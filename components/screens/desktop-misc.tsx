@@ -713,83 +713,368 @@ export function MCommunityAbout({ data, close }) {
 };
 
 // =============== Desktop Auth (login / sign up) ===============
-export function DesktopAuth({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
-  const app = useApp();
-  const [mode, setMode] = React.useState('signin'); // 'signin' | 'signup'
-  const signup = mode === 'signup';
-  const go = () => { app.toast?.({ msg: signup ? 'Welcome to Honua' : 'Signed in', sub: signup ? 'Account created (demo).' : 'Welcome back.', kind: 'success', icon: 'leaf' }); onNav?.(signup ? 'home' : 'home'); };
-  const social = ['Continue with Google', 'Continue with Apple', 'Continue with Celo wallet'];
-  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+const INTERESTS = [
+  'Solar Energy', 'Wind Power', 'Zero Waste', 'Urban Gardening', 'Sustainable Food',
+  'Climate Policy', 'Biodiversity', 'Ocean Health', 'Carbon Offsetting', 'Circular Economy',
+  'Sustainable Transport', 'Green Building', 'Reforestation', 'Renewable Energy', 'Water Conservation',
+  'Animal Welfare', 'Ethical Fashion', 'Social Justice', 'Community Energy', 'Environmental Education',
+];
+
+function BrandPanel() {
+  return (
+    <div style={{ flex: '1 1 0', minWidth: 0, position: 'relative', overflow: 'hidden', background: 'linear-gradient(150deg,#1f6f3f 0%,#2e9a5b 55%,#c8e6cf 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 48 }} className="auth-brand">
+      <svg viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" style={{ position: 'absolute', inset: 0, opacity: .5 }}>
+        <path d="M0 520 Q150 460 300 510 T600 480 L600 800 0 800Z" fill="rgba(255,255,255,.08)"/>
+        <path d="M0 600 Q150 540 300 590 T600 560 L600 800 0 800Z" fill="rgba(255,255,255,.10)"/>
+        <circle cx="470" cy="150" r="60" fill="rgba(255,255,255,.12)"/>
+      </svg>
+      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 34, height: 34, borderRadius: 9, background: '#fff', color: 'var(--green)', display: 'grid', placeItems: 'center', fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: 19, letterSpacing: '-0.05em' }}>h</span>
+        <span className="font-display" style={{ color: '#fff', fontWeight: 600, fontSize: 21 }}>honua</span>
+      </div>
+      <div style={{ position: 'relative', color: '#fff' }}>
+        <h1 className="font-display" style={{ fontSize: 'clamp(30px,3.4vw,46px)', fontWeight: 600, lineHeight: 1.05, letterSpacing: '-0.03em', margin: 0, maxWidth: '14ch' }}>The social network for people fixing the planet.</h1>
+        <div style={{ display: 'flex', gap: 28, marginTop: 28 }}>
+          {[['2.4M', 'members'], ['18.6M', 'actions logged'], ['142kt', 'CO₂ avoided']].map(([n, l]) => (
+            <div key={l}>
+              <div className="font-display" style={{ fontSize: 26, fontWeight: 600 }}>{n}</div>
+              <div style={{ fontSize: 12, opacity: .85, fontFamily: 'Geist Mono' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: 'Geist Mono' }}>© 2026 Honua Coop. All rights reserved.</div>
+    </div>
+  );
+}
+
+function PasswordField({ value, onChange, placeholder = 'Enter your password', label = 'PASSWORD' }: any) {
+  const [show, setShow] = React.useState(false);
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 42px 12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
-      {/* Brand panel */}
-      <div style={{ flex: '1 1 0', minWidth: 0, position: 'relative', overflow: 'hidden', background: 'linear-gradient(150deg,#1f6f3f 0%,#2e9a5b 55%,#c8e6cf 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 48 }} className="auth-brand">
-        <svg viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" width="100%" height="100%" style={{ position: 'absolute', inset: 0, opacity: .5 }}>
-          <path d="M0 520 Q150 460 300 510 T600 480 L600 800 0 800Z" fill="rgba(255,255,255,.08)"/>
-          <path d="M0 600 Q150 540 300 590 T600 560 L600 800 0 800Z" fill="rgba(255,255,255,.10)"/>
-          <circle cx="470" cy="150" r="60" fill="rgba(255,255,255,.12)"/>
-        </svg>
-        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ width: 34, height: 34, borderRadius: 9, background: '#fff', color: 'var(--green)', display: 'grid', placeItems: 'center', fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: 19, letterSpacing: '-0.05em' }}>h</span>
-          <span className="font-display" style={{ color: '#fff', fontWeight: 600, fontSize: 21 }}>honua</span>
+    <div style={{ marginBottom: 14 }}>
+      <label style={lab}>{label}</label>
+      <div style={{ position: 'relative' }}>
+        <input type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder} style={field} />
+        <button type="button" onClick={() => setShow(s => !s)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', display: 'grid', placeItems: 'center', padding: 4 }}>
+          {show ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+              <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SocialButtons({ onSuccess }: { onSuccess: () => void }) {
+  const app = useApp();
+  const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '11px 16px', fontSize: 14, fontWeight: 500, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', marginBottom: 8, fontFamily: 'Geist', color: 'var(--ink)', transition: 'background .15s' };
+  return (
+    <>
+      <button style={btn} onClick={onSuccess}>
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continue with Google
+      </button>
+      <button style={btn} onClick={onSuccess}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        Continue with Apple
+      </button>
+      <button style={{ ...btn, opacity: .5, cursor: 'not-allowed', position: 'relative' }} disabled>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#FCFF52" strokeWidth="2"/><path d="M12 7v5l3 3" stroke="#FCFF52" strokeWidth="2" strokeLinecap="round"/></svg>
+        Continue with Celo Wallet
+        <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'Geist Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
+      </button>
+    </>
+  );
+}
+
+// ── Sign-in form ──────────────────────────────────────────────────────────────
+function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: () => void }) {
+  const app = useApp();
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) { app.toast?.({ msg: 'Please fill in all fields', icon: 'bolt', kind: 'error' }); return; }
+    app.login?.({ name: 'You', handle: 'you', email });
+  };
+
+  return (
+    <div style={{ width: '100%', maxWidth: 380 }}>
+      <h2 className="font-display" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>Welcome back</h2>
+      <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '6px 0 24px' }}>Sign in to pick up where you left off.</p>
+
+      <form onSubmit={submit}>
+        <div style={{ marginBottom: 14 }}>
+          <label style={lab}>EMAIL</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={field} />
         </div>
-        <div style={{ position: 'relative', color: '#fff' }}>
-          <h1 className="font-display" style={{ fontSize: 'clamp(30px,3.4vw,46px)', fontWeight: 600, lineHeight: 1.05, letterSpacing: '-0.03em', margin: 0, maxWidth: '14ch' }}>The social network for people fixing the planet.</h1>
-          <div style={{ display: 'flex', gap: 28, marginTop: 28 }}>
-            {[['2.4M', 'members'], ['18.6M', 'actions logged'], ['142kt', 'CO₂ avoided']].map(([n, l]) => (
-              <div key={l}>
-                <div className="font-display" style={{ fontSize: 26, fontWeight: 600 }}>{n}</div>
-                <div style={{ fontSize: 12, opacity: .85, fontFamily: 'Geist Mono' }}>{l}</div>
-              </div>
-            ))}
-          </div>
+        <PasswordField value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="Your password" />
+        <div style={{ textAlign: 'right', marginBottom: 4 }}>
+          <span onClick={() => app.toast?.({ msg: 'Reset link sent', sub: 'Check your inbox for a reset link.', icon: 'msg' })} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Forgot password?</span>
         </div>
-        <div style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: 'Geist Mono' }}>© 2026 honua coop</div>
+        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 8 }}>Sign in</button>
+      </form>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-4)', margin: '18px 0' }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+        <span style={{ fontSize: 11, fontFamily: 'Geist Mono' }}>OR</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+      </div>
+      <SocialButtons onSuccess={() => app.login?.({ name: 'You', handle: 'you', email: 'social@honua.earth' })} />
+
+      <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 20 }}>
+        New to Honua?{' '}
+        <span onClick={onSwitch} style={{ color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Create an account</span>
+      </p>
+      <p style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-4)', marginTop: 14, lineHeight: 1.6 }}>
+        By signing in you agree to our{' '}
+        <a href="/terms" target="_blank" style={{ color: 'var(--ink-3)', textDecoration: 'underline' }}>Terms of Service &amp; Privacy Policy</a>.
+      </p>
+    </div>
+  );
+}
+
+// ── Signup — multi-step onboarding ────────────────────────────────────────────
+function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
+  const app = useApp();
+  const [step, setStep] = React.useState(1); // 1–5
+  const totalSteps = 5;
+
+  // Step 1: credentials
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [confirm, setConfirm] = React.useState('');
+
+  // Step 2: identity
+  const [name, setName] = React.useState('');
+  const [handle, setHandle] = React.useState('');
+  const [dob, setDob] = React.useState('');
+  const [location, setLocation] = React.useState('');
+
+  // Step 3: bio & focus
+  const [bio, setBio] = React.useState('');
+  const [interests, setInterests] = React.useState<string[]>([]);
+
+  // Step 4: T&C
+  const [agreed, setAgreed] = React.useState(false);
+  const [agreedMarketing, setAgreedMarketing] = React.useState(false);
+
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block' };
+
+  const handleHandleChange = (v: string) => setHandle(v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30));
+
+  const next = () => {
+    if (step === 1) {
+      if (!email || !password || !confirm) { app.toast?.({ msg: 'Please fill in all fields', icon: 'bolt', kind: 'error' }); return; }
+      if (password.length < 8) { app.toast?.({ msg: 'Password must be at least 8 characters', icon: 'bolt', kind: 'error' }); return; }
+      if (password !== confirm) { app.toast?.({ msg: "Passwords don't match", icon: 'bolt', kind: 'error' }); return; }
+    }
+    if (step === 2) {
+      if (!name || !handle) { app.toast?.({ msg: 'Name and username are required', icon: 'bolt', kind: 'error' }); return; }
+      if (handle.length < 3) { app.toast?.({ msg: 'Username must be at least 3 characters', icon: 'bolt', kind: 'error' }); return; }
+    }
+    if (step === 3 && interests.length < 3) { app.toast?.({ msg: 'Pick at least 3 interests to personalise your feed', icon: 'bolt', kind: 'error' }); return; }
+    if (step === 4 && !agreed) { app.toast?.({ msg: 'Please accept the Terms of Service to continue', icon: 'bolt', kind: 'error' }); return; }
+    if (step === totalSteps) {
+      app.login?.({ name, handle, email, bio, interests, location });
+      app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}! 🌱`, sub: 'Your account is ready. Start exploring.', kind: 'success', icon: 'leaf' });
+      return;
+    }
+    setStep(s => s + 1);
+  };
+
+  const back = () => setStep(s => s - 1);
+
+  const stepTitle = ['Create your account', 'Tell us about you', 'What do you care about?', 'Terms & conditions', 'You\'re almost in!'];
+  const stepSub = [
+    'Set up your login credentials.',
+    'Help your community know who you are.',
+    'Pick at least 3 topics to personalise your feed.',
+    'Please read and accept before joining.',
+    'Review your profile before going live.',
+  ];
+
+  return (
+    <div style={{ width: '100%', maxWidth: 440 }}>
+      {/* Back / progress */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        {step > 1 && <button onClick={back} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7"/></svg> Back
+        </button>}
+        <div style={{ flex: 1, display: 'flex', gap: 4 }}>
+          {Array.from({ length: totalSteps }).map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: i < step ? 'var(--green)' : 'var(--line)', transition: 'background .3s' }} />
+          ))}
+        </div>
+        <span style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-4)' }}>{step}/{totalSteps}</span>
       </div>
 
-      {/* Form panel */}
-      <div style={{ flex: '0 0 clamp(380px, 38%, 520px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px clamp(24px,4vw,56px)', overflow: 'auto' }} className="no-scrollbar">
-        <div style={{ width: '100%', maxWidth: 360 }}>
-          <h2 className="font-display" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>{signup ? 'Create your account' : 'Welcome back'}</h2>
-          <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '6px 0 24px' }}>{signup ? 'Start logging real-world impact in minutes.' : 'Sign in to pick up where you left off.'}</p>
+      <h2 className="font-display" style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>{stepTitle[step - 1]}</h2>
+      <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '6px 0 22px', lineHeight: 1.55 }}>{stepSub[step - 1]}</p>
 
-          <div onSubmit={e => e.preventDefault()}>
-            {signup && (
-              <div style={{ marginBottom: 14 }}>
-                <label style={lab}>NAME</label>
-                <input style={field} placeholder="Sarah Green" />
-              </div>
-            )}
-            <div style={{ marginBottom: 14 }}>
-              <label style={lab}>EMAIL</label>
-              <input style={field} defaultValue={signup ? '' : 'sarah@sunhill.coop'} placeholder="you@example.com" />
-            </div>
-            <div style={{ marginBottom: 6 }}>
-              <label style={lab}>PASSWORD</label>
-              <input type="password" style={field} defaultValue="••••••••••" />
-            </div>
-            {!signup && <div style={{ textAlign: 'right', margin: '8px 0 4px' }}><span onClick={() => app.toast?.({ msg: 'Reset link sent', sub: 'Check your email (demo).', icon: 'msg' })} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Forgot password?</span></div>}
-            <button className="btn btn-primary" onClick={go} style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 12 }}>{signup ? 'Create account' : 'Sign in'}</button>
+      {/* ── Step 1: Credentials ── */}
+      {step === 1 && (
+        <div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lab}>EMAIL ADDRESS</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={field} autoFocus />
           </div>
+          <PasswordField value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="At least 8 characters" label="PASSWORD" />
+          <PasswordField value={confirm} onChange={(e: any) => setConfirm(e.target.value)} placeholder="Repeat your password" label="CONFIRM PASSWORD" />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-4)', margin: '18px 0' }}>
             <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
             <span style={{ fontSize: 11, fontFamily: 'Geist Mono' }}>OR</span>
             <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
           </div>
-          {social.map(s => (
-            <button key={s} className="btn btn-ghost" onClick={go} style={{ width: '100%', justifyContent: 'center', padding: '11px 16px', fontSize: 14, marginBottom: 8 }}>{s}</button>
-          ))}
-
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 20 }}>
-            {signup ? 'Already have an account? ' : 'New to Honua? '}
-            <span onClick={() => setMode(signup ? 'signin' : 'signup')} style={{ color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>{signup ? 'Sign in' : 'Create an account'}</span>
-          </p>
-          <p style={{ textAlign: 'center', fontSize: 11.5, color: 'var(--ink-4)', marginTop: 14, lineHeight: 1.5 }}>
-            By continuing you agree to our <span onClick={() => app.toast?.({ msg: 'Opening…', sub: 'Support docs would open here.', icon: 'comment' })} style={{ color: 'var(--ink-3)', textDecoration: 'underline', cursor: 'pointer' }}>Terms &amp; privacy</span>.
-          </p>
+          <SocialButtons onSuccess={() => { setStep(2); }} />
         </div>
+      )}
+
+      {/* ── Step 2: Identity ── */}
+      {step === 2 && (
+        <div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lab}>FULL NAME</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Sarah Green" style={field} autoFocus />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lab}>USERNAME</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)', fontSize: 15, marginTop: 3 }}>@</span>
+              <input value={handle} onChange={e => handleHandleChange(e.target.value)} placeholder="sarahgreen" style={{ ...field, paddingLeft: 28 }} />
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4, display: 'block' }}>Letters, numbers, underscores only. Min 3 chars.</span>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lab}>DATE OF BIRTH</label>
+            <input type="date" value={dob} onChange={e => setDob(e.target.value)} style={field} />
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4, display: 'block' }}>You must be 13 or older to join Honua.</span>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lab}>LOCATION (OPTIONAL)</label>
+            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Portland, OR · Global" style={field} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 3: Interests ── */}
+      {step === 3 && (
+        <div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {INTERESTS.map(it => {
+              const on = interests.includes(it);
+              return (
+                <button key={it} onClick={() => setInterests(prev => on ? prev.filter(x => x !== it) : [...prev, it])} style={{ padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${on ? 'var(--green)' : 'var(--line)'}`, background: on ? 'var(--green)' : 'var(--surface)', color: on ? '#fff' : 'var(--ink-2)', fontSize: 13, fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'Geist', transition: 'all .15s' }}>
+                  {it}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 14 }}>{interests.length} selected · minimum 3</p>
+        </div>
+      )}
+
+      {/* ── Step 4: Bio ── */}
+      {step === 4 && (
+        <div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={lab}>SHORT BIO (OPTIONAL)</label>
+            <textarea value={bio} onChange={e => setBio(e.target.value.slice(0, 200))} placeholder="Tell the Honua community about yourself, your sustainability journey, and what drives you." rows={4} style={{ ...field, resize: 'none', lineHeight: 1.55 }} />
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4, display: 'block', textAlign: 'right' }}>{bio.length}/200</span>
+          </div>
+
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, maxHeight: 260, overflowY: 'auto' }} className="no-scrollbar">
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Terms of Service — Summary</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.65, margin: '0 0 10px' }}>By joining Honua you agree to post only truthful, original content; not to harass, deceive, or harm other members; to grant Honua a non-exclusive licence to display your content on the platform; and to respect our community guidelines around verified impact claims.</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.65, margin: '0 0 10px' }}>Honua may suspend or terminate accounts that violate these terms. Green Points are non-transferable and have no cash value outside the platform. You retain ownership of all content you post.</p>
+            <a href="/terms" target="_blank" style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600, textDecoration: 'none' }}>Read the full Terms of Service →</a>
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 16, cursor: 'pointer' }}>
+            <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--green)', width: 16, height: 16, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+              I have read and agree to the{' '}
+              <a href="/terms" target="_blank" style={{ color: 'var(--green)', fontWeight: 600, textDecoration: 'none' }}>Terms of Service</a>
+              {' '}and{' '}
+              <a href="/terms#privacy" target="_blank" style={{ color: 'var(--green)', fontWeight: 600, textDecoration: 'none' }}>Privacy Policy</a>.
+              <span style={{ color: 'var(--clay)', marginLeft: 4 }}>*</span>
+            </span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={agreedMarketing} onChange={e => setAgreedMarketing(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--green)', width: 16, height: 16, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55 }}>
+              I'd like to receive Honua's newsletter with sustainability tips, platform updates, and community highlights. (Optional)
+            </span>
+          </label>
+        </div>
+      )}
+
+      {/* ── Step 5: Review ── */}
+      {step === 5 && (
+        <div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--green)', display: 'grid', placeItems: 'center', fontSize: 28, color: '#fff', fontWeight: 700 }}>{name.charAt(0) || '?'}</div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>{name || '—'}</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{handle || '—'}</div>
+                {location && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>📍 {location}</div>}
+              </div>
+            </div>
+            {bio && <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, margin: '0 0 14px' }}>{bio}</p>}
+            {interests.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {interests.map(it => <span key={it} style={{ fontSize: 12, background: 'var(--green-tint)', color: 'var(--green)', padding: '3px 10px', borderRadius: 999, fontWeight: 500 }}>{it}</span>)}
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6, background: 'var(--green-tint)', border: '1px solid var(--green-3)', borderRadius: 12, padding: 14 }}>
+            🌱 <strong>You're joining {(2400000).toLocaleString()} members</strong> who are making their climate impact visible and verifiable.
+          </div>
+        </div>
+      )}
+
+      <button onClick={next} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 22 }}>
+        {step === totalSteps ? 'Create my account 🌱' : step === 4 ? 'I agree — continue' : 'Continue →'}
+      </button>
+
+      {step === 1 && (
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 18 }}>
+          Already have an account?{' '}
+          <span onClick={onSwitch} style={{ color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Sign in</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function DesktopAuth({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
+  const [mode, setMode] = React.useState<'signin' | 'signup'>((params?.mode as any) || 'signin');
+  const app = useApp();
+  return (
+    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <BrandPanel />
+      <div style={{ flex: '0 0 clamp(400px, 42%, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px clamp(24px,4vw,56px)', overflow: 'auto' }} className="no-scrollbar">
+        {mode === 'signin'
+          ? <SignInForm onSwitch={() => setMode('signup')} onSuccess={() => app.login?.({ name: 'You', handle: 'you', email: '' })} />
+          : <SignUpFlow onSwitch={() => setMode('signin')} />
+        }
       </div>
     </div>
   );

@@ -408,9 +408,14 @@ export function SettingsSection({ sec, app, onNav }) {
           <ToggleC2 label="Hide my email from search" />
         </Section>
         <Section title="Danger zone">
-          <button className="btn btn-ghost" style={{ color: 'var(--clay)', borderColor: 'var(--clay)' }} onClick={() => app.openModal('deleteaccount')}>
-            <Icon name="trash" size={14} /> Delete account
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-ghost" onClick={() => app.logout?.()}>
+              <Icon name="bolt" size={14} /> Sign out
+            </button>
+            <button className="btn btn-ghost" style={{ color: 'var(--clay)', borderColor: 'var(--clay)' }} onClick={() => app.openModal('deleteaccount')}>
+              <Icon name="trash" size={14} /> Delete account
+            </button>
+          </div>
         </Section>
       </>}
 

@@ -46,6 +46,8 @@ const STATE_DEFAULTS: any = {
   dark: false,
   sellerStatus: "none",
   sellerShop: null,
+  authed: false,
+  user: null,
 };
 
 const LS_STATE = "honua_desktop_state";
@@ -108,11 +110,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     remove: (v: any) => setSt((s: any) => ({ ...s, [field]: s[field].filter((x: any) => x !== v) })),
   });
 
+  const login = useCallback((userData: any) => {
+    setSt((s: any) => ({ ...s, authed: true, user: userData }));
+    router.push("/");
+  }, [router]);
+
+  const logout = useCallback(() => {
+    setSt((s: any) => ({ ...s, authed: false, user: null }));
+    router.push("/login");
+  }, [router]);
+
   const ctx = {
     nav,
     toast, toasts, dismissToast,
     openModal, closeModal, modal,
     state: st, setState: setSt,
+    authed: st.authed,
+    user: st.user,
+    login, logout,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     like: mk("liked"), save: mk("saved"), follow: mk("following"),
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),

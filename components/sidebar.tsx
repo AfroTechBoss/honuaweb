@@ -114,12 +114,12 @@ export function DesktopSidebar({ active, onNav }: any) {
             borderRadius: 10, cursor: "pointer",
           }}
         >
-          <Avatar name="Y" size={36} />
+          <Avatar name={app.user?.name?.charAt(0) || "Y"} src={app.user?.avatar} size={36} />
           {!collapsed && (
             <>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>You</div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "Geist Mono" }}>@you · 86 impact</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.user?.name || "You"}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "Geist Mono" }}>@{app.user?.handle || "you"}</div>
               </div>
               <button onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }} style={{ background: menuOpen ? "var(--bg-2)" : "transparent", border: "none", borderRadius: 8, padding: 5, cursor: "pointer", color: "var(--ink-3)" }}>
                 <Icon name="more" size={16} />
@@ -140,7 +140,7 @@ export function DesktopSidebar({ active, onNav }: any) {
                 ["Settings", "settings", () => onNav?.("settings")],
                 ["Switch appearance", "sparkles", () => app.toggleDark?.()],
                 ["Help & support", "comment", () => app.toast?.({ msg: "Help center", sub: "Support docs would open here.", icon: "comment" })],
-                ["Log out", "logout", () => { app.toast?.({ msg: "Logged out", sub: "Signed out — back to sign in.", icon: "logout" }); onNav?.("auth"); }],
+                ["Log out", "logout", () => app.logout?.()],
               ] as any[]).map(([l, ic, fn]) => (
                 <button key={l} onClick={() => { setMenuOpen(false); fn(); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 10px", border: "none", background: "transparent", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, color: l === "Log out" ? "var(--clay)" : "var(--ink-2)", fontFamily: "Geist" }} className="row-hover">
                   <Icon name={ic} size={16} /> {l}
