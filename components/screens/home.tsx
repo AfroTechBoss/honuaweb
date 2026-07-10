@@ -1,17 +1,17 @@
-"use client";
+﻿"use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 
 // =============== Story data ===============
 const STORY_KEYS = ["sarah", "marcus", "maya", "okafor", "greentech", "can", "tara"];
 const STORY_CONTENT: Record<string, { caption: string; bg: [string, string] }> = {
-  sarah:    { caption: "First sun on the 20 new panels ☀️ co-op is officially off coal.", bg: ["#1f6f3f", "#2e9a5b"] },
-  marcus:   { caption: "Week 3, zero-waste. The compost is finally cooking 🔥", bg: ["#6b4f2a", "#9c7a3c"] },
-  maya:     { caption: "Two more pollinators today. Tiny balcony, big week 🐝", bg: ["#2e7d32", "#7cb342"] },
+  sarah:    { caption: "First sun on the 20 new panels â˜€ï¸ co-op is officially off coal.", bg: ["#1f6f3f", "#2e9a5b"] },
+  marcus:   { caption: "Week 3, zero-waste. The compost is finally cooking ðŸ”¥", bg: ["#6b4f2a", "#9c7a3c"] },
+  maya:     { caption: "Two more pollinators today. Tiny balcony, big week ðŸ", bg: ["#2e7d32", "#7cb342"] },
   okafor:   { caption: "New blade design hit 40% efficiency in testing. Paper Monday.", bg: ["#13315c", "#2a6fae"] },
   greentech:{ caption: "Prototype #7 is on the truck. Field trial starts Thursday.", bg: ["#0d3b66", "#1d6dc4"] },
   can:      { caption: "47 cities confirmed for Friday. Find yours on the map.", bg: ["#3a1c71", "#6d3bbf"] },
-  tara:     { caption: "Repaired instead of replaced. 5th item this month 🪡", bg: ["#7a3b2e", "#c4623a"] },
+  tara:     { caption: "Repaired instead of replaced. 5th item this month ðŸª¡", bg: ["#7a3b2e", "#c4623a"] },
 };
 const DURATION = 4500;
 
@@ -89,7 +89,7 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{u.name}</div>
-          <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'Geist Mono' }}>@{u.handle} · {2 + idx}h</div>
+          <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'Geist Mono' }}>@{u.handle} Â· {2 + idx}h</div>
         </div>
         <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#fff', padding: 6 }}>
           <Icon name="close" size={20} />
@@ -103,7 +103,7 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
       }}>
         {/* Placeholder image label */}
         <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-          <span style={{ color: 'rgba(255,255,255,.4)', fontFamily: 'Geist Mono', fontSize: 13 }}>{key} · story image</span>
+          <span style={{ color: 'rgba(255,255,255,.4)', fontFamily: 'Geist Mono', fontSize: 13 }}>{key} Â· story image</span>
         </div>
 
         {/* Tap zones */}
@@ -124,7 +124,7 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
               value={reply} onChange={e => setReply(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
               onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
-              placeholder={`Reply to ${u.name.split(' ')[0]}…`}
+              placeholder={`Reply to ${u.name.split(' ')[0]}â€¦`}
               style={{
                 flex: 1, border: '1px solid rgba(255,255,255,.45)', background: 'transparent',
                 color: '#fff', borderRadius: 999, padding: '10px 16px', fontSize: 14,
@@ -173,7 +173,7 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="image" size={11} /> Photo</span>
-            <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="bolt" size={11} /> Video · max 1 min</span>
+            <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="bolt" size={11} /> Video Â· max 1 min</span>
           </div>
         </button>
         {/* Text card */}
@@ -220,7 +220,7 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', display: 'block', marginBottom: 6 }}>CAPTION (OPTIONAL)</label>
-          <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 150))} placeholder="Add a caption…" rows={3} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: 'var(--ink)', resize: 'none', fontFamily: 'Geist', boxSizing: 'border-box' }} />
+          <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 150))} placeholder="Add a captionâ€¦" rows={3} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: 'var(--ink)', resize: 'none', fontFamily: 'Geist', boxSizing: 'border-box' }} />
           <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 2 }}>{caption.length}/150</div>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -239,7 +239,7 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
         {/* Live preview */}
         <div style={{ height: 200, borderRadius: 16, background: `linear-gradient(135deg, ${bg[0]}, ${bg[1]})`, display: 'grid', placeItems: 'center', padding: 24 }}>
           <p style={{ margin: 0, color: text ? '#fff' : 'rgba(255,255,255,.4)', fontSize: text.length > 80 ? 18 : 22, fontWeight: 600, textAlign: 'center', lineHeight: 1.4 }}>
-            {text || 'Your text will appear here…'}
+            {text || 'Your text will appear hereâ€¦'}
           </p>
         </div>
         <textarea value={text} onChange={e => setText(e.target.value.slice(0, 280))} placeholder="What's on your mind?" rows={4} autoFocus style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 15, color: 'var(--ink)', resize: 'none', fontFamily: 'Geist', boxSizing: 'border-box' }} />
@@ -297,12 +297,31 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   const [tab, setTab] = React.useState('foryou');
   const [story, setStory] = React.useState<number | null>(null);
   const [statusCompose, setStatusCompose] = React.useState(false);
+  const [dbPosts, setDbPosts] = React.useState<any[]>([]);
+  const [loadingFeed, setLoadingFeed] = React.useState(true);
   const app = useApp();
-  const feed = tab === 'following'
-    ? MOCK.posts.filter(p => app.follow?.has(MOCK.users[p.user].handle))
-    : tab === 'verified'
-      ? MOCK.posts.filter(p => p.verified)
-      : MOCK.posts;
+
+  // Fetch real posts from Supabase
+  const fetchFeed = React.useCallback(async () => {
+    setLoadingFeed(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      let query = supabase
+        .from('posts')
+        .select(`*, profile:profiles(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles(id, handle, full_name, avatar_url, verified))`)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
+      const { data } = await query;
+      setDbPosts(data ?? []);
+    } catch {}
+    setLoadingFeed(false);
+  }, [tab]);
+
+  React.useEffect(() => { fetchFeed(); }, [fetchFeed]);
+
+  // Merge real DB posts with MOCK posts for a richer feed while DB is empty
+  const feed = dbPosts.length > 0 ? dbPosts : MOCK.posts;
   const joinedChallenge = app.challenge?.has('week19');
   return (
     <>
@@ -330,13 +349,13 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           <StoryRail onOpen={setStory} onNav={onNav} onAddStatus={() => setStatusCompose(true)} />
 
           {/* Composer prompt */}
-          <div onClick={() => app.openModal?.('compose')} style={{
+          <div onClick={() => { app.openModal?.('compose'); }} style={{
             background: 'var(--surface)', borderRadius: 16,
             border: '1px solid var(--line)', padding: 16, marginBottom: 12,
             display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer',
           }}>
-            <Avatar src={MOCK.users.you.avatar} name="You" size={40} />
-            <span style={{ flex: 1, fontSize: 15, color: 'var(--ink-4)', fontFamily: 'Geist' }}>Share an action, idea, or update…</span>
+            <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={40} />
+            <span style={{ flex: 1, fontSize: 15, color: 'var(--ink-4)', fontFamily: 'Geist' }}>Share an action, idea, or updateâ€¦</span>
             <span style={{ color: 'var(--ink-3)', display: 'inline-flex' }}><Icon name="image" size={16} /></span>
             <span style={{ color: 'var(--ink-3)', display: 'inline-flex' }}><Icon name="pin" size={16} /></span>
             <button className="btn btn-primary" style={{ padding: '7px 14px' }} onClick={(e) => { e.stopPropagation(); app.openModal?.('compose'); }}>Post</button>
@@ -356,18 +375,29 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
               <Icon name="flame" size={20} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontFamily: 'Geist Mono', color: 'var(--green)', fontWeight: 600 }}>WEEK 19 CHALLENGE · 4 days left</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Bike to work — 12.4k joined</div>
+              <div style={{ fontSize: 13, fontFamily: 'Geist Mono', color: 'var(--green)', fontWeight: 600 }}>WEEK 19 CHALLENGE Â· 4 days left</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Bike to work â€” 12.4k joined</div>
             </div>
-            <button className={joinedChallenge ? 'btn btn-ghost' : 'btn btn-green'} style={{ padding: '7px 14px' }} onClick={(e) => { e.stopPropagation(); app.challenge.toggle('week19'); app.toast?.(joinedChallenge ? { msg: 'Left the challenge', icon: 'close' } : { msg: 'Joined Bike to work 🔥', sub: 'Log daily to keep your streak.', kind: 'success', icon: 'flame' }); }}>{joinedChallenge ? 'Joined ✓' : 'Join'}</button>
+            <button className={joinedChallenge ? 'btn btn-ghost' : 'btn btn-green'} style={{ padding: '7px 14px' }} onClick={(e) => { e.stopPropagation(); app.challenge.toggle('week19'); app.toast?.(joinedChallenge ? { msg: 'Left the challenge', icon: 'close' } : { msg: 'Joined Bike to work ðŸ”¥', sub: 'Log daily to keep your streak.', kind: 'success', icon: 'flame' }); }}>{joinedChallenge ? 'Joined âœ“' : 'Join'}</button>
           </div>
 
-          {feed.length > 0 ? feed.map(p => <PostCard key={p.id} post={p} />) : (
+          {loadingFeed ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+            </div>
+          ) : feed.length > 0 ? (
+            <>
+              {feed.map(p => dbPosts.length > 0
+                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} />
+                : <PostCard key={p.id} post={p} />
+              )}
+            </>
+          ) : (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-3)' }}>
               <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: 'var(--ink-4)' }}><Icon name={tab === 'verified' ? 'leaf' : 'users'} size={26} /></div>
-              <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)' }}>{tab === 'following' ? 'Nothing here yet' : 'No verified posts yet'}</div>
-              <p style={{ fontSize: 14, maxWidth: 320, margin: '6px auto 0', lineHeight: 1.5 }}>{tab === 'following' ? 'Follow people to see their updates in this tab.' : 'Posts with oracle-verified impact will appear here.'}</p>
-              {tab === 'following' && <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => setTab('foryou')}>Discover people →</button>}
+              <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)' }}>{tab === 'following' ? 'Nothing here yet' : 'No posts yet'}</div>
+              <p style={{ fontSize: 14, maxWidth: 320, margin: '6px auto 0', lineHeight: 1.5 }}>{tab === 'following' ? 'Follow people to see their updates in this tab.' : 'Be the first to post something!'}</p>
+              {tab === 'following' && <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => setTab('foryou')}>Discover people â†’</button>}
             </div>
           )}
         </div>
@@ -397,8 +427,8 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           <TrendingPanel />
           <SuggestedFollows />
           <div style={{ padding: '12px 4px', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', lineHeight: 1.7 }}>
-            ABOUT · HELP · API · PRIVACY · TERMS<br/>
-            © 2026 honua coop
+            ABOUT Â· HELP Â· API Â· PRIVACY Â· TERMS<br/>
+            Â© 2026 honua coop
           </div>
         </div>
       </main>
@@ -409,26 +439,158 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   );
 };
 
+// =============== Real feed card (DB posts) ===============
+function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRefresh: () => void }) {
+  const app = useApp();
+  const profile = post.profile;
+  const original = post.original;
+  const liked = app.like?.has(post.id);
+
+  const timeAgo = (ts: string) => {
+    const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h`;
+    return `${Math.floor(s / 86400)}d`;
+  };
+
+  const displayContent = post.is_repost && original ? original.content : post.content;
+  const displayImage = post.is_repost && original ? original.image_url : post.image_url;
+  const displayProfile = profile;
+  const tags: string[] = post.tags ?? [];
+
+  return (
+    <article style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20, marginBottom: 12 }}>
+      {post.is_repost && original && (
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="repost" size={13} /> Reposted from <strong>@{original.profile?.handle}</strong>
+        </div>
+      )}
+      <header style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+        <span style={{ cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: displayProfile?.handle })}>
+          <Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={42} verified={displayProfile?.verified} />
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: displayProfile?.handle })}>{displayProfile?.full_name}</span>
+            {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9 }}>âœ“</span>}
+            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{displayProfile?.handle}</span>
+            <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>Â· {timeAgo(post.created_at)}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginTop: 2, textTransform: 'capitalize' }}>{post.post_type}</div>
+        </div>
+      </header>
+
+      {displayContent && <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>{displayContent}</p>}
+
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+          {tags.map(t => (
+            <span key={t} onClick={() => onNav?.('explore', { tag: t })} style={{ color: 'var(--sky)', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>#{t}</span>
+          ))}
+        </div>
+      )}
+
+      {displayImage && (
+        <img src={displayImage} style={{ width: '100%', borderRadius: 12, marginBottom: 12, objectFit: 'cover', maxHeight: 340 }} />
+      )}
+
+      <footer style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
+        <ActionBtn icon="heart" count={post.likes_count + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+        <ActionBtn icon="comment" count={post.comments_count} onClick={() => {}} />
+        <ActionBtn icon="repost" count={post.reposts_count} onClick={() => {}} />
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
+          <ActionBtn icon="bookmark" active={app.save?.has(post.id)} onClick={() => app.save?.toggle(post.id)} />
+          <ActionBtn icon="share" onClick={() => { navigator.clipboard?.writeText(window.location.origin + '/post/' + post.id); app.toast?.({ msg: 'Link copied', icon: 'share' }); }} />
+        </span>
+      </footer>
+    </article>
+  );
+}
+
 // =============== Desktop Explore ===============
 export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
-  const [tab, setTab] = React.useState('trending');
+  const incomingTag = params?.tag as string | undefined;
+  const [tab, setTab] = React.useState(incomingTag ? 'tags' : 'trending');
+  const [activeTag, setActiveTag] = React.useState<string | null>(incomingTag ?? null);
+  const [tagPosts, setTagPosts] = React.useState<any[]>([]);
+  const [tagLoading, setTagLoading] = React.useState(false);
   const app = useApp();
   const openArticle = (a) => app.openModal?.('article', a);
+
+  // When a tag comes in from params, switch to Tags tab
+  React.useEffect(() => {
+    if (incomingTag) { setActiveTag(incomingTag); setTab('tags'); }
+  }, [incomingTag]);
+
+  // Fetch posts for the selected tag
+  React.useEffect(() => {
+    if (tab !== 'tags' || !activeTag) return;
+    setTagLoading(true);
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase
+        .from('posts')
+        .select('*, profile:profiles(id, handle, full_name, avatar_url, verified)')
+        .contains('tags', [activeTag])
+        .order('created_at', { ascending: false })
+        .limit(30)
+        .then(({ data }) => { setTagPosts(data ?? []); setTagLoading(false); });
+    });
+  }, [activeTag, tab]);
+
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="explore" onNav={onNav} />
       <main style={{ flex: 1, padding: '20px 28px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
-            <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Explore</h1>
-            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>What the community is building, planting, and fighting for right now.</p>
+            <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>
+              {tab === 'tags' && activeTag ? `#${activeTag}` : 'Explore'}
+            </h1>
+            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>
+              {tab === 'tags' && activeTag ? `Posts tagged #${activeTag}` : 'What the community is building, planting, and fighting for right now.'}
+            </p>
           </div>
           <div className="pill-nav">
             {['Trending', 'Nearby', 'Projects', 'People', 'Tags'].map(t => (
-              <button key={t} className={tab === t.toLowerCase() ? 'active' : ''} onClick={() => setTab(t.toLowerCase())}>{t}</button>
+              <button key={t} className={tab === t.toLowerCase() ? 'active' : ''} onClick={() => { setTab(t.toLowerCase()); if (t.toLowerCase() !== 'tags') setActiveTag(null); }}>{t}</button>
             ))}
           </div>
         </div>
+
+        {/* Tags tab */}
+        {tab === 'tags' && (
+          <div>
+            {!activeTag ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+                {MOCK.trends.map(t => (
+                  <button key={t.tag} onClick={() => setActiveTag(t.tag)} className="chip" style={{ cursor: 'pointer', fontSize: 14, padding: '8px 16px' }}>
+                    #{t.tag} <span style={{ color: 'var(--ink-3)', fontSize: 12, marginLeft: 6 }}>{t.posts}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <button onClick={() => setActiveTag(null)} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>â† All tags</button>
+                {tagLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+                  </div>
+                ) : tagPosts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--ink-3)' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>ðŸŒ¿</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-2)' }}>No posts yet for #{activeTag}</div>
+                    <p style={{ fontSize: 14, marginTop: 6 }}>Be the first to use this hashtag!</p>
+                  </div>
+                ) : (
+                  tagPosts.map(p => <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={() => {}} />)
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {tab !== 'tags' && (<>
 
         {/* Hero: editorial featured story */}
         <div style={{
@@ -438,8 +600,8 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
             background: 'var(--surface)', borderRadius: 20,
             overflow: 'hidden', border: '1px solid var(--line)',
             display: 'grid', gridTemplateRows: '260px 1fr', cursor: 'pointer',
-          }} className="post-card" onClick={() => openArticle({ tag: 'Energy', title: 'How a Nairobi co-op put 4,200 homes on solar in 18 months', author: 'Dr. Adaeze Okafor', img: 'hero · solar farm at dawn' })}>
-            <ImagePlaceholder label="hero · solar farm at dawn" height={260} />
+          }} className="post-card" onClick={() => openArticle({ tag: 'Energy', title: 'How a Nairobi co-op put 4,200 homes on solar in 18 months', author: 'Dr. Adaeze Okafor', img: 'hero Â· solar farm at dawn' })}>
+            <ImagePlaceholder label="hero Â· solar farm at dawn" height={260} />
             <div style={{ padding: 20 }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                 <span className="chip chip-green">Editor's pick</span>
@@ -452,7 +614,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                 <Avatar src={MOCK.users.okafor.avatar} name="Dr. Okafor" size={32} verified />
                 <div style={{ fontSize: 13 }}>
                   <span style={{ fontWeight: 600 }}>Dr. Adaeze Okafor</span>
-                  <span style={{ color: 'var(--ink-3)' }}> · May 19</span>
+                  <span style={{ color: 'var(--ink-3)' }}> Â· May 19</span>
                 </div>
               </div>
             </div>
@@ -460,7 +622,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              { tag: 'Policy', t: 'EU Carbon Border Adjustment — what it means for steel', a: 'Climate Action Net.', img: 'steel mill' },
+              { tag: 'Policy', t: 'EU Carbon Border Adjustment â€” what it means for steel', a: 'Climate Action Net.', img: 'steel mill' },
               { tag: 'Energy', t: 'Heat pumps overtook gas boilers in 9 European markets', a: 'GreenTech', img: 'heat pump unit' },
               { tag: 'Ocean', t: 'Inside the 2026 North Sea kelp restoration trial', a: 'Sea Forests', img: 'kelp underwater' },
             ].map((s, i) => (
@@ -491,7 +653,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
             ['Transport', 'bolt', '#e6b450'],
             ['Policy', 'globe', '#5c635e'],
           ].map(([label, icon, col]) => (
-            <div key={label} onClick={() => app.openModal?.('list', { title: label + ' on Honua', icon, sub: 'Recent posts and projects in this category', items: MOCK.posts.slice(0, 4).map(p => ({ icon, title: p.content.slice(0, 48) + '…', sub: '@' + MOCK.users[p.user].handle + ' · ' + p.time })) })} style={{
+            <div key={label} onClick={() => app.openModal?.('list', { title: label + ' on Honua', icon, sub: 'Recent posts and projects in this category', items: MOCK.posts.slice(0, 4).map(p => ({ icon, title: p.content.slice(0, 48) + 'â€¦', sub: '@' + MOCK.users[p.user].handle + ' Â· ' + p.time })) })} style={{
               background: 'var(--surface)', borderRadius: 14, padding: 16,
               border: '1px solid var(--line)', cursor: 'pointer',
             }} className="post-card">
@@ -512,7 +674,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
         {/* Communities grid */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h2 className="font-display" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Communities you might love</h2>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 500, cursor: 'pointer', fontSize: 13 }} onClick={() => onNav?.('forum')}>See all →</button>
+          <button style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 500, cursor: 'pointer', fontSize: 13 }} onClick={() => onNav?.('forum')}>See all â†’</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
           {MOCK.communities.slice(0, 3).map(c => {
@@ -527,7 +689,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                 <span className="chip">{c.cat}</span>
                 <h3 style={{ margin: '8px 0 4px', fontSize: 16, fontWeight: 600 }}>{c.name}</h3>
                 <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{c.members} members</div>
-                <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.community.toggle(c.name); app.toast?.(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}`, kind: 'success', icon: 'users' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join community'}</button>
+                <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.community.toggle(c.name); app.toast?.(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}`, kind: 'success', icon: 'users' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined âœ“' : 'Join community'}</button>
               </div>
             </div>
             );
@@ -544,17 +706,18 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           <div style={{ padding: 24 }}>
             <span className="chip chip-sky">Action map</span>
             <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>147 verified projects near you</h2>
-            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>Beach cleanups, community gardens, repair cafés, energy co-ops — find something to do this weekend.</p>
+            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>Beach cleanups, community gardens, repair cafÃ©s, energy co-ops â€” find something to do this weekend.</p>
             <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={() => onNav?.('map')}>Open map <Icon name="arrow" size={14} /></button>
           </div>
         </div>
+        </>)}
       </main>
     </div>
   );
 };
 
 export function MapPreview({ height = 320 }) {
-  // Decorative map placeholder — toned earthy
+  // Decorative map placeholder â€” toned earthy
   return (
     <div style={{
       height, position: 'relative', overflow: 'hidden',
@@ -592,3 +755,4 @@ export function MapPreview({ height = 320 }) {
     </div>
   );
 };
+

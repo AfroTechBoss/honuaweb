@@ -90,41 +90,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Supabase auth listener ----
   useEffect(() => {
+    // Fetch real profile data (avatar_url, handle, etc.) from profiles table
+    const hydrateUser = async (session: any) => {
+      const u = session.user;
+      const base = {
+        id: u.id,
+        email: u.email,
+        name: u.user_metadata?.full_name || u.email?.split("@")[0] || "You",
+        handle: u.user_metadata?.handle || u.email?.split("@")[0] || "you",
+        avatar: u.user_metadata?.avatar_url || null,
+      };
+      setSt((s: any) => ({ ...s, authed: true, session, user: base }));
+      // Fetch the profiles row to get the real avatar_url / handle / name
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, handle, avatar_url, cover_url")
+          .eq("id", u.id)
+          .single();
+        if (profile) {
+          setSt((s: any) => ({
+            ...s,
+            user: {
+              ...s.user,
+              name: profile.full_name || base.name,
+              handle: profile.handle || base.handle,
+              avatar: profile.avatar_url || base.avatar,
+              cover: profile.cover_url || null,
+            },
+          }));
+        }
+      } catch {}
+    };
+
     // Set initial session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        const u = session.user;
-        setSt((s: any) => ({
-          ...s,
-          authed: true,
-          session,
-          user: {
-            id: u.id,
-            email: u.email,
-            name: u.user_metadata?.full_name || u.email?.split("@")[0] || "You",
-            handle: u.user_metadata?.handle || u.email?.split("@")[0] || "you",
-            avatar: u.user_metadata?.avatar_url || null,
-          },
-        }));
-      }
+      if (session) hydrateUser(session);
     });
 
     // Keep in sync with any auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        const u = session.user;
-        setSt((s: any) => ({
-          ...s,
-          authed: true,
-          session,
-          user: {
-            id: u.id,
-            email: u.email,
-            name: u.user_metadata?.full_name || u.email?.split("@")[0] || "You",
-            handle: u.user_metadata?.handle || u.email?.split("@")[0] || "you",
-            avatar: u.user_metadata?.avatar_url || null,
-          },
-        }));
+        hydrateUser(session);
         if (_event === "SIGNED_IN") router.push("/");
         if (_event === "SIGNED_OUT") router.push("/login");
       } else {

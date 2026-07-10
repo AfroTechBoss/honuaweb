@@ -62,6 +62,7 @@ create table public.posts (
   content          text,
   image_url        text,
   post_type        text    default 'post',
+  tags             text[]  default '{}',
   is_repost        boolean default false,
   original_post_id uuid    references public.posts(id) on delete set null,
   likes_count      integer default 0,

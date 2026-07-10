@@ -556,32 +556,66 @@ export function ToggleRow({ label, sub, on }) {
 // Form / action modals  +  ModalContent dispatcher
 // ====================================================================
 
-// --- Compose post (success / draft-on-offline) ---
+// --- Compose post ---
 export function MCompose({ close }) {
   const app = useApp();
   const [text, setText] = React.useState('');
   const [cat, setCat] = React.useState('Energy');
-  const [withImg, setWithImg] = React.useState(false);
-  const [offline, setOffline] = React.useState(false);
-  const publish = () => {
-    if (!text.trim()) return;
-    if (offline) {
-      app.addDraft({ text, cat, ts: Date.now() });
-      app.toast({ kind: 'error', msg: "Couldn't publish — you're offline", sub: 'Saved to drafts. We\'ll retry when you reconnect.', icon: 'wifiOff', duration: 6000, action: { label: 'View drafts', onClick: () => app.toast({ msg: `${app.drafts.length + 1} draft(s) saved`, icon: 'edit' }) } });
-    } else {
-      app.toast({ kind: 'success', msg: 'Post published 🌱', sub: 'Your update is live on the feed.', icon: 'check' });
-    }
-    close();
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const [publishing, setPublishing] = React.useState(false);
+  const imgRef = React.useRef<HTMLInputElement>(null);
+
+  const pickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setImageFile(f);
+    setImagePreview(URL.createObjectURL(f));
   };
+
+  const publish = async () => {
+    if (!text.trim() || !app.user?.id) return;
+    setPublishing(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      let image_url: string | null = null;
+      if (imageFile) {
+        const { uploadFile } = await import('@/lib/storage');
+        image_url = await uploadFile('posts', app.user.id, imageFile);
+      }
+      // Extract hashtags from text: words starting with #
+      const tags = [...new Set((text.match(/#(\w+)/g) || []).map(t => t.slice(1)))];
+      const { error } = await supabase.from('posts').insert({
+        user_id: app.user.id,
+        content: text.trim(),
+        image_url,
+        post_type: cat.toLowerCase(),
+        tags,
+      });
+      if (error) throw error;
+      app.toast?.({ kind: 'success', msg: 'Post published 🌱', sub: 'Your update is live on the feed.', icon: 'check' });
+      close();
+    } catch (err: any) {
+      app.toast?.({ kind: 'error', msg: 'Failed to publish', sub: err.message, icon: 'bolt' });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   return (
     <Modal onClose={close} width={560}>
       <ModalHead icon="pencil" title="New post" sub="Share an action, idea, or win with the community." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
         <div style={{ display: 'flex', gap: 12 }}>
-          <Avatar src={MOCK.users.you.avatar} name="You" size={40} />
-          <textarea className="fld" autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="What did you do for the planet today?" style={{ minHeight: 110 }} />
+          <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={40} />
+          <textarea className="fld" autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="What did you do for the planet today? Use #hashtags to tag topics." style={{ minHeight: 110 }} />
         </div>
-        {withImg && <div style={{ marginTop: 12 }}><ImagePlaceholder label="drag a photo here" height={130} /></div>}
+        {imagePreview && (
+          <div style={{ marginTop: 12, position: 'relative' }}>
+            <img src={imagePreview} style={{ width: '100%', borderRadius: 10, maxHeight: 220, objectFit: 'cover' }} />
+            <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff', fontSize: 14 }}>✕</button>
+          </div>
+        )}
         <div style={{ marginTop: 14 }}>
           <span className="fld-label">Category</span>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -591,16 +625,15 @@ export function MCompose({ close }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-          <button onClick={() => setWithImg(v => !v)} style={{ background: withImg ? 'var(--green-tint)' : 'transparent', border: 'none', borderRadius: 8, padding: 7, cursor: 'pointer', color: withImg ? 'var(--green)' : 'var(--ink-3)' }}><Icon name="image" size={18} /></button>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 7 }}><Icon name="pin" size={18} /></button>
-          <label style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--ink-3)' }}>
-            <ToggleC on={offline} onChange={setOffline} /> Simulate offline
-          </label>
+          <button onClick={() => imgRef.current?.click()} style={{ background: imageFile ? 'var(--green-tint)' : 'transparent', border: 'none', borderRadius: 8, padding: 7, cursor: 'pointer', color: imageFile ? 'var(--green)' : 'var(--ink-3)' }}><Icon name="image" size={18} /></button>
+          <input ref={imgRef} type="file" accept="image/*" onChange={pickImage} style={{ display: 'none' }} />
         </div>
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={() => { if (text.trim()) { app.addDraft({ text, cat, ts: Date.now() }); app.toast({ msg: 'Saved to drafts', icon: 'edit' }); } close(); }}>Save draft</button>
-        <button className="btn btn-green" onClick={publish} disabled={!text.trim()} style={{ opacity: text.trim() ? 1 : .5 }}>Post</button>
+        <button className="btn btn-ghost" onClick={close} disabled={publishing}>Cancel</button>
+        <button className="btn btn-green" onClick={publish} disabled={!text.trim() || publishing} style={{ opacity: text.trim() ? 1 : .5 }}>
+          {publishing ? 'Publishing…' : 'Post'}
+        </button>
       </ModalFoot>
     </Modal>
   );

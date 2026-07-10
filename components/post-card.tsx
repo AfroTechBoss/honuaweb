@@ -190,8 +190,8 @@ export function PostCard({ post, dense = false }) {
       {post.tags && post.tags.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
           {post.tags.map(t => (
-            <span key={t} style={{
-              color: 'var(--sky)', fontSize: 13, fontWeight: 500,
+            <span key={t} onClick={stop(() => app.nav?.('explore', { tag: t }))} style={{
+              color: 'var(--sky)', fontSize: 13, fontWeight: 500, cursor: 'pointer',
             }}>#{t}</span>
           ))}
         </div>
