@@ -585,13 +585,18 @@ export function MCompose({ close }) {
       }
       // Extract hashtags from text: words starting with #
       const tags = [...new Set((text.match(/#(\w+)/g) || []).map(t => t.slice(1)))];
-      const { error } = await supabase.from('posts').insert({
+      const payload: Record<string, any> = {
         user_id: app.user.id,
         content: text.trim(),
         image_url,
         post_type: cat.toLowerCase(),
-        tags,
-      });
+      };
+      // Try with tags first; if the column doesn't exist yet, retry without it
+      let result = await supabase.from('posts').insert({ ...payload, tags });
+      if (result.error?.code === '42703') {
+        result = await supabase.from('posts').insert(payload);
+      }
+      const { error } = result;
       if (error) throw error;
       app.toast?.({ kind: 'success', msg: 'Post published 🌱', sub: 'Your update is live on the feed.', icon: 'check' });
       close();
