@@ -228,7 +228,7 @@ export default function TermsPage() {
               <UL items={[
                 "You will self-custody your own keys. Honua never holds, controls, or recovers your private key.",
                 "Blockchain transactions are irreversible. You are solely responsible for transactions you authorise.",
-                "Celo network fees ("gas") are your responsibility.",
+                'Celo network fees ("gas") are your responsibility.',
                 "Honua is not a money services business, licensed exchange, or custodian. The Wallet is an interface tool, not a financial service.",
                 "Regulatory compliance (KYC/AML) may be required for transactions above statutory thresholds and will be managed in partnership with a licensed third-party provider.",
                 "You are solely responsible for reporting crypto income, gains, and losses to applicable tax authorities.",
