@@ -743,24 +743,143 @@ export function MNewCollection({ close }) {
 // --- Edit profile ---
 export function MEditProfile({ close }) {
   const app = useApp();
+  const userId = app.user?.id;
+
+  const [fullName, setFullName] = React.useState(app.user?.name || '');
+  const [bio, setBio] = React.useState('');
+  const [location, setLocation] = React.useState('');
+  const [website, setWebsite] = React.useState('');
+
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
+  const [coverFile, setCoverFile] = React.useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = React.useState<string | null>(null);
+  const [currentAvatar, setCurrentAvatar] = React.useState<string | null>(null);
+  const [currentCover, setCurrentCover] = React.useState<string | null>(null);
+  const avatarRef = React.useRef<HTMLInputElement>(null);
+  const coverRef = React.useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = React.useState(false);
+
+  // Load current profile data
+  React.useEffect(() => {
+    if (!userId) return;
+    import('@/lib/profile').then(({ getProfile }) => {
+      getProfile(userId).then(p => {
+        if (!p) return;
+        setFullName(p.full_name || '');
+        setBio(p.bio || '');
+        setLocation(p.location || '');
+        setWebsite(p.website || '');
+        setCurrentAvatar(p.avatar_url || null);
+        setCurrentCover(p.cover_url || null);
+      }).catch(() => {});
+    });
+  }, [userId]);
+
+  const pickAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { app.toast?.({ msg: 'Image too large', sub: 'Max 5 MB', kind: 'error', icon: 'bolt' }); return; }
+    setAvatarFile(f);
+    setAvatarPreview(URL.createObjectURL(f));
+  };
+
+  const pickCover = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { app.toast?.({ msg: 'Image too large', sub: 'Max 10 MB', kind: 'error', icon: 'bolt' }); return; }
+    setCoverFile(f);
+    setCoverPreview(URL.createObjectURL(f));
+  };
+
+  const save = async () => {
+    if (!userId) return;
+    setSaving(true);
+    try {
+      const { uploadFile } = await import('@/lib/storage');
+      const { updateProfile } = await import('@/lib/profile');
+      const updates: Record<string, any> = { full_name: fullName, bio, location, website };
+
+      if (avatarFile) {
+        updates.avatar_url = await uploadFile('avatars', userId, avatarFile);
+        app.setState?.((s: any) => ({ ...s, user: { ...s.user, avatar: updates.avatar_url } }));
+      }
+      if (coverFile) {
+        updates.cover_url = await uploadFile('covers', userId, coverFile);
+      }
+
+      await updateProfile(userId, updates);
+      app.toast?.({ msg: 'Profile updated', kind: 'success', icon: 'check' });
+      close();
+      // Reload the page so profile reflects changes
+      window.location.reload();
+    } catch (err: any) {
+      app.toast?.({ msg: 'Failed to save', sub: err.message, kind: 'error', icon: 'bolt' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const avatarSrc = avatarPreview || currentAvatar;
+  const coverSrc = coverPreview || currentCover;
+  const fld: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 13px', fontSize: 14, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none' };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block', marginBottom: 5 };
+
   return (
     <Modal onClose={close} width={560}>
       <ModalHead icon="edit" title="Edit profile" sub="Update how you appear across Honua." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
-        <div style={{ height: 90, borderRadius: 12, background: 'linear-gradient(135deg,#1f6f3f,#2e9a5b)', position: 'relative', marginBottom: 44 }}>
-          <button style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 8, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Change cover</button>
-          <div style={{ position: 'absolute', bottom: -30, left: 16, width: 64, height: 64, borderRadius: 16, background: 'var(--green)', border: '4px solid var(--surface)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 26, fontFamily: 'Bricolage Grotesque' }}>Y</div>
+
+        {/* Cover photo */}
+        <div style={{
+          height: 110, borderRadius: 12, position: 'relative', marginBottom: 48, overflow: 'hidden',
+          background: coverSrc ? `url(${coverSrc}) center/cover` : 'linear-gradient(135deg,#1f6f3f,#2e9a5b)',
+        }}>
+          <button onClick={() => coverRef.current?.click()} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,.5)', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
+            {coverSrc ? 'Change cover' : '+ Add cover'}
+          </button>
+          <input ref={coverRef} type="file" accept="image/*" onChange={pickCover} style={{ display: 'none' }} />
+
+          {/* Avatar */}
+          <div style={{ position: 'absolute', bottom: -36, left: 16 }}>
+            <div style={{ width: 72, height: 72, borderRadius: 18, border: '4px solid var(--surface)', overflow: 'hidden', background: 'var(--green)', position: 'relative', cursor: 'pointer' }} onClick={() => avatarRef.current?.click()}>
+              {avatarSrc
+                ? <img src={avatarSrc} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 28, color: '#fff', fontFamily: 'Bricolage Grotesque' }}>{fullName.charAt(0) || '?'}</div>
+              }
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.4)', display: 'grid', placeItems: 'center', opacity: 0, transition: 'opacity .15s' }} className="avatar-edit-overlay">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </div>
+            </div>
+            <input ref={avatarRef} type="file" accept="image/*" onChange={pickAvatar} style={{ display: 'none' }} />
+          </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><span className="fld-label">Display name</span><input className="fld" defaultValue="You" /></div>
-          <div><span className="fld-label">Username</span><input className="fld" defaultValue="@you" /></div>
+
+        {/* Fields */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={lab}>DISPLAY NAME</label>
+            <input style={fld} value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" />
+          </div>
+          <div>
+            <label style={lab}>LOCATION</label>
+            <input style={fld} value={location} onChange={e => setLocation(e.target.value)} placeholder="City, Country" />
+          </div>
         </div>
-        <div style={{ marginTop: 12 }}><span className="fld-label">Bio</span><textarea className="fld" defaultValue="Learning to live lighter. Composting, biking, and one less flight a year." /></div>
-        <div style={{ marginTop: 12 }}><span className="fld-label">Location</span><input className="fld" defaultValue="Brooklyn, NY" /></div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={lab}>BIO</label>
+          <textarea style={{ ...fld, minHeight: 80, resize: 'vertical' }} value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell your story…" />
+        </div>
+        <div style={{ marginBottom: 4 }}>
+          <label style={lab}>WEBSITE</label>
+          <input style={fld} value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yoursite.com" />
+        </div>
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Profile updated', icon: 'check' }); }}>Save changes</button>
+        <button className="btn btn-ghost" onClick={close} disabled={saving}>Cancel</button>
+        <button className="btn btn-green" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
       </ModalFoot>
     </Modal>
   );
