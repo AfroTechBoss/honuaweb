@@ -1,5 +1,5 @@
 ﻿"use client";
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 
 const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
@@ -55,11 +55,31 @@ const SECTIONS = [
 export default function TermsPage() {
   const last = "10 July 2026";
   const effective = "10 July 2026";
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState("s1");
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const ids = SECTIONS.map((_, i) => `s${i + 1}`);
+    const els = ids.map(id => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Pick the topmost visible section
+        const visible = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) setActive(visible[0].target.id);
+      },
+      { root: container, rootMargin: "-10% 0px -60% 0px", threshold: 0 }
+    );
+    els.forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)", fontFamily: "Geist, sans-serif" }}>
+    // position:fixed + overflow-y:auto escapes #honua-app { overflow:hidden }
+    <div ref={scrollRef} style={{ position: "fixed", inset: 0, overflowY: "auto", background: "var(--bg)", color: "var(--ink)", fontFamily: "Geist, sans-serif", zIndex: 10 }}>
       {/* Header */}
-      <header style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(var(--bg-rgb),0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid var(--line)", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--bg)", borderBottom: "1px solid var(--line)", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
           <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--green)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 17, fontFamily: "Bricolage Grotesque, sans-serif", letterSpacing: "-0.05em" }}>h</span>
           <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink)", fontFamily: "Bricolage Grotesque, sans-serif" }}>honua</span>
@@ -69,11 +89,15 @@ export default function TermsPage() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 24px 80px", display: "flex", gap: 64, alignItems: "flex-start" }}>
         {/* Sidebar TOC */}
-        <aside style={{ width: 220, flexShrink: 0, position: "sticky", top: 80, display: "flex", flexDirection: "column", gap: 2 }} className="toc-aside">
+        <aside style={{ width: 220, flexShrink: 0, position: "sticky", top: 74, maxHeight: "calc(100vh - 90px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }} className="toc-aside no-scrollbar">
           <div style={{ fontSize: 11, fontFamily: "Geist Mono", color: "var(--ink-4)", letterSpacing: ".08em", marginBottom: 10, textTransform: "uppercase" }}>Contents</div>
-          {SECTIONS.map((s, i) => (
-            <a key={i} href={`#s${i + 1}`} style={{ fontSize: 12.5, color: "var(--ink-3)", textDecoration: "none", padding: "4px 0", lineHeight: 1.4 }}>{i + 1}. {s}</a>
-          ))}
+          {SECTIONS.map((s, i) => {
+            const id = `s${i + 1}`;
+            const isActive = active === id;
+            return (
+              <a key={i} href={`#${id}`} style={{ fontSize: 12.5, color: isActive ? "var(--green)" : "var(--ink-3)", fontWeight: isActive ? 600 : 400, textDecoration: "none", padding: "4px 0 4px 8px", lineHeight: 1.4, borderLeft: isActive ? "2px solid var(--green)" : "2px solid transparent", transition: "color .15s, border-color .15s" }}>{i + 1}. {s}</a>
+            );
+          })}
         </aside>
 
         {/* Body */}
