@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React from "react";
 import Link from "next/link";
 
@@ -423,7 +423,7 @@ export default function TermsPage() {
             <UL items={[
               "Send an email to your registered address at least 14 days before the changes take effect",
               "Display a prominent in-app notification",
-              "Update the "Last updated" date at the top of this page",
+              'Update the "Last updated" date at the top of this page',
               "Maintain an archive of prior versions at honua.earth/terms/history",
             ]} />
             <P>Your continued use of the Platform after the effective date of revised Terms constitutes acceptance. If you do not agree with the changes, you must stop using the Platform and may delete your account.</P>
