@@ -882,6 +882,10 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Username availability
+  const [handleStatus, setHandleStatus] = React.useState<'idle' | 'checking' | 'available' | 'taken' | 'short'>('idle');
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Step 3: bio & focus
   const [bio, setBio] = React.useState('');
   const [interests, setInterests] = React.useState<string[]>([]);
@@ -893,7 +897,20 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block' };
 
-  const handleHandleChange = (v: string) => setHandle(v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30));
+  const handleHandleChange = (v: string) => {
+    const clean = v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
+    setHandle(clean);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (clean.length < 3) { setHandleStatus(clean.length > 0 ? 'short' : 'idle'); return; }
+    setHandleStatus('checking');
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data } = await supabase.from('profiles').select('handle').eq('handle', clean).maybeSingle();
+        setHandleStatus(data ? 'taken' : 'available');
+      } catch { setHandleStatus('idle'); }
+    }, 500);
+  };
 
   const next = async () => {
     if (step === 1) {
@@ -904,6 +921,8 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
     if (step === 2) {
       if (!name || !handle) { app.toast?.({ msg: 'Name and username are required', icon: 'bolt', kind: 'error' }); return; }
       if (handle.length < 3) { app.toast?.({ msg: 'Username must be at least 3 characters', icon: 'bolt', kind: 'error' }); return; }
+      if (handleStatus === 'taken') { app.toast?.({ msg: 'That username is taken', sub: 'Try a different one.', icon: 'bolt', kind: 'error' }); return; }
+      if (handleStatus === 'checking') { app.toast?.({ msg: 'Still checking username…', icon: 'bolt', kind: 'error' }); return; }
     }
     if (step === 3 && interests.length < 3) { app.toast?.({ msg: 'Pick at least 3 interests to personalise your feed', icon: 'bolt', kind: 'error' }); return; }
     if (step === 4 && !agreed) { app.toast?.({ msg: 'Please accept the Terms of Service to continue', icon: 'bolt', kind: 'error' }); return; }
@@ -1024,9 +1043,39 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
             <label style={lab}>USERNAME</label>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)', fontSize: 15, marginTop: 3 }}>@</span>
-              <input value={handle} onChange={e => handleHandleChange(e.target.value)} placeholder="sarahgreen" style={{ ...field, paddingLeft: 28 }} />
+              <input
+                value={handle}
+                onChange={e => handleHandleChange(e.target.value)}
+                placeholder="sarahgreen"
+                style={{
+                  ...field,
+                  paddingLeft: 28,
+                  paddingRight: 36,
+                  borderColor: handleStatus === 'taken' ? 'var(--clay)' : handleStatus === 'available' ? 'var(--green)' : undefined,
+                }}
+              />
+              {handleStatus === 'checking' && (
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', marginTop: 3 }}>
+                  <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid var(--green)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                </span>
+              )}
+              {handleStatus === 'available' && (
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', marginTop: 3, color: 'var(--green)', fontSize: 16 }}>✓</span>
+              )}
+              {handleStatus === 'taken' && (
+                <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', marginTop: 3, color: 'var(--clay)', fontSize: 16 }}>✕</span>
+              )}
             </div>
-            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4, display: 'block' }}>Letters, numbers, underscores only. Min 3 chars.</span>
+            <span style={{
+              fontSize: 11, fontFamily: 'Geist Mono', marginTop: 4, display: 'block',
+              color: handleStatus === 'taken' ? 'var(--clay)' : handleStatus === 'available' ? 'var(--green)' : 'var(--ink-4)',
+            }}>
+              {handleStatus === 'taken' ? `@${handle} is already taken.` :
+               handleStatus === 'available' ? `@${handle} is available!` :
+               handleStatus === 'short' ? 'Min 3 characters.' :
+               handleStatus === 'checking' ? 'Checking availability…' :
+               'Letters, numbers, underscores only. Min 3 chars.'}
+            </span>
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={lab}>DATE OF BIRTH</label>
