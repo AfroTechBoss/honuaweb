@@ -1,11 +1,13 @@
 import { supabase } from "./supabase";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getProfile(handleOrId: string) {
-  // Try handle first, fall back to id
+  const col = UUID_RE.test(handleOrId) ? "id" : "handle";
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
-    .or(`handle.eq.${handleOrId},id.eq.${handleOrId}`)
+    .eq(col, handleOrId)
     .single();
   if (error) throw error;
   return data;
