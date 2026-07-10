@@ -1,6 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 // Route key -> URL path. Mirrors the prototype's ROUTES registry, but
 // navigation now drives the real Next.js router.
@@ -48,6 +49,8 @@ const STATE_DEFAULTS: any = {
   sellerShop: null,
   authed: false,
   user: null,
+  // supabase session — not persisted to localStorage
+  session: null,
 };
 
 const LS_STATE = "honua_desktop_state";
@@ -75,11 +78,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // hydrate from localStorage after mount (avoids SSR mismatch)
   useEffect(() => { setSt(loadState()); }, []);
   useEffect(() => {
-    try { localStorage.setItem(LS_STATE, JSON.stringify(st)); } catch {}
+    // Don't persist session/authed/user — Supabase manages those
+    const { session: _s, authed: _a, user: _u, ...persistable } = st;
+    try { localStorage.setItem(LS_STATE, JSON.stringify(persistable)); } catch {}
   }, [st]);
   useEffect(() => {
     document.body.classList.toggle("dark", !!st.dark);
   }, [st.dark]);
+
+  // ---- Supabase auth listener ----
+  useEffect(() => {
+    // Set initial session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        const u = session.user;
+        setSt((s: any) => ({
+          ...s,
+          authed: true,
+          session,
+          user: {
+            id: u.id,
+            email: u.email,
+            name: u.user_metadata?.full_name || u.email?.split("@")[0] || "You",
+            handle: u.user_metadata?.handle || u.email?.split("@")[0] || "you",
+            avatar: u.user_metadata?.avatar_url || null,
+          },
+        }));
+      }
+    });
+
+    // Keep in sync with any auth changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        const u = session.user;
+        setSt((s: any) => ({
+          ...s,
+          authed: true,
+          session,
+          user: {
+            id: u.id,
+            email: u.email,
+            name: u.user_metadata?.full_name || u.email?.split("@")[0] || "You",
+            handle: u.user_metadata?.handle || u.email?.split("@")[0] || "you",
+            avatar: u.user_metadata?.avatar_url || null,
+          },
+        }));
+        if (_event === "SIGNED_IN") router.push("/");
+        if (_event === "SIGNED_OUT") router.push("/login");
+      } else {
+        setSt((s: any) => ({ ...s, authed: false, session: null, user: null }));
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   // ---- navigation ----
   const nav = useCallback((key: string, params: any = {}) => {
@@ -110,15 +162,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     remove: (v: any) => setSt((s: any) => ({ ...s, [field]: s[field].filter((x: any) => x !== v) })),
   });
 
-  const login = useCallback((userData: any) => {
-    setSt((s: any) => ({ ...s, authed: true, user: userData }));
-    router.push("/");
-  }, [router]);
+  // login / logout are now thin wrappers — the auth listener does the real state update
+  const login = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    // navigation handled by onAuthStateChange SIGNED_IN
+  }, []);
 
-  const logout = useCallback(() => {
-    setSt((s: any) => ({ ...s, authed: false, user: null }));
-    router.push("/login");
-  }, [router]);
+  const loginWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) throw error;
+  }, []);
+
+  const loginWithApple = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) throw error;
+  }, []);
+
+  const signup = useCallback(async (email: string, password: string, metadata: Record<string, any>) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: metadata },
+    });
+    if (error) throw error;
+    // On email-confirmed projects this auto-signs in; otherwise show "check your email"
+  }, []);
+
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    // navigation handled by onAuthStateChange SIGNED_OUT
+  }, []);
 
   const ctx = {
     nav,
@@ -127,7 +207,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     state: st, setState: setSt,
     authed: st.authed,
     user: st.user,
-    login, logout,
+    session: st.session,
+    login, loginWithGoogle, loginWithApple, signup, logout,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     like: mk("liked"), save: mk("saved"), follow: mk("following"),
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),

@@ -776,16 +776,15 @@ function PasswordField({ value, onChange, placeholder = 'Enter your password', l
   );
 }
 
-function SocialButtons({ onSuccess }: { onSuccess: () => void }) {
-  const app = useApp();
+function SocialButtons({ onGoogle, onApple }: { onGoogle: () => void; onApple: () => void }) {
   const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '11px 16px', fontSize: 14, fontWeight: 500, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', marginBottom: 8, fontFamily: 'Geist', color: 'var(--ink)', transition: 'background .15s' };
   return (
     <>
-      <button style={btn} onClick={onSuccess}>
+      <button style={btn} onClick={onGoogle}>
         <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
         Continue with Google
       </button>
-      <button style={btn} onClick={onSuccess}>
+      <button style={btn} onClick={onApple}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
         Continue with Apple
       </button>
@@ -803,13 +802,21 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
   const app = useApp();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) { app.toast?.({ msg: 'Please fill in all fields', icon: 'bolt', kind: 'error' }); return; }
-    app.login?.({ name: 'You', handle: 'you', email });
+    setLoading(true);
+    try {
+      await app.login(email, password);
+    } catch (err: any) {
+      app.toast?.({ msg: 'Sign in failed', sub: err.message, icon: 'bolt', kind: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -826,7 +833,9 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
         <div style={{ textAlign: 'right', marginBottom: 4 }}>
           <span onClick={() => app.toast?.({ msg: 'Reset link sent', sub: 'Check your inbox for a reset link.', icon: 'msg' })} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Forgot password?</span>
         </div>
-        <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 8 }}>Sign in</button>
+        <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 8, opacity: loading ? 0.7 : 1 }}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
       </form>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-4)', margin: '18px 0' }}>
@@ -834,7 +843,10 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
         <span style={{ fontSize: 11, fontFamily: 'Geist Mono' }}>OR</span>
         <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
       </div>
-      <SocialButtons onSuccess={() => app.login?.({ name: 'You', handle: 'you', email: 'social@honua.earth' })} />
+      <SocialButtons
+        onGoogle={async () => { try { await app.loginWithGoogle(); } catch (e: any) { app.toast?.({ msg: 'Google sign-in failed', sub: e.message, icon: 'bolt', kind: 'error' }); } }}
+        onApple={async () => { try { await app.loginWithApple(); } catch (e: any) { app.toast?.({ msg: 'Apple sign-in failed', sub: e.message, icon: 'bolt', kind: 'error' }); } }}
+      />
 
       <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 20 }}>
         New to Honua?{' '}
@@ -853,6 +865,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
   const app = useApp();
   const [step, setStep] = React.useState(1); // 1–5
   const totalSteps = 5;
+  const [loading, setLoading] = React.useState(false);
 
   // Step 1: credentials
   const [email, setEmail] = React.useState('');
@@ -878,7 +891,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
 
   const handleHandleChange = (v: string) => setHandle(v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30));
 
-  const next = () => {
+  const next = async () => {
     if (step === 1) {
       if (!email || !password || !confirm) { app.toast?.({ msg: 'Please fill in all fields', icon: 'bolt', kind: 'error' }); return; }
       if (password.length < 8) { app.toast?.({ msg: 'Password must be at least 8 characters', icon: 'bolt', kind: 'error' }); return; }
@@ -891,8 +904,23 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
     if (step === 3 && interests.length < 3) { app.toast?.({ msg: 'Pick at least 3 interests to personalise your feed', icon: 'bolt', kind: 'error' }); return; }
     if (step === 4 && !agreed) { app.toast?.({ msg: 'Please accept the Terms of Service to continue', icon: 'bolt', kind: 'error' }); return; }
     if (step === totalSteps) {
-      app.login?.({ name, handle, email, bio, interests, location });
-      app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}! 🌱`, sub: 'Your account is ready. Start exploring.', kind: 'success', icon: 'leaf' });
+      setLoading(true);
+      try {
+        await app.signup(email, password, {
+          full_name: name,
+          handle,
+          dob,
+          location,
+          bio,
+          interests,
+          marketing_emails: agreedMarketing,
+        });
+        app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}! 🌱`, sub: 'Check your email to confirm your account.', kind: 'success', icon: 'leaf' });
+      } catch (err: any) {
+        app.toast?.({ msg: 'Sign up failed', sub: err.message, icon: 'bolt', kind: 'error' });
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     setStep(s => s + 1);
@@ -942,7 +970,10 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
             <span style={{ fontSize: 11, fontFamily: 'Geist Mono' }}>OR</span>
             <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
           </div>
-          <SocialButtons onSuccess={() => { setStep(2); }} />
+          <SocialButtons
+            onGoogle={async () => { try { await app.loginWithGoogle(); } catch (e: any) { app.toast?.({ msg: 'Google sign-in failed', sub: e.message, icon: 'bolt', kind: 'error' }); } }}
+            onApple={async () => { try { await app.loginWithApple(); } catch (e: any) { app.toast?.({ msg: 'Apple sign-in failed', sub: e.message, icon: 'bolt', kind: 'error' }); } }}
+          />
         </div>
       )}
 
@@ -1050,8 +1081,8 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
         </div>
       )}
 
-      <button onClick={next} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 22 }}>
-        {step === totalSteps ? 'Create my account 🌱' : step === 4 ? 'I agree — continue' : 'Continue →'}
+      <button onClick={next} disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 22, opacity: loading ? 0.7 : 1 }}>
+        {loading ? 'Creating account…' : step === totalSteps ? 'Create my account 🌱' : step === 4 ? 'I agree — continue' : 'Continue →'}
       </button>
 
       {step === 1 && (
@@ -1072,7 +1103,7 @@ export function DesktopAuth({ onNav, params }: { onNav: any; params?: Record<str
       <BrandPanel />
       <div style={{ flex: '0 0 clamp(400px, 42%, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px clamp(24px,4vw,56px)', overflow: 'auto' }} className="no-scrollbar">
         {mode === 'signin'
-          ? <SignInForm onSwitch={() => setMode('signup')} onSuccess={() => app.login?.({ name: 'You', handle: 'you', email: '' })} />
+          ? <SignInForm onSwitch={() => setMode('signup')} onSuccess={() => {}} />
           : <SignUpFlow onSwitch={() => setMode('signin')} />
         }
       </div>
