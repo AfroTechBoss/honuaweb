@@ -878,6 +878,9 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
   const [handle, setHandle] = React.useState('');
   const [dob, setDob] = React.useState('');
   const [location, setLocation] = React.useState('');
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
   // Step 3: bio & focus
   const [bio, setBio] = React.useState('');
@@ -907,7 +910,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
     if (step === totalSteps) {
       setLoading(true);
       try {
-        await app.signup(email, password, {
+        const result = await app.signup(email, password, {
           full_name: name,
           handle,
           dob,
@@ -916,6 +919,10 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
           interests,
           marketing_emails: agreedMarketing,
         });
+        // If user is immediately active (no email confirmation), upload avatar now
+        if (result?.user && avatarFile) {
+          await app.uploadAvatar(result.user.id, avatarFile);
+        }
         app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}! 🌱`, sub: 'Check your email to confirm your account.', kind: 'success', icon: 'leaf' });
       } catch (err: any) {
         app.toast?.({ msg: 'Sign up failed', sub: err.message, icon: 'bolt', kind: 'error' });
@@ -981,6 +988,34 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
       {/* ── Step 2: Identity ── */}
       {step === 2 && (
         <div>
+          {/* Avatar upload */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 22 }}>
+            <div
+              onClick={() => avatarInputRef.current?.click()}
+              style={{ width: 80, height: 80, borderRadius: 20, background: avatarPreview ? 'transparent' : 'var(--green-tint)', border: `2px dashed ${avatarPreview ? 'transparent' : 'var(--green)'}`, display: 'grid', placeItems: 'center', cursor: 'pointer', overflow: 'hidden', flexShrink: 0 }}
+            >
+              {avatarPreview
+                ? <img src={avatarPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              }
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>Profile photo</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 8 }}>JPG, PNG or WebP · max 5 MB</div>
+              <button type="button" onClick={() => avatarInputRef.current?.click()} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--ink-2)', fontFamily: 'Geist' }}>
+                {avatarPreview ? 'Change photo' : 'Upload photo'}
+              </button>
+              {avatarPreview && <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--clay)', fontFamily: 'Geist', marginLeft: 6 }}>Remove</button>}
+            </div>
+            <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              if (f.size > 5 * 1024 * 1024) { app.toast?.({ msg: 'File too large', sub: 'Max 5 MB', icon: 'bolt', kind: 'error' }); return; }
+              setAvatarFile(f);
+              setAvatarPreview(URL.createObjectURL(f));
+            }} />
+          </div>
+
           <div style={{ marginBottom: 14 }}>
             <label style={lab}>FULL NAME</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Sarah Green" style={field} autoFocus />

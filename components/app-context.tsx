@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { uploadFile } from "@/lib/storage";
+import { updateProfile } from "@/lib/profile";
 
 // Route key -> URL path. Mirrors the prototype's ROUTES registry, but
 // navigation now drives the real Next.js router.
@@ -186,13 +188,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signup = useCallback(async (email: string, password: string, metadata: Record<string, any>) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: metadata },
     });
     if (error) throw error;
-    // On email-confirmed projects this auto-signs in; otherwise show "check your email"
+    return data; // { user, session } — session is null if email confirmation required
+  }, []);
+
+  const uploadAvatar = useCallback(async (userId: string, file: File) => {
+    const url = await uploadFile("avatars", userId, file);
+    await updateProfile(userId, { avatar_url: url });
+    // Update local state so sidebar/header reflects immediately
+    setSt((s: any) => ({ ...s, user: { ...s.user, avatar: url } }));
+    return url;
   }, []);
 
   const logout = useCallback(async () => {
@@ -208,7 +218,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     authed: st.authed,
     user: st.user,
     session: st.session,
-    login, loginWithGoogle, loginWithApple, signup, logout,
+    login, loginWithGoogle, loginWithApple, signup, logout, uploadAvatar,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     like: mk("liked"), save: mk("saved"), follow: mk("following"),
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),

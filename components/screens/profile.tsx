@@ -1,19 +1,104 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
 
+function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
+  const [profile, setProfile] = React.useState<any>(null);
+  const [posts, setPosts] = React.useState<any[]>([]);
+  const [followerCount, setFollowerCount] = React.useState(0);
+  const [followingCount, setFollowingCount] = React.useState(0);
+  const [achievements, setAchievements] = React.useState<any[]>([]);
+  const [projects, setProjects] = React.useState<any[]>([]);
+  const [following, setFollowing] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!handleOrId) return;
+    setLoading(true);
+    Promise.all([
+      getProfile(handleOrId),
+    ]).then(async ([p]) => {
+      setProfile(p);
+      const [postsData, fc, fwc, ach, proj] = await Promise.all([
+        getProfilePosts(p.id),
+        getFollowerCount(p.id),
+        getFollowingCount(p.id),
+        getAchievements(p.id),
+        getProjects(p.id),
+      ]);
+      setPosts(postsData);
+      setFollowerCount(fc);
+      setFollowingCount(fwc);
+      setAchievements(ach);
+      setProjects(proj);
+      if (currentUserId && currentUserId !== p.id) {
+        setFollowing(await isFollowing(currentUserId, p.id));
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [handleOrId, currentUserId]);
+
+  return { profile, posts, followerCount, followingCount, achievements, projects, following, setFollowing, loading };
+}
 
 // =============== Desktop Profile ===============
 export function DesktopProfile({ onNav, params }) {
   const [tab, setTab] = React.useState('posts');
   const app = useApp();
   const handle = params?.handle;
-  const isOwn = !handle || handle === 'you';
-  const key = handle && Object.keys(MOCK.users).find(k => MOCK.users[k].handle === handle);
-  const u = isOwn
-    ? MOCK.users.you
-    : (key ? MOCK.users[key] : MOCK.users.sarah);
-  const following = app.follow?.has(u.handle);
+
+  // If no handle or handle is 'you', show the signed-in user's profile
+  const lookupKey = (!handle || handle === 'you') ? app.user?.handle : handle;
+  const isOwn = !handle || handle === 'you' || handle === app.user?.handle;
+
+  const { profile, posts, followerCount, followingCount, achievements, projects, following, setFollowing, loading } =
+    useProfileData(lookupKey, app.user?.id);
+
+  const handleFollowToggle = async () => {
+    if (!app.user?.id || !profile?.id) return;
+    await toggleFollow(app.user.id, profile.id, following);
+    setFollowing(!following);
+  };
+
+  // Posts split: own posts vs reposts
+  const ownPosts = posts.filter(p => !p.is_repost);
+  const reposts = posts.filter(p => p.is_repost);
+  const mediaPosts = posts.filter(p => p.image_url);
+
+  const joinedDate = profile?.created_at
+    ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : null;
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+        <DesktopSidebar active="profile" onNav={onNav} />
+        <main style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--ink-3)' }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+            <span style={{ fontSize: 13, fontFamily: 'Geist Mono' }}>Loading profile…</span>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+        <DesktopSidebar active="profile" onNav={onNav} />
+        <main style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+          <div style={{ textAlign: 'center', color: 'var(--ink-3)' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🌍</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>Profile not found</div>
+            <div style={{ fontSize: 14, marginTop: 6 }}>This account doesn't exist or may have been removed.</div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="profile" onNav={onNav} />
@@ -21,46 +106,58 @@ export function DesktopProfile({ onNav, params }) {
         {/* Cover */}
         <div style={{
           height: 180,
-          background: 'linear-gradient(135deg, #1f6f3f 0%, #2e9a5b 50%, #c8e6cf 100%)',
+          background: profile.cover_url
+            ? `url(${profile.cover_url}) center/cover`
+            : 'linear-gradient(135deg, #1f6f3f 0%, #2e9a5b 50%, #c8e6cf 100%)',
           position: 'relative',
         }}>
-          <svg viewBox="0 0 800 200" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
-            <path d="M0 100 Q200 60 400 100 T800 80 L800 200 0 200Z" fill="rgba(255,255,255,.1)"/>
-            <path d="M0 140 Q200 100 400 140 T800 120 L800 200 0 200Z" fill="rgba(255,255,255,.1)"/>
-          </svg>
+          {!profile.cover_url && (
+            <svg viewBox="0 0 800 200" preserveAspectRatio="xMidYMid slice" width="100%" height="100%">
+              <path d="M0 100 Q200 60 400 100 T800 80 L800 200 0 200Z" fill="rgba(255,255,255,.1)"/>
+              <path d="M0 140 Q200 100 400 140 T800 120 L800 200 0 200Z" fill="rgba(255,255,255,.1)"/>
+            </svg>
+          )}
+          {isOwn && (
+            <button onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Cover photo upload coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', bottom: 12, right: 12, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: 8, color: '#fff', padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="edit" size={13} /> Edit cover
+            </button>
+          )}
         </div>
 
         <div style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
           {/* Identity row */}
-          <div style={{
-            display: 'flex', alignItems: 'flex-end', gap: 20,
-            marginTop: -50, marginBottom: 18, position: 'relative', zIndex: 1,
-          }}>
-            <div style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0 }}>
-              <Avatar src={u.avatar} name={u.name} size={132} verified={u.verified} />
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -50, marginBottom: 18, position: 'relative', zIndex: 1 }}>
+            <div style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+              <Avatar src={profile.avatar_url} name={profile.full_name} size={132} verified={profile.verified} />
+              {isOwn && (
+                <div onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Avatar change coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)', display: 'grid', placeItems: 'center', opacity: 0, cursor: 'pointer', transition: 'opacity .15s' }} className="avatar-edit-overlay">
+                  <Icon name="edit" size={20} />
+                </div>
+              )}
             </div>
             <div style={{ flex: 1, paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h1 className="font-display" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{u.name}</h1>
-                {u.verified && <span style={{
-                  background: 'var(--sky)', color: '#fff', width: 22, height: 22,
-                  borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12,
-                }}>✓</span>}
-                <span className="chip chip-green">{isOwn ? 'Level 7 · Composter' : 'Level 12 · Forest steward'}</span>
+                <h1 className="font-display" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
+                {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
+                {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 2 }}>@{u.handle} · {isOwn ? 'Brooklyn, NY · Joined Jan 2025' : 'Portland, OR · Joined Sep 2024'}</div>
+              <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 2 }}>
+                @{profile.handle}
+                {profile.location && ` · ${profile.location}`}
+                {joinedDate && ` · Joined ${joinedDate}`}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 8, paddingBottom: 8 }}>
               {isOwn ? (
                 <>
-                  <button className="btn btn-ghost" onClick={() => app.toast({ msg: 'Share profile', sub: 'Profile link copied.', icon: 'share' })}><Icon name="share" size={14} /> Share</button>
-                  <button className="btn btn-primary" onClick={() => app.openModal('editprofile')}><Icon name="edit" size={14} /> Edit profile</button>
+                  <button className="btn btn-ghost" onClick={() => { navigator.clipboard?.writeText(window.location.href); app.toast?.({ msg: 'Link copied', icon: 'share' }); }}><Icon name="share" size={14} /> Share</button>
+                  <button className="btn btn-primary" onClick={() => app.openModal?.('editprofile')}><Icon name="edit" size={14} /> Edit profile</button>
                 </>
               ) : (
                 <>
                   <button className="btn btn-ghost" onClick={() => onNav?.('messages')}><Icon name="msg" size={14} /> Message</button>
-                  <button className="btn btn-ghost" onClick={() => app.openModal('tip', { user: u })}><Icon name="gift" size={14} /> Tip</button>
-                  <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(u.handle); app.toast(following ? { msg: `Unfollowed ${u.name}`, icon: 'user' } : { msg: `Following ${u.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
+                  <button className="btn btn-ghost" onClick={() => app.openModal?.('tip', { user: profile })}><Icon name="gift" size={14} /> Tip</button>
+                  <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={handleFollowToggle}>{following ? 'Following' : 'Follow'}</button>
                 </>
               )}
             </div>
@@ -69,39 +166,31 @@ export function DesktopProfile({ onNav, params }) {
           {/* Bio + stats */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 18, marginBottom: 18 }}>
             <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20 }}>
-              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)', textWrap: 'pretty' }}>
-                Community solar organizer in Cascadia. Currently retrofitting our co-op center — 20 panels in, 30 to go. Co-host of the <strong>Sunhill</strong> podcast. She/her.
-              </p>
-              <div style={{ display: 'flex', gap: 14, marginTop: 12, fontSize: 13, color: 'var(--ink-3)' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="pin" size={14} /> Portland, OR
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="globe" size={14} /> sunhill.coop
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="calendar" size={14} /> Joined Sep 2024
-                </span>
+              {profile.bio
+                ? <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>{profile.bio}</p>
+                : <p style={{ margin: 0, fontSize: 15, color: 'var(--ink-4)', fontStyle: 'italic' }}>No bio yet.{isOwn && ' Add one to tell your story.'}</p>
+              }
+              <div style={{ display: 'flex', gap: 14, marginTop: 12, fontSize: 13, color: 'var(--ink-3)', flexWrap: 'wrap' }}>
+                {profile.location && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="pin" size={14} /> {profile.location}</span>}
+                {profile.website && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="globe" size={14} /> {profile.website}</span>}
+                {joinedDate && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="calendar" size={14} /> Joined {joinedDate}</span>}
               </div>
-              <div style={{ display: 'flex', gap: 20, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-                <Stat n="1,284" l="Posts" />
-                <Stat n={isOwn ? '1,204' : '48.6k'} l="Followers" onClick={() => onNav?.('followers', { handle: u.handle })} />
-                <Stat n={isOwn ? '356' : '412'} l="Following" onClick={() => onNav?.('following', { handle: u.handle })} />
-                <Stat n="92" l="Impact score" green />
-                <Stat n="2.8t" l="CO₂ avoided" green />
+              <div style={{ display: 'flex', gap: 20, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line)', flexWrap: 'wrap' }}>
+                <Stat n={ownPosts.length} l="Posts" />
+                <Stat n={followerCount.toLocaleString()} l="Followers" onClick={() => onNav?.('followers', { handle: profile.handle })} />
+                <Stat n={followingCount.toLocaleString()} l="Following" onClick={() => onNav?.('following', { handle: profile.handle })} />
+                <Stat n={profile.impact_score || 0} l="Impact score" green />
+                <Stat n={profile.co2_avoided_kg >= 1000 ? `${(profile.co2_avoided_kg / 1000).toFixed(1)}t` : `${profile.co2_avoided_kg || 0}kg`} l="CO₂ avoided" green />
               </div>
             </div>
 
-            <div style={{
-              background: 'linear-gradient(135deg, #1f6f3f, #2e9a5b)', color: '#fff',
-              borderRadius: 16, padding: 20, position: 'relative', overflow: 'hidden',
-            }}>
+            <div style={{ background: 'linear-gradient(135deg, #1f6f3f, #2e9a5b)', color: '#fff', borderRadius: 16, padding: 20, position: 'relative', overflow: 'hidden' }}>
               <div style={{ fontSize: 11, fontFamily: 'Geist Mono', opacity: .85, letterSpacing: '.05em' }}>VERIFIED IMPACT · LIFETIME</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
-                <Stat n="2.8t" l="CO₂ avoided" light />
-                <Stat n="180" l="Trees funded" light />
-                <Stat n="42k L" l="Water saved" light />
-                <Stat n="14" l="Projects led" light />
+                <Stat n={profile.co2_avoided_kg >= 1000 ? `${(profile.co2_avoided_kg / 1000).toFixed(1)}t` : `${profile.co2_avoided_kg || 0}kg`} l="CO₂ avoided" light />
+                <Stat n={profile.green_points?.toLocaleString() || 0} l="Green points" light />
+                <Stat n={projects.length} l="Projects led" light />
+                <Stat n={achievements.length} l="Achievements" light />
               </div>
               <button className="btn" style={{ background: 'rgba(255,255,255,.18)', color: '#fff', marginTop: 14, padding: '7px 12px', fontSize: 12 }} onClick={() => onNav?.('impact')}>
                 See full impact ledger →
@@ -109,9 +198,18 @@ export function DesktopProfile({ onNav, params }) {
             </div>
           </div>
 
+          {/* Interests */}
+          {profile.interests?.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+              {profile.interests.map((it: string) => (
+                <span key={it} style={{ fontSize: 12, background: 'var(--green-tint)', color: 'var(--green)', padding: '3px 10px', borderRadius: 999, fontWeight: 500 }}>{it}</span>
+              ))}
+            </div>
+          )}
+
           {/* Tabs */}
           <div style={{ borderBottom: '1px solid var(--line)', marginBottom: 18, display: 'flex', gap: 4 }}>
-            {['Posts', 'Replies', 'Projects', 'Impact', 'Achievements', 'Media'].map(t => (
+            {['Posts', 'Reposts', 'Projects', 'Achievements', 'Media'].map(t => (
               <button key={t} onClick={() => setTab(t.toLowerCase())} style={{
                 background: 'transparent', border: 'none', padding: '12px 16px',
                 color: tab === t.toLowerCase() ? 'var(--ink)' : 'var(--ink-3)',
@@ -119,64 +217,163 @@ export function DesktopProfile({ onNav, params }) {
                 cursor: 'pointer', position: 'relative', fontFamily: 'Geist',
               }}>
                 {t}
-                {tab === t.toLowerCase() && <div style={{
-                  position: 'absolute', bottom: -1, left: 12, right: 12, height: 2,
-                  background: 'var(--green)', borderRadius: 2,
-                }} />}
+                {tab === t.toLowerCase() && <div style={{ position: 'absolute', bottom: -1, left: 12, right: 12, height: 2, background: 'var(--green)', borderRadius: 2 }} />}
               </button>
             ))}
           </div>
 
-          {/* Content */}
+          {/* Tab content */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18, paddingBottom: 40 }}>
             <div>
-              {MOCK.posts.slice(0, 2).map(p => <PostCard key={p.id} post={p} />)}
-            </div>
-            <div>
-              <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
-                <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Achievements</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                  {[['🌱', 'Seedling', 'Logged your first action'], ['🌿', 'Sprout', '7-day streak reached'], ['🌳', 'Forest steward', 'Funded 100+ trees'], ['☀️', 'Solar pioneer', 'Switched to renewable energy'], ['💧', 'Water saver', 'Saved 10,000 L'], ['⚡', 'Energy cutter', 'Locked'], ['♻️', 'Zero-waster', 'Locked'], ['🏆', 'Champion', 'Locked']].map(([e, name, desc], i) => (
-                    <div key={i} onClick={() => i < 5 && app.openModal('badge', { emoji: e, name, desc: desc + '.', perks: ['+150 Green Points', 'Profile flair', 'Featured in your achievements'] })} style={{
-                      aspectRatio: '1', borderRadius: 10, background: i < 5 ? 'var(--green-tint)' : 'var(--bg-2)',
-                      display: 'grid', placeItems: 'center', fontSize: 22, opacity: i < 5 ? 1 : 0.4,
-                      cursor: i < 5 ? 'pointer' : 'default',
-                    }}>{e}</div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 10 }}>5 of 8 earned this season</div>
-              </div>
-
-              <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
-                <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Projects led</h3>
-                {[
-                  ['Sunhill rooftop solar', '20 / 50 panels', 0.4],
-                  ['SE Portland repair café', 'Active · weekly', 1],
-                  ['Powell Butte tree drive', 'Goal: 5,000 trees', 0.68],
-                ].map(([t, s, p], i) => {
-                  const ratio = typeof p === 'number' ? p : Number(p || 0);
-                  const percent = Math.round(ratio * 100);
-                  return (
-                    <div key={i} style={{ padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 500 }}>
-                        <span>{t}</span>
-                        <span style={{ fontFamily: 'Geist Mono', color: 'var(--ink-3)', fontSize: 11 }}>{percent}%</span>
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{s}</div>
-                      <div style={{ height: 4, background: 'var(--line)', borderRadius: 999, marginTop: 6 }}>
-                        <div style={{ width: `${percent}%`, height: '100%', background: 'var(--green)', borderRadius: 999 }} />
+              {tab === 'posts' && (
+                ownPosts.length === 0
+                  ? <EmptyTab icon="✍️" msg={isOwn ? "You haven't posted yet. Share your first action!" : "No posts yet."} />
+                  : ownPosts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} />)
+              )}
+              {tab === 'reposts' && (
+                reposts.length === 0
+                  ? <EmptyTab icon="🔁" msg="No reposts yet." />
+                  : reposts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} isRepost />)
+              )}
+              {tab === 'projects' && (
+                projects.length === 0
+                  ? <EmptyTab icon="🌱" msg={isOwn ? "Start a project to track real-world impact." : "No projects yet."} />
+                  : projects.map((pr: any) => (
+                    <div key={pr.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, marginBottom: 12 }}>
+                      {pr.cover_url && <img src={pr.cover_url} style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 10, marginBottom: 12 }} />}
+                      <div style={{ fontSize: 16, fontWeight: 600 }}>{pr.title}</div>
+                      {pr.description && <div style={{ fontSize: 14, color: 'var(--ink-3)', marginTop: 4, lineHeight: 1.55 }}>{pr.description}</div>}
+                      <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>
+                        <span>{pr.members} member{pr.members !== 1 ? 's' : ''}</span>
+                        {pr.impact_kg > 0 && <span>{pr.impact_kg}kg CO₂</span>}
+                        <span style={{ textTransform: 'capitalize' }}>{pr.status}</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ))
+              )}
+              {tab === 'achievements' && (
+                achievements.length === 0
+                  ? <EmptyTab icon="🏆" msg="No achievements yet. Log your first action to earn one!" />
+                  : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                    {achievements.map((a: any) => (
+                      <div key={a.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <div style={{ fontSize: 32 }}>{a.icon || '🌱'}</div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>{a.title}</div>
+                          {a.description && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{a.description}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+              )}
+              {tab === 'media' && (
+                mediaPosts.length === 0
+                  ? <EmptyTab icon="🖼️" msg="No media posts yet." />
+                  : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                    {mediaPosts.map((p: any) => (
+                      <img key={p.id} src={p.image_url} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8, cursor: 'pointer' }} />
+                    ))}
+                  </div>
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div>
+              {/* Interests */}
+              {achievements.length > 0 && (
+                <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
+                  <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Achievements</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                    {achievements.slice(0, 8).map((a: any) => (
+                      <div key={a.id} title={a.title} style={{ aspectRatio: '1', borderRadius: 10, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', fontSize: 22, cursor: 'pointer' }}>{a.icon || '🌱'}</div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 10 }}>{achievements.length} earned</div>
+                </div>
+              )}
+
+              {projects.length > 0 && (
+                <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
+                  <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Projects led</h3>
+                  {projects.slice(0, 3).map((pr: any, i: number) => (
+                    <div key={pr.id} style={{ padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{pr.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2, textTransform: 'capitalize' }}>{pr.status} · {pr.members} member{pr.members !== 1 ? 's' : ''}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {profile.interests?.length > 0 && (
+                <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18 }}>
+                  <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Interests</h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {profile.interests.map((it: string) => (
+                      <span key={it} style={{ fontSize: 12, background: 'var(--green-tint)', color: 'var(--green)', padding: '3px 10px', borderRadius: 999, fontWeight: 500 }}>{it}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </main>
     </div>
   );
-};
+}
+
+function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--ink-3)' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 14 }}>{msg}</div>
+    </div>
+  );
+}
+
+function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any; isRepost?: boolean }) {
+  const app = useApp();
+  const profile = post.profile;
+  const original = post.original;
+  const liked = app.like?.has(post.id);
+  const timeAgo = (ts: string) => {
+    const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h`;
+    return `${Math.floor(s / 86400)}d`;
+  };
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, marginBottom: 12 }}>
+      {isRepost && original && (
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="repost" size={13} /> Reposted from <strong>@{original.profile?.handle}</strong>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 12 }}>
+        <Avatar src={profile?.avatar_url} name={profile?.full_name} size={40} verified={profile?.verified} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name}</span>
+            <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
+          </div>
+          {(isRepost && original ? original.content : post.content) && (
+            <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }}>{isRepost && original ? original.content : post.content}</p>
+          )}
+          {(isRepost ? original?.image_url : post.image_url) && (
+            <img src={isRepost ? original.image_url : post.image_url} style={{ width: '100%', borderRadius: 12, marginBottom: 10, objectFit: 'cover', maxHeight: 320 }} />
+          )}
+          <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--ink-3)' }}>
+            <ActionBtn icon="heart" count={post.likes_count} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+            <ActionBtn icon="comment" count={post.comments_count} onClick={() => {}} />
+            <ActionBtn icon="repost" count={post.reposts_count} onClick={() => {}} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function CommentRow({ usr, text, time, likes, onNav }) {
   const [liked, setLiked] = React.useState(false);
