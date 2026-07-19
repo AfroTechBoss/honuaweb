@@ -60,8 +60,13 @@ export function DesktopProfile({ onNav, params }) {
 
   const handleFollowToggle = async () => {
     if (!app.user?.id || !profile?.id) return;
+    const nowFollowing = !following;
     await toggleFollow(app.user.id, profile.id, following);
-    setFollowing(!following);
+    setFollowing(nowFollowing);
+    if (nowFollowing) {
+      const { createNotification } = await import('@/lib/notifications');
+      await createNotification({ userId: profile.id, actorId: app.user.id, type: 'follow', body: 'started following you' });
+    }
   };
 
   // Posts split: own posts vs reposts
@@ -437,7 +442,23 @@ export function DesktopPostDetail({ onNav, params }) {
   const [tree, setTree] = React.useState(makeCommentSeed);
   const [reply, setReply] = React.useState('');
   const [showBookmark, setShowBookmark] = React.useState(false);
-  const postReply = () => { if (!reply.trim()) return; setTree(c => [{ id: Date.now(), user: 'you', text: reply.trim(), time: 'now', likes: 0, replies: [] }, ...c]); setReply(''); app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' }); };
+  const postReply = async () => {
+    if (!reply.trim()) return;
+    const text = reply.trim();
+    setTree(c => [{ id: Date.now(), user: app.user?.handle || 'you', text, time: 'now', likes: 0, replies: [] }, ...c]);
+    setReply('');
+    app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' });
+    if (!isMock && app.user?.id) {
+      try {
+        await supabase.from('comments').insert({ post_id: post.id, user_id: app.user.id, content: text });
+        const postOwnerId = post.user_id ?? dbPost?.user_id;
+        if (postOwnerId) {
+          const { createNotification } = await import('@/lib/notifications');
+          await createNotification({ userId: postOwnerId, actorId: app.user.id, type: 'comment', postId: post.id, body: `commented: "${text.slice(0, 80)}"` });
+        }
+      } catch {}
+    }
+  };
   if (loading) return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="home" onNav={onNav} />

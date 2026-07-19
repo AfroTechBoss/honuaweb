@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { uploadFile } from "@/lib/storage";
 import { updateProfile } from "@/lib/profile";
+import { createNotification, getUnreadCount, markAllRead } from "@/lib/notifications";
 
 // Route key -> URL path. Mirrors the prototype's ROUTES registry, but
 // navigation now drives the real Next.js router.
@@ -172,6 +173,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     remove: (v: any) => setSt((s: any) => ({ ...s, [field]: s[field].filter((x: any) => x !== v) })),
   });
 
+  // ---- unread notification count ----
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const refreshUnread = useCallback(async (userId: string) => {
+    const count = await getUnreadCount(userId);
+    setUnreadNotifs(count);
+  }, []);
+
   // ---- DB-backed like toggle ----
   const dbLike = {
     has: (postId: any) => st.liked.includes(postId),
@@ -185,6 +193,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await supabase.from('post_likes').delete().match({ user_id: st.user.id, post_id: postId });
         } else {
           await supabase.from('post_likes').insert({ user_id: st.user.id, post_id: postId });
+          // Notify post owner
+          const { data: post } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+          if (post?.user_id) {
+            await createNotification({ userId: post.user_id, actorId: st.user.id, type: 'like', postId, body: 'liked your post' });
+          }
         }
       } catch {}
     },
@@ -207,7 +220,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
   };
 
-  // ---- Sync likes + reposts from DB when user logs in ----
+  // ---- Sync likes + reposts + unread notifs from DB when user logs in ----
   useEffect(() => {
     if (!st.user?.id) return;
     const userId = st.user.id;
@@ -221,7 +234,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
       }));
     }).catch(() => {});
-  }, [st.user?.id]);
+    refreshUnread(userId);
+  }, [st.user?.id, refreshUnread]);
 
   // login / logout are now thin wrappers — the auth listener does the real state update
   const login = useCallback(async (email: string, password: string) => {
@@ -278,6 +292,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     user: st.user,
     session: st.session,
     login, loginWithGoogle, loginWithApple, signup, logout, uploadAvatar,
+    unreadNotifs, refreshUnread,
+    markAllNotifsRead: async () => { if (st.user?.id) { await markAllRead(st.user.id); setUnreadNotifs(0); } },
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     like: dbLike, save: mk("saved"), follow: mk("following"),
     repost: dbRepost,
