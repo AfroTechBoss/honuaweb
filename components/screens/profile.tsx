@@ -371,9 +371,9 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
             <img src={isRepost ? original.image_url : post.image_url} style={{ width: '100%', borderRadius: 12, marginBottom: 10, objectFit: 'cover', maxHeight: 320 }} />
           )}
           <div onClick={stop} style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--ink-3)' }}>
-            <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+            <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
             <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
-            <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
+            <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
           </div>
         </div>
       </div>
@@ -534,9 +534,9 @@ export function DesktopPostDetail({ onNav, params }) {
               </div>
             </div>
             <footer style={{ display: 'flex', gap: 28, marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-              <ActionBtn icon="heart" count={(isMock ? (post as any).likes : (post.likes_count ?? 0)) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
+              <ActionBtn icon="heart" count={(isMock ? (post as any).likes : (post.likes_count ?? 0)) + (liked ? 1 : 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
               <ActionBtn icon="comment" count={isMock ? (post as any).comments : (post.comments_count ?? 0)} onClick={() => document.getElementById('pd-reply')?.focus()} />
-              <ActionBtn icon="repost" count={(isMock ? (post as any).reposts : (post.reposts_count ?? 0)) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
+              <ActionBtn icon="repost" count={(isMock ? (post as any).reposts : (post.reposts_count ?? 0)) + (app.repost?.has(post.id) ? 1 : 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
                 <ActionBtn icon="bookmark" active={saved} onClick={() => setShowBookmark(true)} />
                 <ActionBtn icon="share" onClick={() => app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' })} />

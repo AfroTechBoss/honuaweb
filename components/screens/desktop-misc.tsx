@@ -1280,6 +1280,234 @@ function CheckEmailScreen({ email, onBackToSignIn }: { email: string; onBackToSi
   );
 }
 
+// ── OAuth Onboarding Flow ─────────────────────────────────────────────────────
+export function OAuthOnboardingFlow() {
+  const app = useApp();
+  const totalSteps = 5;
+  const [step, setStep] = React.useState(1);
+  const [loading, setLoading] = React.useState(false);
+
+  // Pre-fill from Google user data
+  const [name, setName] = React.useState(app.user?.name || '');
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(app.user?.avatar || null);
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [handle, setHandle] = React.useState('');
+  const [handleStatus, setHandleStatus] = React.useState<'idle' | 'checking' | 'available' | 'taken' | 'short'>('idle');
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [location, setLocation] = React.useState('');
+  const [interests, setInterests] = React.useState<string[]>([]);
+  const [bio, setBio] = React.useState('');
+  const [agreed, setAgreed] = React.useState(false);
+
+  const field: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)',
+    border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px',
+    fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6,
+  };
+  const lab: React.CSSProperties = {
+    fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)',
+    letterSpacing: '.05em', display: 'block',
+  };
+
+  const handleHandleChange = (v: string) => {
+    const clean = v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
+    setHandle(clean);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (clean.length < 3) { setHandleStatus(clean.length > 0 ? 'short' : 'idle'); return; }
+    setHandleStatus('checking');
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data } = await supabase.from('profiles').select('handle').eq('handle', clean).maybeSingle();
+        setHandleStatus(data ? 'taken' : 'available');
+      } catch { setHandleStatus('idle'); }
+    }, 500);
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setAvatarPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const next = async () => {
+    if (step === 1 && !name.trim()) {
+      app.toast?.({ msg: 'Please enter your name', icon: 'bolt', kind: 'error' }); return;
+    }
+    if (step === 2) {
+      if (!handle || handle.length < 3) { app.toast?.({ msg: 'Username must be at least 3 characters', icon: 'bolt', kind: 'error' }); return; }
+      if (handleStatus === 'taken') { app.toast?.({ msg: 'That username is taken', sub: 'Try a different one.', icon: 'bolt', kind: 'error' }); return; }
+      if (handleStatus === 'checking') { app.toast?.({ msg: 'Still checking username…', icon: 'bolt', kind: 'error' }); return; }
+    }
+    if (step === 4 && interests.length < 3) {
+      app.toast?.({ msg: 'Pick at least 3 interests', sub: 'They help us personalise your feed.', icon: 'bolt', kind: 'error' }); return;
+    }
+    if (step === totalSteps) {
+      if (!agreed) { app.toast?.({ msg: 'Please accept the Terms of Service', icon: 'bolt', kind: 'error' }); return; }
+      setLoading(true);
+      try {
+        await app.completeOAuthOnboarding({ name, handle, location, bio, interests, avatarFile });
+        app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}! 🌿`, sub: 'Your profile is all set.', kind: 'success', icon: 'leaf' });
+      } catch (err: any) {
+        app.toast?.({ msg: 'Something went wrong', sub: err.message, icon: 'bolt', kind: 'error' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    setStep(s => s + 1);
+  };
+
+  const stepTitles = ['Welcome to Honua', 'Choose your username', 'Where are you based?', 'What do you care about?', 'Almost done'];
+  const stepSubs = [
+    'Let\'s confirm your name and photo.',
+    'This is how the community will find you.',
+    'Optional — helps connect you with local initiatives.',
+    'Pick at least 3 topics to personalise your feed.',
+    'A short intro and you\'re in.',
+  ];
+
+  const handleStatusColor = handleStatus === 'available' ? 'var(--green)' : handleStatus === 'taken' ? 'var(--clay)' : 'var(--ink-4)';
+  const handleStatusMsg =
+    handleStatus === 'available' ? `@${handle} is available!` :
+    handleStatus === 'taken' ? 'That username is taken.' :
+    handleStatus === 'short' ? 'Min 3 characters.' :
+    handleStatus === 'checking' ? 'Checking…' : 'Letters, numbers, underscores only.';
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        background: 'var(--bg)', borderRadius: 20, padding: '36px 40px',
+        width: '100%', maxWidth: 480, maxHeight: '90vh', overflow: 'auto',
+        boxShadow: '0 24px 80px rgba(0,0,0,.25)',
+      }} className="no-scrollbar">
+        {/* Progress */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+          {step > 1 && (
+            <button onClick={() => setStep(s => s - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7"/></svg>
+            </button>
+          )}
+          <div style={{ flex: 1, display: 'flex', gap: 4 }}>
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: i < step ? 'var(--green)' : 'var(--line)', transition: 'background .3s' }} />
+            ))}
+          </div>
+          <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', flexShrink: 0 }}>{step}/{totalSteps}</span>
+        </div>
+
+        <h2 className="font-display" style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: '0 0 4px' }}>{stepTitles[step - 1]}</h2>
+        <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 24px', lineHeight: 1.55 }}>{stepSubs[step - 1]}</p>
+
+        {/* Step 1: Name + Avatar */}
+        {step === 1 && (
+          <div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
+              <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => avatarInputRef.current?.click()}>
+                <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--line)', overflow: 'hidden', border: '3px solid var(--green)' }}>
+                  {avatarPreview
+                    ? <img src={avatarPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: 'var(--ink-4)' }}>👤</div>
+                  }
+                </div>
+                <div style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg)' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </div>
+              </div>
+              <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+              <span style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 8 }}>Tap to change photo</span>
+            </div>
+            <label style={lab}>FULL NAME</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={field} autoFocus />
+          </div>
+        )}
+
+        {/* Step 2: Username */}
+        {step === 2 && (
+          <div>
+            <label style={lab}>USERNAME</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)', fontSize: 15, marginTop: 3 }}>@</span>
+              <input value={handle} onChange={e => handleHandleChange(e.target.value)} placeholder="yourhandle" style={{ ...field, paddingLeft: 28 }} autoFocus />
+            </div>
+            <span style={{ fontSize: 12, color: handleStatusColor, fontFamily: 'JetBrains Mono', marginTop: 6, display: 'block' }}>{handleStatusMsg}</span>
+          </div>
+        )}
+
+        {/* Step 3: Location */}
+        {step === 3 && (
+          <div>
+            <label style={lab}>CITY / REGION (OPTIONAL)</label>
+            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Lagos, NG · Remote · Global" style={field} autoFocus />
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 12, lineHeight: 1.55 }}>
+              Location helps surface nearby communities, local impact projects, and regional challenges. It's never shared without your consent.
+            </p>
+          </div>
+        )}
+
+        {/* Step 4: Interests */}
+        {step === 4 && (
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {INTERESTS.map(it => {
+                const on = interests.includes(it);
+                return (
+                  <button key={it} onClick={() => setInterests(prev => on ? prev.filter(x => x !== it) : [...prev, it])} style={{ padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${on ? 'var(--green)' : 'var(--line)'}`, background: on ? 'var(--green)' : 'var(--surface)', color: on ? '#fff' : 'var(--ink-2)', fontSize: 13, fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'Satoshi', transition: 'all .15s' }}>
+                    {it}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 14 }}>{interests.length} selected · minimum 3</p>
+          </div>
+        )}
+
+        {/* Step 5: Bio + Terms */}
+        {step === totalSteps && (
+          <div>
+            <label style={lab}>SHORT BIO (OPTIONAL)</label>
+            <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell the community a bit about yourself and your sustainability journey…" rows={4} style={{ ...field, resize: 'vertical' }} />
+            <div style={{ marginTop: 20, padding: 16, background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--line)' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)} style={{ marginTop: 2, accentColor: 'var(--green)', width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                  I agree to Honua's <a href="/terms" style={{ color: 'var(--green)', textDecoration: 'none', fontWeight: 500 }}>Terms of Service</a> and <a href="/terms" style={{ color: 'var(--green)', textDecoration: 'none', fontWeight: 500 }}>Privacy Policy</a>
+                </span>
+              </label>
+            </div>
+          </div>
+        )}
+
+        <button
+          className="btn btn-green"
+          onClick={next}
+          disabled={loading}
+          style={{ width: '100%', justifyContent: 'center', marginTop: 28, padding: '14px', fontSize: 15, fontWeight: 600 }}
+        >
+          {loading ? 'Setting up your profile…' : step === totalSteps ? '🌿 Enter Honua' : 'Continue'}
+        </button>
+
+        {step === 3 && (
+          <button onClick={next} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, marginTop: 12, padding: 8 }}>
+            Skip for now
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function DesktopAuth({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const [mode, setMode] = React.useState<'signin' | 'signup' | 'confirm'>((params?.mode as any) || 'signin');
   const [confirmedEmail, setConfirmedEmail] = React.useState('');

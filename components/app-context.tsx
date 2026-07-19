@@ -96,24 +96,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Fetch real profile data (avatar_url, handle, etc.) from profiles table
     const hydrateUser = async (session: any) => {
       const u = session.user;
+      const provider = u.app_metadata?.provider ?? "email";
       const base = {
         id: u.id,
         email: u.email,
         name: u.user_metadata?.full_name || u.email?.split("@")[0] || "You",
         handle: u.user_metadata?.handle || u.email?.split("@")[0] || "you",
         avatar: u.user_metadata?.avatar_url || null,
+        provider,
       };
       setSt((s: any) => ({ ...s, authed: true, session, user: base }));
       // Fetch the profiles row to get the real avatar_url / handle / name
       try {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, handle, avatar_url, cover_url")
+          .select("full_name, handle, avatar_url, cover_url, onboarding_complete")
           .eq("id", u.id)
           .single();
         if (profile) {
+          const needsOnboarding = provider !== "email" && !profile.onboarding_complete;
           setSt((s: any) => ({
             ...s,
+            needsOnboarding,
             user: {
               ...s.user,
               name: profile.full_name || base.name,
@@ -173,6 +177,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     add: (v: any) => setSt((s: any) => ({ ...s, [field]: s[field].includes(v) ? s[field] : [...s[field], v] })),
     remove: (v: any) => setSt((s: any) => ({ ...s, [field]: s[field].filter((x: any) => x !== v) })),
   });
+
+  // ---- realtime count deltas (other users' interactions on posts) ----
+  const [realtimeDeltas, setRealtimeDeltas] = useState<Record<string, { likes: number; reposts: number }>>({});
+
+  const bumpDelta = useCallback((postId: string, field: 'likes' | 'reposts', delta: number) => {
+    setRealtimeDeltas(prev => ({
+      ...prev,
+      [postId]: {
+        likes: (prev[postId]?.likes ?? 0) + (field === 'likes' ? delta : 0),
+        reposts: (prev[postId]?.reposts ?? 0) + (field === 'reposts' ? delta : 0),
+      },
+    }));
+  }, []);
 
   // ---- unread notification count ----
   const [unreadNotifs, setUnreadNotifs] = useState(0);
@@ -276,6 +293,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshCollections(userId);
   }, [st.user?.id, refreshUnread, refreshCollections]);
 
+  // ---- Supabase Realtime: post counts + incoming notifications ----
+  useEffect(() => {
+    if (!st.user?.id) return;
+    const userId = st.user.id;
+
+    const channel = supabase
+      .channel('honua-realtime-' + userId)
+      // Someone liked a post
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_likes' }, (p: any) => {
+        if (p.new.user_id === userId) return; // already handled optimistically
+        bumpDelta(p.new.post_id, 'likes', 1);
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'post_likes' }, (p: any) => {
+        if (p.old.user_id === userId) return;
+        bumpDelta(p.old.post_id, 'likes', -1);
+      })
+      // Someone reposted
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_reposts' }, (p: any) => {
+        if (p.new.user_id === userId) return;
+        bumpDelta(p.new.post_id, 'reposts', 1);
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'post_reposts' }, (p: any) => {
+        if (p.old.user_id === userId) return;
+        bumpDelta(p.old.post_id, 'reposts', -1);
+      })
+      // Incoming notification for this user
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => {
+        setUnreadNotifs(n => n + 1);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [st.user?.id, bumpDelta]);
+
   // login / logout are now thin wrappers — the auth listener does the real state update
   const login = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -306,8 +357,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       options: { data: metadata },
     });
     if (error) throw error;
+    // Email users complete onboarding through the signup wizard — mark done immediately
+    if (data.user) {
+      try { await updateProfile(data.user.id, { onboarding_complete: true }); } catch {}
+    }
     return data; // { user, session } — session is null if email confirmation required
   }, []);
+
+  const completeOAuthOnboarding = useCallback(async (fields: {
+    name: string; handle: string; location: string; bio: string;
+    interests: string[]; avatarFile?: File | null;
+  }) => {
+    const userId = st.user?.id;
+    if (!userId) return;
+    let avatar_url = st.user?.avatar ?? null;
+    if (fields.avatarFile) {
+      avatar_url = await uploadFile("avatars", userId, fields.avatarFile);
+    }
+    await updateProfile(userId, {
+      full_name: fields.name,
+      handle: fields.handle,
+      location: fields.location,
+      bio: fields.bio,
+      interests: fields.interests,
+      avatar_url,
+      onboarding_complete: true,
+    });
+    setSt((s: any) => ({
+      ...s,
+      needsOnboarding: false,
+      user: {
+        ...s.user,
+        name: fields.name,
+        handle: fields.handle,
+        avatar: avatar_url,
+      },
+    }));
+  }, [st.user]);
 
   const uploadAvatar = useCallback(async (userId: string, file: File) => {
     const url = await uploadFile("avatars", userId, file);
@@ -331,6 +417,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     user: st.user,
     session: st.session,
     login, loginWithGoogle, loginWithApple, signup, logout, uploadAvatar,
+    needsOnboarding: !!st.needsOnboarding,
+    completeOAuthOnboarding,
+    realtimeDeltas,
     unreadNotifs, refreshUnread,
     markAllNotifsRead: async () => { if (st.user?.id) { await markAllRead(st.user.id); setUnreadNotifs(0); } },
     collections, createColl, refreshCollections,

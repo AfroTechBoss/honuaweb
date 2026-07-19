@@ -483,10 +483,9 @@ export function SettingsSection({ sec, app, onNav }) {
 
       {sec === 'Account' && <>
         <Section title="Identity">
-          <Field label="Display name" v="Sarah Green" />
-          <Field label="Username" v="@sarahgreen" />
-          <Field label="Email" v="sarah@sunhill.coop" />
-          <Field label="Bio" v="Community solar organizer in Cascadia." multiline />
+          <Field label="Display name" v={app.user?.name || '—'} />
+          <Field label="Username" v={app.user?.handle ? `@${app.user.handle}` : '—'} />
+          <Field label="Email" v={app.user?.email || '—'} />
         </Section>
         <Section title="Security">
           <ToggleC2 label="Two-factor authentication" sub="Recommended for active organizers." def />
@@ -507,10 +506,9 @@ export function SettingsSection({ sec, app, onNav }) {
 
       {sec === 'Profile' && <>
         <Section title="Public profile">
-          <Field label="Display name" v="Sarah Green" />
-          <Field label="Username" v="@sarahgreen" />
-          <Field label="Bio" v="Community solar organizer in Cascadia." multiline />
-          <Field label="Location" v="Portland, OR" />
+          <Field label="Display name" v={app.user?.name || '—'} />
+          <Field label="Username" v={app.user?.handle ? `@${app.user.handle}` : '—'} />
+          <Field label="Email" v={app.user?.email || '—'} />
         </Section>
         <button className="btn btn-green" onClick={() => app.openModal('editprofile')}><Icon name="edit" size={14} /> Edit profile</button>
       </>}
@@ -578,18 +576,155 @@ export function SettingsSection({ sec, app, onNav }) {
         </Section>
       )}
 
-      {sec === 'Help & support' && (
-        <Section title="Get help">
-          {[['Help center', 'comment', 'Help Center.html'], ['Contact support', 'msg', 'Contact Support.html'], ['Community guidelines', 'users', 'Community Guidelines.html'], ['Report a problem', 'bolt', 'Report a Problem.html'], ['Terms & privacy', 'lock', 'Terms & Privacy.html']].map(([t, ic, file]) => (
-            <button key={t} onClick={() => { app.toast?.({ msg: 'Opening…', sub: 'Support docs would open here.', icon: 'comment' }); app.toast({ msg: t, sub: 'Opened in a new tab.', icon: ic }); }} className="row-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 10px', margin: '0 -10px', border: 'none', borderTop: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', fontFamily: 'Satoshi', textAlign: 'left' }}>
-              <Icon name={ic} size={16} color="var(--ink-3)" /> <span style={{ flex: 1 }}>{t}</span> <Icon name="arrow" size={15} color="var(--ink-4)" />
-            </button>
-          ))}
-        </Section>
-      )}
+      {sec === 'Help & support' && <HelpSupport app={app} onNav={onNav} />}
     </>
   );
 };
+
+const FAQ_ITEMS = [
+  { q: 'How do I verify my impact actions?', a: 'Go to Settings → Impact tracking and connect your data sources (utility provider, transit app, or bank). Once connected, Honua pulls your activity automatically and awards Green Points after verification.' },
+  { q: 'What are Green Points and Impact Tokens?', a: 'Green Points (GP) are earned for verified sustainable actions — commuting by bike, reducing energy use, etc. Impact Tokens (IT) are milestone rewards. Both appear in your Wallet & rewards and on your public profile.' },
+  { q: 'How do I join or create a community?', a: 'Open the Communities tab in the sidebar. Browse featured communities or search by topic. To create one, tap "+ New community" and fill in the name, description, and focus area.' },
+  { q: 'Can I make my account private?', a: 'Yes. Go to Settings → Privacy and toggle "Private account" on. Only approved followers will see your posts and profile details.' },
+  { q: 'How do I edit my profile?', a: 'Go to Settings → Profile and tap "Edit profile", or tap your avatar anywhere it appears and select Edit. You can update your display name, handle, bio, avatar, and cover photo.' },
+  { q: 'How does the tipping system work?', a: 'Tap the coin icon on any post to send a tip. Tips are sent in Impact Tokens and go directly to the creator. You can disable incoming tips under Settings → Privacy.' },
+  { q: 'How do I report a post or user?', a: 'Tap the "…" menu on a post or visit a user\'s profile and tap "Report." Select a reason and submit. Our moderation team reviews reports within 24 hours.' },
+  { q: 'Why was my post removed?', a: 'Posts may be removed for violating our Community Guidelines — misinformation about climate science, hate speech, spam, or prohibited commercial promotion. You\'ll receive a notification with the reason.' },
+  { q: 'How do I delete my account?', a: 'Go to Settings → Account → Danger zone and tap "Delete account." You\'ll be asked to confirm. Deletion is permanent and removes all your data within 30 days.' },
+  { q: 'Is my data shared with third parties?', a: 'Honua never sells your personal data. Impact data from connected apps is processed only to calculate your verified actions. Read our full Privacy Policy under Terms & privacy.' },
+];
+
+export function HelpSupport({ app, onNav }: { app: any; onNav?: any }) {
+  const [openFaq, setOpenFaq] = React.useState<number | null>(null);
+  const [view, setView] = React.useState<'home' | 'contact' | 'report'>('home');
+  const [form, setForm] = React.useState({ subject: '', message: '' });
+  const [report, setReport] = React.useState({ category: 'Bug', description: '' });
+  const [sending, setSending] = React.useState(false);
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--line)',
+    background: 'var(--bg)', color: 'var(--ink)', fontSize: 13, fontFamily: 'Satoshi',
+    outline: 'none', boxSizing: 'border-box',
+  };
+
+  async function handleContact(e: React.FormEvent) {
+    e.preventDefault();
+    setSending(true);
+    await new Promise(r => setTimeout(r, 900));
+    setSending(false);
+    setForm({ subject: '', message: '' });
+    setView('home');
+    app.toast({ msg: 'Message sent', sub: 'We\'ll get back to you within 2 business days.', icon: 'msg', kind: 'success' });
+  }
+
+  async function handleReport(e: React.FormEvent) {
+    e.preventDefault();
+    setSending(true);
+    await new Promise(r => setTimeout(r, 900));
+    setSending(false);
+    setReport({ category: 'Bug', description: '' });
+    setView('home');
+    app.toast({ msg: 'Report submitted', sub: 'Thanks — we\'ll investigate shortly.', icon: 'bolt', kind: 'success' });
+  }
+
+  if (view === 'contact') return (
+    <>
+      <button onClick={() => setView('home')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', fontSize: 13, fontWeight: 500, padding: 0, marginBottom: 20 }}>
+        <Icon name="arrow" size={14} style={{ transform: 'rotate(180deg)' }} /> Back
+      </button>
+      <h2 className="font-display" style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 600 }}>Contact support</h2>
+      <p style={{ margin: '0 0 20px', color: 'var(--ink-3)', fontSize: 13 }}>We typically respond within 2 business days.</p>
+      <form onSubmit={handleContact} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Subject</label>
+          <input required style={inputStyle} placeholder="e.g. Can't connect my utility provider" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Message</label>
+          <textarea required rows={5} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Describe your issue in as much detail as possible…" value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} />
+        </div>
+        <button className="btn btn-green" type="submit" disabled={sending} style={{ alignSelf: 'flex-start' }}>
+          {sending ? 'Sending…' : <><Icon name="msg" size={14} /> Send message</>}
+        </button>
+      </form>
+    </>
+  );
+
+  if (view === 'report') return (
+    <>
+      <button onClick={() => setView('home')} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', fontSize: 13, fontWeight: 500, padding: 0, marginBottom: 20 }}>
+        <Icon name="arrow" size={14} style={{ transform: 'rotate(180deg)' }} /> Back
+      </button>
+      <h2 className="font-display" style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 600 }}>Report a problem</h2>
+      <p style={{ margin: '0 0 20px', color: 'var(--ink-3)', fontSize: 13 }}>Help us make Honua better for everyone.</p>
+      <form onSubmit={handleReport} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</label>
+          <select style={inputStyle} value={report.category} onChange={e => setReport(r => ({ ...r, category: e.target.value }))}>
+            {['Bug', 'Incorrect impact data', 'Missing feature', 'Account issue', 'Safety concern', 'Other'].map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</label>
+          <textarea required rows={5} style={{ ...inputStyle, resize: 'vertical' }} placeholder="What happened? What did you expect instead?" value={report.description} onChange={e => setReport(r => ({ ...r, description: e.target.value }))} />
+        </div>
+        <button className="btn btn-green" type="submit" disabled={sending} style={{ alignSelf: 'flex-start' }}>
+          {sending ? 'Submitting…' : <><Icon name="bolt" size={14} /> Submit report</>}
+        </button>
+      </form>
+    </>
+  );
+
+  return (
+    <>
+      {/* Quick actions */}
+      <Section title="Get in touch">
+        {([
+          ['Contact support', 'msg', 'contact', 'Questions, billing, or account issues'] as const,
+          ['Report a problem', 'bolt', 'report', 'Bugs, incorrect data, safety concerns'] as const,
+        ]).map(([label, icon, target, sub]) => (
+          <button key={label} onClick={() => setView(target as any)} className="row-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 10px', margin: '0 -10px', border: 'none', borderTop: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon name={icon} size={16} color="var(--green)" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{label}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>{sub}</div>
+            </div>
+            <Icon name="arrow" size={15} color="var(--ink-4)" />
+          </button>
+        ))}
+        <a href="/terms" onClick={e => { e.preventDefault(); onNav?.('terms'); }} className="row-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 10px', margin: '0 -10px', borderTop: '1px solid var(--line)', textDecoration: 'none' }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="lock" size={16} color="var(--green)" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>Terms & privacy</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>Community guidelines, ToS and Privacy Policy</div>
+          </div>
+          <Icon name="arrow" size={15} color="var(--ink-4)" />
+        </a>
+      </Section>
+
+      {/* FAQ */}
+      <Section title="Frequently asked questions">
+        {FAQ_ITEMS.map((item, i) => (
+          <div key={i} style={{ borderTop: '1px solid var(--line)' }}>
+            <button onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '13px 0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', gap: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)', lineHeight: 1.4 }}>{item.q}</span>
+              <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: openFaq === i ? 'var(--green)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: openFaq === i ? '#fff' : 'var(--ink-3)', transition: 'background 0.15s' }}>
+                {openFaq === i ? '−' : '+'}
+              </span>
+            </button>
+            {openFaq === i && (
+              <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.65, paddingRight: 32 }}>{item.a}</p>
+            )}
+          </div>
+        ))}
+      </Section>
+    </>
+  );
+}
 
 // controlled toggle row for settings
 export function ToggleC2({ label, sub, def }: { label: string; sub?: string; def?: boolean }) {
@@ -1249,16 +1384,39 @@ export function MDeleteAccount({ close }) {
 export function MDeleteAccount2({ close }) {
   const app = useApp();
   const [v, setV] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
   const ok = v.trim().toLowerCase() === 'delete my account';
+
+  const handleDelete = async () => {
+    if (!ok) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/delete-account', { method: 'POST' });
+      if (!res.ok) {
+        const { error } = await res.json();
+        throw new Error(error || 'Deletion failed');
+      }
+      close();
+      await app.logout?.();
+      app.toast({ kind: 'error', msg: 'Account deleted', sub: 'Your account and all data have been permanently removed.', icon: 'trash', duration: 6000 });
+    } catch (err) {
+      app.toast({ kind: 'error', msg: 'Could not delete account', sub: err.message, icon: 'bolt' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Modal onClose={close} width={460}>
-      <ModalHead icon="trash" iconColor="var(--clay)" title="Final confirmation" sub="To confirm, type “delete my account” below." onClose={close} />
-      <div style={{ padding: '18px 24px 0' }}>
-        <input className="fld" autoFocus value={v} onChange={e => setV(e.target.value)} placeholder="delete my account" style={{ borderColor: ok ? 'var(--clay)' : undefined }} />
+      <ModalHead icon="trash" iconColor="var(--clay)" title="Final confirmation" sub="To confirm, type 'delete my account' in the field below." onClose={close} />
+      <div style={{ padding: "18px 24px 0" }}>
+        <input className="fld" autoFocus value={v} onChange={e => setV(e.target.value)} placeholder="delete my account" style={{ borderColor: ok ? "var(--clay)" : undefined }} />
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn" disabled={!ok} style={{ background: ok ? 'var(--clay)' : 'var(--line-2)', color: '#fff', opacity: ok ? 1 : .7, cursor: ok ? 'pointer' : 'not-allowed' }} onClick={() => { close(); app.toast({ kind: 'error', msg: 'Account deleted', sub: 'Your account has been permanently removed (demo).', icon: 'trash', duration: 6000 }); app.nav('home'); }}>Delete forever</button>
+        <button className="btn btn-ghost" onClick={close} disabled={loading}>Cancel</button>
+        <button className="btn" disabled={!ok || loading} style={{ background: ok ? "var(--clay)" : "var(--line-2)", color: "#fff", opacity: (ok && !loading) ? 1 : .7, cursor: (ok && !loading) ? "pointer" : "not-allowed" }} onClick={handleDelete}>
+          {loading ? "Deleting…" : "Delete forever"}
+        </button>
       </ModalFoot>
     </Modal>
   );

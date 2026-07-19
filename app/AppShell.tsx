@@ -5,17 +5,17 @@ import { AppProvider, useApp } from "@/components/app-context";
 import { ToastHost } from "@/components/primitives";
 import { ModalRoot } from "@/components/screens/desktop-rest";
 import { MobileNav } from "@/components/sidebar";
+import { OAuthOnboardingFlow } from "@/components/screens/desktop-misc";
 
 const PUBLIC_PATHS = ["/login", "/terms", "/seller-policy", "/proposition"];
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { authed, state } = useApp();
+  const { authed, needsOnboarding } = useApp();
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = React.useState(false);
 
   useEffect(() => {
-    // Wait one tick so localStorage-hydrated state is loaded
     setReady(true);
   }, []);
 
@@ -31,7 +31,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
   if (!authed && !isPublic) return null;
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {needsOnboarding && <OAuthOnboardingFlow />}
+    </>
+  );
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
