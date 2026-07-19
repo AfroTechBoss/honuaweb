@@ -152,6 +152,8 @@ export function PostCard({ post, dense = false }) {
   const liked = app.like?.has(post.id);
   const saved = app.save?.has(post.id);
   const [lightbox, setLightbox] = React.useState<string | null>(null);
+  const [showShare, setShowShare] = React.useState(false);
+  const [showBookmark, setShowBookmark] = React.useState(false);
   const open = () => app.nav?.('post', { id: post.id });
   const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
   return (
@@ -227,25 +229,218 @@ export function PostCard({ post, dense = false }) {
       }}>
         <ActionBtn icon="heart" count={post.likes + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={stop(() => app.like.toggle(post.id))} />
         <ActionBtn icon="comment" count={post.comments} onClick={stop(open)} />
-        <ActionBtn icon="repost" count={post.reposts} onClick={stop(() => app.toast?.({ msg: 'Reposted to your followers', icon: 'repost' }))} />
+        <ActionBtn icon="repost" count={post.reposts + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={stop(() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); })} />
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <ActionBtn icon="bookmark" active={saved} onClick={stop(() => { app.save.toggle(post.id); app.toast?.(saved ? { msg: 'Removed from bookmarks', icon: 'bookmark' } : { msg: 'Saved to bookmarks', kind: 'success', icon: 'bookmark' }); })} />
-          <ActionBtn icon="share" onClick={stop(() => app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' }))} />
+          <ActionBtn icon="bookmark" active={saved} onClick={stop(() => setShowBookmark(true))} />
+          <ActionBtn icon="share" onClick={stop(() => setShowShare(true))} />
         </span>
       </footer>
+      {showBookmark && (
+        <BookmarkSheet
+          postId={post.id}
+          saved={!!saved}
+          onSave={(col) => { if (!saved) app.save?.toggle(post.id); app.toast?.({ msg: `Saved to "${col}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
+          onRemove={() => { if (saved) app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
+          onClose={() => setShowBookmark(false)}
+        />
+      )}
+      {showShare && (
+        <ShareSheet
+          url={typeof window !== 'undefined' ? window.location.origin + '/post/' + post.id : '/post/' + post.id}
+          text={post.body ? post.body.slice(0, 100) : 'Check this out on Honua'}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </article>
   );
 };
 
-export function ActionBtn({ icon, count, active, activeColor = 'var(--green)', onClick }: { icon: any; count?: number | string; active?: boolean; activeColor?: string; onClick?: React.MouseEventHandler<HTMLButtonElement> }) {
+// =============== Bookmark sheet ===============
+const MOCK_COLLECTIONS = ['All bookmarks', 'Solar energy', 'Zero-waste tips', 'Climate reads', 'Cool tech'];
+
+export function BookmarkSheet({ postId, saved, onSave, onRemove, onClose }: {
+  postId: string; saved: boolean;
+  onSave: (col: string) => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const app = useApp();
+  React.useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+
   return (
-    <button onClick={onClick} style={{
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,.45)', display: 'grid', placeItems: 'center', backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', borderRadius: 20, width: 360, padding: '20px 20px 22px', boxShadow: '0 24px 60px rgba(0,0,0,.18)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span className="font-display" style={{ fontSize: 17, fontWeight: 600 }}>Save to collection</span>
+          <button onClick={onClose} style={{ background: 'var(--surface)', border: 'none', borderRadius: 9, width: 30, height: 30, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)' }}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {MOCK_COLLECTIONS.map(col => (
+            <button key={col} onClick={() => onSave(col)} style={{
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+              background: 'transparent', border: 'none', borderRadius: 10, padding: '10px 12px',
+              cursor: 'pointer', textAlign: 'left', transition: 'background .1s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                <Icon name="bookmark" size={16} color="var(--ink-3)" />
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{col}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ height: 1, background: 'var(--line)', margin: '12px 0' }} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{
+            flex: 1, padding: '9px 0', background: 'var(--surface)', border: '1px solid var(--line)',
+            borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'Satoshi',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--line)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface)')}
+            onClick={() => { app.openModal('newcollection'); onClose(); }}
+          >
+            <Icon name="plus" size={13} /> New collection
+          </button>
+          {saved && (
+            <button onClick={onRemove} style={{
+              padding: '9px 16px', background: 'transparent', border: '1px solid var(--line)',
+              borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: 'var(--clay)', fontFamily: 'Satoshi',
+            }}>Remove</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============== Share sheet ===============
+// SVGs as path strings to avoid module-level JSX (causes Next.js SSR 500)
+const SHARE_PLATFORMS: { name: string; bg: string; fg: string; path: string; stroke?: boolean; href: (...args: string[]) => string }[] = [
+  { name: 'X / Twitter', bg: '#000', fg: '#fff', path: 'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.741l7.73-8.835L1.254 2.25H8.08l4.259 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z', href: (url, text) => `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}` },
+  { name: 'WhatsApp', bg: '#25D366', fg: '#fff', path: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z', href: (url, text) => `https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}` },
+  { name: 'Telegram', bg: '#2CA5E0', fg: '#fff', path: 'M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z', href: (url, text) => `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}` },
+  { name: 'Facebook', bg: '#1877F2', fg: '#fff', path: 'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z', href: (url) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}` },
+  { name: 'LinkedIn', bg: '#0A66C2', fg: '#fff', path: 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z', href: (url) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}` },
+  { name: 'Reddit', bg: '#FF4500', fg: '#fff', path: 'M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z', href: (url, text) => `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}` },
+  { name: 'Threads', bg: '#000', fg: '#fff', path: 'M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.851 1.205 8.604.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.02-5.11.895-6.54 2.604C4.366 6.108 3.69 8.418 3.666 12c.024 3.59.698 5.9 2.144 7.271 1.43 1.71 3.63 2.587 6.54 2.6 2.7-.015 4.5-.62 5.74-1.894 1.168-1.197 1.69-2.8 1.689-4.995V14.7h-5.376v-2.17h7.535v2.342c.005 3.016-.722 5.35-2.183 6.865-1.573 1.63-3.872 2.253-6.569 2.263z', href: (url, text) => `https://www.threads.net/intent/post?text=${encodeURIComponent(text + '\n' + url)}` },
+  { name: 'Email', bg: 'var(--surface)', fg: 'var(--ink)', path: 'M2 4h20v16H2zM2 7l10 7 10-7', stroke: true, href: (url, text) => `mailto:?subject=${encodeURIComponent(text)}&body=${encodeURIComponent(url)}` },
+];
+
+export function ShareSheet({ url, text, onClose }: { url: string; text: string; onClose: () => void }) {
+  const [copied, setCopied] = React.useState(false);
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(0,0,0,.45)', display: 'grid', placeItems: 'center', backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', borderRadius: 20, width: 400, padding: '22px 22px 26px', boxShadow: '0 24px 60px rgba(0,0,0,.18)' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <span className="font-display" style={{ fontSize: 18, fontWeight: 600 }}>Share</span>
+          <button onClick={onClose} style={{ background: 'var(--surface)', border: 'none', borderRadius: 9, width: 30, height: 30, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)' }}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+
+        {/* Copy link row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', borderRadius: 12, padding: '9px 9px 9px 14px', marginBottom: 22 }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+          <button onClick={copyLink} style={{
+            background: copied ? 'var(--green)' : 'var(--ink)', color: '#fff',
+            border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12.5, fontWeight: 600,
+            cursor: 'pointer', flexShrink: 0, fontFamily: 'Satoshi', transition: 'background .2s',
+          }}>{copied ? 'Copied!' : 'Copy link'}</button>
+        </div>
+
+        {/* Platform grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          {SHARE_PLATFORMS.map(p => (
+            <a key={p.name} href={p.href(url, text)} target="_blank" rel="noopener noreferrer"
+              onClick={onClose}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textDecoration: 'none', padding: '8px 4px', borderRadius: 12, cursor: 'pointer', transition: 'background .12s' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: p.bg, display: 'grid', placeItems: 'center', color: p.fg, border: p.bg === 'var(--surface)' ? '1px solid var(--line)' : 'none', flexShrink: 0 }}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill={p.stroke ? 'none' : 'currentColor'} stroke={p.stroke ? 'currentColor' : 'none'} strokeWidth={p.stroke ? 1.75 : undefined} strokeLinecap="round" strokeLinejoin="round">
+                  <path d={p.path} />
+                </svg>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', fontFamily: 'Satoshi', lineHeight: 1.2 }}>{p.name}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const BURST_DOTS = [
+  { dx: '0px', dy: '-22px' },
+  { dx: '16px', dy: '-16px' },
+  { dx: '22px', dy: '0px' },
+  { dx: '16px', dy: '16px' },
+  { dx: '0px', dy: '22px' },
+  { dx: '-16px', dy: '16px' },
+  { dx: '-22px', dy: '0px' },
+  { dx: '-16px', dy: '-16px' },
+];
+
+export function ActionBtn({ icon, count, active, activeColor = 'var(--green)', onClick }: { icon: any; count?: number | string; active?: boolean; activeColor?: string; onClick?: React.MouseEventHandler<HTMLButtonElement> }) {
+  const filled = active && (icon === 'heart' || icon === 'bookmark');
+  const [popping, setPopping] = React.useState(false);
+  const [bursting, setBursting] = React.useState(false);
+
+  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (e) => {
+    if (icon === 'heart' && !active) {
+      setPopping(true);
+      setBursting(true);
+      setTimeout(() => setPopping(false), 450);
+      setTimeout(() => setBursting(false), 600);
+    }
+    onClick?.(e);
+  };
+
+  return (
+    <button onClick={handleClick} style={{
       background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
       display: 'inline-flex', alignItems: 'center', gap: 6,
       color: active ? activeColor : 'var(--ink-3)', fontSize: 13, fontFamily: 'JetBrains Mono', fontWeight: 500,
-      transition: 'color .12s',
+      transition: 'color .12s', position: 'relative',
     }}>
-      <Icon name={icon} size={18} stroke={active ? 2.2 : 1.7} />
+      <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ display: 'inline-flex', animation: popping ? 'heart-pop 0.45s cubic-bezier(.36,.07,.19,.97) forwards' : 'none' }}>
+          <Icon name={icon} size={18} stroke={filled ? 0 : 1.7} fill={filled ? activeColor : 'none'} color={active ? activeColor : 'var(--ink-3)'} />
+        </span>
+        {bursting && BURST_DOTS.map((d, i) => (
+          <span key={i} style={{
+            position: 'absolute', top: '50%', left: '50%',
+            width: 5, height: 5, borderRadius: '50%',
+            background: activeColor,
+            '--dx': d.dx, '--dy': d.dy,
+            animation: `burst-dot 0.55s ease-out ${i * 18}ms forwards`,
+            pointerEvents: 'none',
+          } as React.CSSProperties} />
+        ))}
+      </span>
       {count !== undefined && <span>{formatCount(count)}</span>}
     </button>
   );
@@ -269,7 +464,7 @@ export function TrendingPanel() {
         <Icon name="sparkles" size={16} color="var(--green)" />
       </div>
       {MOCK.trends.map((t, i) => (
-        <div key={t.tag} onClick={() => app.nav?.('explore')} className="row-hover" style={{
+        <div key={t.tag} onClick={() => app.nav?.('explore', { tag: t.tag })} className="row-hover" style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '10px 8px', margin: '0 -8px', borderRadius: 8,
           borderTop: i === 0 ? 'none' : '1px solid var(--line)',

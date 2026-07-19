@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
 
 function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
@@ -362,8 +362,8 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
           )}
           <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--ink-3)' }}>
             <ActionBtn icon="heart" count={post.likes_count} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
-            <ActionBtn icon="comment" count={post.comments_count} onClick={() => {}} />
-            <ActionBtn icon="repost" count={post.reposts_count} onClick={() => {}} />
+            <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
+            <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
           </div>
         </div>
       </div>
@@ -414,6 +414,7 @@ export function DesktopPostDetail({ onNav, params }) {
   const following = app.follow?.has(user.handle);
   const [tree, setTree] = React.useState(makeCommentSeed);
   const [reply, setReply] = React.useState('');
+  const [showBookmark, setShowBookmark] = React.useState(false);
   const postReply = () => { if (!reply.trim()) return; setTree(c => [{ id: Date.now(), user: 'you', text: reply.trim(), time: 'now', likes: 0, replies: [] }, ...c]); setReply(''); app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' }); };
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -470,12 +471,21 @@ export function DesktopPostDetail({ onNav, params }) {
             <footer style={{ display: 'flex', gap: 28, marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
               <ActionBtn icon="heart" count={post.likes + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
               <ActionBtn icon="comment" count={post.comments} onClick={() => document.getElementById('pd-reply')?.focus()} />
-              <ActionBtn icon="repost" count={post.reposts} onClick={() => app.toast?.({ msg: 'Reposted to your followers', icon: 'repost' })} />
+              <ActionBtn icon="repost" count={post.reposts + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
-                <ActionBtn icon="bookmark" active={saved} onClick={() => { app.save.toggle(post.id); app.toast?.(saved ? { msg: 'Removed from bookmarks', icon: 'bookmark' } : { msg: 'Saved to bookmarks', kind: 'success', icon: 'bookmark' }); }} />
+                <ActionBtn icon="bookmark" active={saved} onClick={() => setShowBookmark(true)} />
                 <ActionBtn icon="share" onClick={() => app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' })} />
               </span>
             </footer>
+            {showBookmark && (
+              <BookmarkSheet
+                postId={post.id}
+                saved={!!saved}
+                onSave={(col) => { if (!saved) app.save?.toggle(post.id); app.toast?.({ msg: `Saved to "${col}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
+                onRemove={() => { if (saved) app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
+                onClose={() => setShowBookmark(false)}
+              />
+            )}
           </article>
 
           {/* Comment composer */}

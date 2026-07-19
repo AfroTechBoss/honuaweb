@@ -2,7 +2,7 @@
 import React from "react";
 
 // Tiny inline icons (lucide-style) — ported verbatim from the prototype.
-export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor" }: any) {
+export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor", fill = "none" }: any) {
   const paths: Record<string, React.ReactNode> = {
     home: <path d="M3 11l9-8 9 8M5 10v10h14V10" />,
     compass: <><circle cx="12" cy="12" r="9" /><path d="M16 8l-2 6-6 2 2-6z" /></>,
@@ -52,7 +52,7 @@ export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor" }:
     coin: <><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9.5 9.5a2.5 2 0 015 0c0 1.5-2.5 1.5-2.5 2.5s2.5 1 2.5 2.5a2.5 2 0 01-5 0" /></>,
   };
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
       {paths[name] || paths.home}
     </svg>
   );

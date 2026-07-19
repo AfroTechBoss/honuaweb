@@ -556,6 +556,18 @@ export function ToggleRow({ label, sub, on }) {
 // Form / action modals  +  ModalContent dispatcher
 // ====================================================================
 
+// Hashtag pool — seeded from MOCK trends + common sustainability tags
+const HASHTAG_POOL = [
+  'SolarPanels', 'ClimateStrike', 'ZeroWaste', 'UrbanGardening', 'CarbonOffsets',
+  'GreenEnergy', 'ClimateAction', 'Sustainability', 'EcoFriendly', 'NetZero',
+  'RenewableEnergy', 'CleanEnergy', 'PlantBased', 'CompostLife', 'BikeToWork',
+  'PublicTransit', 'ElectricVehicle', 'WildlifeConservation', 'TreePlanting', 'OceanCleanup',
+  'CircularEconomy', 'FoodWaste', 'SlowFashion', 'GreenBuilding', 'CarbonNeutral',
+  'Rewilding', 'SustainableAg', 'WaterConservation', 'AirQuality', 'GreenTech',
+  'ClimateJustice', 'EnergyEfficiency', 'CommunityGarden', 'LocalFood', 'Beekeeping',
+  'SeedSwap', 'PollinatorGarden', 'SolarCoOp', 'GreenPoints', 'ImpactLedger',
+];
+
 // --- Compose post ---
 export function MCompose({ close }) {
   const app = useApp();
@@ -564,13 +576,79 @@ export function MCompose({ close }) {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [publishing, setPublishing] = React.useState(false);
+  const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([]);
+  const [activeSuggestion, setActiveSuggestion] = React.useState(0);
+  const [hashQuery, setHashQuery] = React.useState('');
+  const [hashStart, setHashStart] = React.useState(-1);
+  const [allTags, setAllTags] = React.useState<string[]>(HASHTAG_POOL);
   const imgRef = React.useRef<HTMLInputElement>(null);
+  const taRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Fetch existing tags from DB and merge with static pool
+  React.useEffect(() => {
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase.from('posts').select('tags').not('tags', 'is', null).limit(500)
+        .then(({ data }) => {
+          if (!data) return;
+          const dbTags = [...new Set(data.flatMap((p: any) => p.tags || []))] as string[];
+          setAllTags(prev => [...new Set([...prev, ...dbTags])]);
+        });
+    });
+  }, []);
 
   const pickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setImageFile(f);
     setImagePreview(URL.createObjectURL(f));
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setText(val);
+    const cursor = e.target.selectionStart ?? val.length;
+    // Find the # that starts the current word
+    const before = val.slice(0, cursor);
+    const match = before.match(/#(\w*)$/);
+    if (match) {
+      const q = match[1];
+      setHashQuery(q);
+      setHashStart(cursor - match[0].length);
+      const lower = q.toLowerCase();
+      const hits = allTags.filter(t => t.toLowerCase().startsWith(lower) && t.toLowerCase() !== lower).slice(0, 6);
+      setTagSuggestions(hits);
+      setActiveSuggestion(0);
+    } else {
+      setTagSuggestions([]);
+      setHashQuery('');
+      setHashStart(-1);
+    }
+  };
+
+  const acceptSuggestion = (tag: string) => {
+    if (hashStart < 0) return;
+    const cursor = taRef.current?.selectionStart ?? text.length;
+    const before = text.slice(0, hashStart);
+    const after = text.slice(cursor);
+    const newText = before + '#' + tag + ' ' + after;
+    setText(newText);
+    setTagSuggestions([]);
+    setHashQuery('');
+    setHashStart(-1);
+    // Restore focus + move cursor after inserted tag
+    setTimeout(() => {
+      taRef.current?.focus();
+      const pos = (before + '#' + tag + ' ').length;
+      taRef.current?.setSelectionRange(pos, pos);
+    }, 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!tagSuggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSuggestion(i => Math.min(i + 1, tagSuggestions.length - 1)); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveSuggestion(i => Math.max(i - 1, 0)); }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptSuggestion(tagSuggestions[activeSuggestion]); }
+    if (e.key === 'Escape')    { setTagSuggestions([]); }
   };
 
   const publish = async () => {
@@ -583,7 +661,6 @@ export function MCompose({ close }) {
         const { uploadFile } = await import('@/lib/storage');
         image_url = await uploadFile('posts', app.user.id, imageFile);
       }
-      // Extract hashtags from text: words starting with #
       const tags = [...new Set((text.match(/#(\w+)/g) || []).map(t => t.slice(1)))];
       const payload: Record<string, any> = {
         user_id: app.user.id,
@@ -591,7 +668,6 @@ export function MCompose({ close }) {
         image_url,
         post_type: cat.toLowerCase(),
       };
-      // Try with tags first; if the column doesn't exist yet, retry without it
       let result = await supabase.from('posts').insert({ ...payload, tags });
       if (result.error?.code === '42703') {
         result = await supabase.from('posts').insert(payload);
@@ -613,7 +689,39 @@ export function MCompose({ close }) {
       <div style={{ padding: '18px 24px 0' }}>
         <div style={{ display: 'flex', gap: 12 }}>
           <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={40} />
-          <textarea className="fld" autoFocus value={text} onChange={e => setText(e.target.value)} placeholder="What did you do for the planet today? Use #hashtags to tag topics." style={{ minHeight: 110 }} />
+          <div style={{ flex: 1, position: 'relative' }}>
+            <textarea ref={taRef} className="fld" autoFocus value={text}
+              onChange={handleTextChange}
+              onKeyDown={handleKeyDown}
+              placeholder="What did you do for the planet today? Use #hashtags to tag topics."
+              style={{ minHeight: 110, width: '100%' }}
+            />
+            {tagSuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12,
+                boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden', marginTop: 4,
+              }}>
+                {tagSuggestions.map((tag, i) => (
+                  <button key={tag} onMouseDown={e => { e.preventDefault(); acceptSuggestion(tag); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                      padding: '9px 14px', background: i === activeSuggestion ? 'var(--surface)' : 'transparent',
+                      border: 'none', cursor: 'pointer', textAlign: 'left',
+                      fontSize: 14, color: 'var(--ink)',
+                    }}
+                    onMouseEnter={() => setActiveSuggestion(i)}
+                  >
+                    <span style={{ color: 'var(--sky)', fontWeight: 600 }}>#</span>
+                    <span>
+                      <span style={{ color: 'var(--ink-3)' }}>{tag.slice(0, hashQuery.length)}</span>
+                      <span style={{ fontWeight: 600 }}>{tag.slice(hashQuery.length)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         {imagePreview && (
           <div style={{ marginTop: 12, position: 'relative' }}>

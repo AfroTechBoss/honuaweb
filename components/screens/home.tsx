@@ -1,6 +1,6 @@
 ﻿"use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, ShareSheet, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 
 // =============== Story data ===============
 const STORY_KEYS = ["sarah", "marcus", "maya", "okafor", "greentech", "can", "tara"];
@@ -424,6 +424,8 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
   const profile = post.profile;
   const original = post.original;
   const liked = app.like?.has(post.id);
+  const [showShare, setShowShare] = React.useState(false);
+  const [showBookmark, setShowBookmark] = React.useState(false);
 
   const timeAgo = (ts: string) => {
     const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -476,13 +478,29 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
 
       <footer style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
         <ActionBtn icon="heart" count={post.likes_count + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
-        <ActionBtn icon="comment" count={post.comments_count} onClick={() => {}} />
-        <ActionBtn icon="repost" count={post.reposts_count} onClick={() => {}} />
+        <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
+        <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-          <ActionBtn icon="bookmark" active={app.save?.has(post.id)} onClick={() => app.save?.toggle(post.id)} />
-          <ActionBtn icon="share" onClick={() => { navigator.clipboard?.writeText(window.location.origin + '/post/' + post.id); app.toast?.({ msg: 'Link copied', icon: 'share' }); }} />
+          <ActionBtn icon="bookmark" active={app.save?.has(post.id)} onClick={() => setShowBookmark(true)} />
+          <ActionBtn icon="share" onClick={() => setShowShare(true)} />
         </span>
       </footer>
+      {showBookmark && (
+        <BookmarkSheet
+          postId={post.id}
+          saved={!!app.save?.has(post.id)}
+          onSave={(col) => { if (!app.save?.has(post.id)) app.save?.toggle(post.id); app.toast?.({ msg: `Saved to "${col}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
+          onRemove={() => { if (app.save?.has(post.id)) app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
+          onClose={() => setShowBookmark(false)}
+        />
+      )}
+      {showShare && (
+        <ShareSheet
+          url={typeof window !== 'undefined' ? window.location.origin + '/post/' + post.id : '/post/' + post.id}
+          text={post.content ? post.content.slice(0, 100) : 'Check this out on Honua'}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </article>
   );
 }

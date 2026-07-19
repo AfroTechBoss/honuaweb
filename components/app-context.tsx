@@ -35,6 +35,7 @@ export function pathFor(key: string, params: any = {}): string {
 
 const STATE_DEFAULTS: any = {
   liked: [],
+  reposted: [],
   saved: [],
   following: ["sarahgreen", "greentech"],
   joinedCommunities: ["Urban gardeners", "Solar DIY", "Ocean cleanup crew"],
@@ -171,6 +172,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     remove: (v: any) => setSt((s: any) => ({ ...s, [field]: s[field].filter((x: any) => x !== v) })),
   });
 
+  // ---- DB-backed like toggle ----
+  const dbLike = {
+    has: (postId: any) => st.liked.includes(postId),
+    toggle: async (postId: any) => {
+      const isLiked = st.liked.includes(postId);
+      // Optimistic local update immediately
+      setSt((s: any) => ({ ...s, liked: isLiked ? s.liked.filter((x: any) => x !== postId) : [...s.liked, postId] }));
+      if (!st.user?.id) return;
+      try {
+        if (isLiked) {
+          await supabase.from('post_likes').delete().match({ user_id: st.user.id, post_id: postId });
+        } else {
+          await supabase.from('post_likes').insert({ user_id: st.user.id, post_id: postId });
+        }
+      } catch {}
+    },
+  };
+
+  // ---- DB-backed repost toggle ----
+  const dbRepost = {
+    has: (postId: any) => st.reposted?.includes(postId) ?? false,
+    toggle: async (postId: any) => {
+      const isReposted = st.reposted?.includes(postId) ?? false;
+      setSt((s: any) => ({ ...s, reposted: isReposted ? (s.reposted || []).filter((x: any) => x !== postId) : [...(s.reposted || []), postId] }));
+      if (!st.user?.id) return;
+      try {
+        if (isReposted) {
+          await supabase.from('post_reposts').delete().match({ user_id: st.user.id, post_id: postId });
+        } else {
+          await supabase.from('post_reposts').insert({ user_id: st.user.id, post_id: postId });
+        }
+      } catch {}
+    },
+  };
+
+  // ---- Sync likes + reposts from DB when user logs in ----
+  useEffect(() => {
+    if (!st.user?.id) return;
+    const userId = st.user.id;
+    Promise.all([
+      supabase.from('post_likes').select('post_id').eq('user_id', userId),
+      supabase.from('post_reposts').select('post_id').eq('user_id', userId),
+    ]).then(([{ data: likes }, { data: reposts }]) => {
+      setSt((s: any) => ({
+        ...s,
+        liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
+        reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
+      }));
+    }).catch(() => {});
+  }, [st.user?.id]);
+
   // login / logout are now thin wrappers — the auth listener does the real state update
   const login = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -227,7 +279,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     session: st.session,
     login, loginWithGoogle, loginWithApple, signup, logout, uploadAvatar,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
-    like: mk("liked"), save: mk("saved"), follow: mk("following"),
+    like: dbLike, save: mk("saved"), follow: mk("following"),
+    repost: dbRepost,
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),
     cart: st.cart, cartCount: st.cart.length,
     addToCart: (item: any) => setSt((s: any) => ({ ...s, cart: [...s.cart, item] })),
