@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { PostDetailSkeleton } from "@/components/primitives";
 import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
@@ -440,7 +441,9 @@ export function DesktopPostDetail({ onNav, params }) {
   if (loading) return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="home" onNav={onNav} />
-      <main style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>Loading post…</main>
+      <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
+        <PostDetailSkeleton />
+      </main>
     </div>
   );
   return (

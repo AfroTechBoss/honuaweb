@@ -73,6 +73,52 @@ export function ProfileSkeleton() {
   );
 }
 
+export function PostDetailSkeleton() {
+  return (
+    <div style={{ padding: '20px 28px', maxWidth: 720 }}>
+      {/* Back button */}
+      <Skel w={80} h={13} style={{ marginBottom: 20 }} />
+      {/* Article card */}
+      <div style={{ background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)', padding: 28, marginBottom: 16 }}>
+        {/* Author row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+          <Skel w={56} h={56} r={999} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Skel w={140} h={15} />
+            <Skel w={90} h={12} />
+          </div>
+          <Skel w={80} h={32} r={20} />
+        </div>
+        {/* Content lines */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+          <Skel w="100%" h={14} />
+          <Skel w="92%" h={14} />
+          <Skel w="78%" h={14} />
+        </div>
+        {/* Image placeholder */}
+        <Skel w="100%" h={240} r={12} style={{ marginBottom: 18 }} />
+        {/* Action row */}
+        <div style={{ display: 'flex', gap: 28, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+          <Skel w={44} h={13} />
+          <Skel w={44} h={13} />
+          <Skel w={44} h={13} />
+        </div>
+      </div>
+      {/* Comment skeletons */}
+      {[1, 2, 3].map(i => (
+        <div key={i} style={{ display: 'flex', gap: 12, padding: '14px 0', borderTop: '1px solid var(--line)' }}>
+          <Skel w={36} h={36} r={999} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Skel w={120} h={12} />
+            <Skel w="85%" h={12} />
+            <Skel w="65%" h={12} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Logo({ size = 28 }: any) {
   return (
     <span className="font-display" style={{ fontWeight: 700, fontSize: size * 0.75, color: "var(--ink)", letterSpacing: "-0.02em" }}>Honua</span>
