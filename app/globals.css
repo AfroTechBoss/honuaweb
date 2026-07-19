@@ -429,21 +429,41 @@ input, textarea, select { font-family: inherit; }
     overflow-x: hidden;
   }
 
-  /* Reduce side padding in main areas and prevent overflow */
+  /* Main area: zero side padding — inner content controls its own padding */
   .page-wrap > main {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
     min-width: 0;
     overflow-x: hidden;
     box-sizing: border-box;
   }
 
-  /* Feed column: full-width, no right border */
+  /*
+   * Inner content panels: override the hardcoded 28-32px horizontal padding
+   * that every page uses, replacing with a comfortable 14px mobile gutter.
+   * Targets both direct children and one level deeper (flex-container > content).
+   */
+  .page-wrap > main > div:not(.right-panel),
+  .page-wrap > main > div:not(.right-panel) > div:not(.right-panel):not(.post-card):first-child {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Feed column: full-width, no right border, unified gutter */
   .feed-col {
     max-width: 100% !important;
     border-right: none !important;
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* Profile content already has its own class */
+  .profile-content {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
   }
 
   /* Hide desktop-only panels */
