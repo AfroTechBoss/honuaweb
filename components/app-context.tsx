@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { uploadFile } from "@/lib/storage";
 import { updateProfile } from "@/lib/profile";
 import { createNotification, getUnreadCount, markAllRead } from "@/lib/notifications";
+import { getBookmarkedPostIds, addBookmark, removeBookmark, getCollections, createCollection } from "@/lib/bookmarks";
 
 // Route key -> URL path. Mirrors the prototype's ROUTES registry, but
 // navigation now drives the real Next.js router.
@@ -180,6 +181,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUnreadNotifs(count);
   }, []);
 
+  // ---- collections + DB-backed bookmarks ----
+  const [collections, setCollections] = useState<any[]>([]);
+  const refreshCollections = useCallback(async (userId: string) => {
+    const data = await getCollections(userId);
+    setCollections(data);
+  }, []);
+
+  const dbSave = {
+    has: (postId: any) => st.saved.includes(postId),
+    toggle: async (postId: any, collectionId?: string) => {
+      const isSaved = st.saved.includes(postId);
+      setSt((s: any) => ({ ...s, saved: isSaved ? s.saved.filter((x: any) => x !== postId) : [...s.saved, postId] }));
+      if (!st.user?.id) return;
+      try {
+        if (isSaved) {
+          await removeBookmark(st.user.id, postId);
+        } else {
+          await addBookmark(st.user.id, postId, collectionId);
+        }
+      } catch {}
+    },
+    addToCollection: async (postId: any, collectionId: string) => {
+      if (!st.user?.id) return;
+      setSt((s: any) => ({ ...s, saved: s.saved.includes(postId) ? s.saved : [...s.saved, postId] }));
+      try { await addBookmark(st.user.id, postId, collectionId); } catch {}
+    },
+  };
+
+  const createColl = useCallback(async (name: string, emoji?: string) => {
+    if (!st.user?.id) return null;
+    const coll = await createCollection(st.user.id, name, emoji);
+    setCollections(prev => [...prev, coll]);
+    return coll;
+  }, [st.user?.id]);
+
   // ---- DB-backed like toggle ----
   const dbLike = {
     has: (postId: any) => st.liked.includes(postId),
@@ -220,22 +256,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
   };
 
-  // ---- Sync likes + reposts + unread notifs from DB when user logs in ----
+  // ---- Sync likes, reposts, bookmarks + unread notifs from DB when user logs in ----
   useEffect(() => {
     if (!st.user?.id) return;
     const userId = st.user.id;
     Promise.all([
       supabase.from('post_likes').select('post_id').eq('user_id', userId),
       supabase.from('post_reposts').select('post_id').eq('user_id', userId),
-    ]).then(([{ data: likes }, { data: reposts }]) => {
+      getBookmarkedPostIds(userId),
+    ]).then(([{ data: likes }, { data: reposts }, savedIds]) => {
       setSt((s: any) => ({
         ...s,
         liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
         reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
+        saved: savedIds.length ? savedIds : s.saved,
       }));
     }).catch(() => {});
     refreshUnread(userId);
-  }, [st.user?.id, refreshUnread]);
+    refreshCollections(userId);
+  }, [st.user?.id, refreshUnread, refreshCollections]);
 
   // login / logout are now thin wrappers — the auth listener does the real state update
   const login = useCallback(async (email: string, password: string) => {
@@ -294,8 +333,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     login, loginWithGoogle, loginWithApple, signup, logout, uploadAvatar,
     unreadNotifs, refreshUnread,
     markAllNotifsRead: async () => { if (st.user?.id) { await markAllRead(st.user.id); setUnreadNotifs(0); } },
+    collections, createColl, refreshCollections,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
-    like: dbLike, save: mk("saved"), follow: mk("following"),
+    like: dbLike, save: dbSave, follow: mk("following"),
     repost: dbRepost,
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),
     cart: st.cart, cartCount: st.cart.length,

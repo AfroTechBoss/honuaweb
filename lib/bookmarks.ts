@@ -1,0 +1,79 @@
+import { supabase } from "./supabase";
+
+const POST_SELECT = `
+  *,
+  profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)
+`;
+
+// ── Collections ───────────────────────────────────────────────
+
+export async function getCollections(userId: string) {
+  const { data } = await supabase
+    .from("collections")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  return data ?? [];
+}
+
+export async function createCollection(userId: string, name: string, emoji = "🔖") {
+  const { data, error } = await supabase
+    .from("collections")
+    .insert({ user_id: userId, name, emoji })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteCollection(collectionId: string) {
+  await supabase.from("collections").delete().eq("id", collectionId);
+}
+
+// ── Bookmarks ─────────────────────────────────────────────────
+
+export async function getBookmarkedPostIds(userId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("bookmarks")
+    .select("post_id")
+    .eq("user_id", userId);
+  return [...new Set((data ?? []).map((r: any) => r.post_id))];
+}
+
+export async function getBookmarks(userId: string, collectionId?: string) {
+  let q = supabase
+    .from("bookmarks")
+    .select(`id, collection_id, created_at, post:posts(${POST_SELECT})`)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (collectionId) q = q.eq("collection_id", collectionId);
+  const { data } = await q;
+  return data ?? [];
+}
+
+export async function addBookmark(userId: string, postId: string, collectionId?: string) {
+  await supabase.from("bookmarks").insert({
+    user_id: userId,
+    post_id: postId,
+    collection_id: collectionId ?? null,
+  });
+}
+
+export async function removeBookmark(userId: string, postId: string) {
+  // Removes all bookmark rows for this post (across all collections)
+  await supabase.from("bookmarks").delete().match({ user_id: userId, post_id: postId });
+}
+
+export async function getCollectionCounts(userId: string): Promise<Record<string, number>> {
+  const { data } = await supabase
+    .from("bookmarks")
+    .select("collection_id")
+    .eq("user_id", userId);
+  const counts: Record<string, number> = { __all__: 0 };
+  (data ?? []).forEach((r: any) => {
+    counts.__all__++;
+    const key = r.collection_id ?? "__uncollected__";
+    counts[key] = (counts[key] ?? 0) + 1;
+  });
+  return counts;
+}

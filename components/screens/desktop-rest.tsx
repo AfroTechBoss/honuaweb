@@ -273,9 +273,64 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
 };
 
 // =============== Desktop Bookmarks ===============
+import { getBookmarks, getCollectionCounts, deleteCollection } from "@/lib/bookmarks";
+
+function BookmarkPostCard({ post, onNav }: { post: any; onNav: any }) {
+  const app = useApp();
+  const profile = post.profile;
+  const liked = app.like?.has(post.id);
+  const timeAgo = (ts: string) => { const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s`; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`; };
+  return (
+    <div onClick={() => onNav?.('post', { id: post.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+        <Avatar src={profile?.avatar_url} name={profile?.full_name} size={32} verified={profile?.verified} />
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{profile?.full_name}</div>
+          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</div>
+        </div>
+      </div>
+      {post.content && <p style={{ margin: '0 0 10px', fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>}
+      {post.image_url && <img src={post.image_url} style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 180, marginBottom: 10 }} />}
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--ink-3)' }}>
+        <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+        <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
+      </div>
+    </div>
+  );
+}
+
 export function DesktopBookmarks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
-  const [coll, setColl] = React.useState('All bookmarks');
+  const [activeId, setActiveId] = React.useState<string | null>(null); // null = all
+  const [bookmarks, setBookmarks] = React.useState<any[]>([]);
+  const [counts, setCounts] = React.useState<Record<string, number>>({});
+  const [loading, setLoading] = React.useState(true);
+  const collections: any[] = app.collections ?? [];
+
+  const load = React.useCallback(async () => {
+    if (!app.user?.id) { setLoading(false); return; }
+    setLoading(true);
+    const [bms, cnts] = await Promise.all([
+      getBookmarks(app.user.id, activeId ?? undefined),
+      getCollectionCounts(app.user.id),
+    ]);
+    setBookmarks(bms);
+    setCounts(cnts);
+    setLoading(false);
+  }, [app.user?.id, activeId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const handleDeleteCollection = async (id: string) => {
+    await deleteCollection(id);
+    app.refreshCollections?.(app.user.id);
+    if (activeId === id) setActiveId(null);
+    load();
+  };
+
+  const activeName = activeId ? (collections.find(c => c.id === activeId)?.name ?? 'Collection') : 'All bookmarks';
+  const posts = bookmarks.map((b: any) => b.post).filter(Boolean);
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="bookmarks" onNav={onNav} />
@@ -283,47 +338,78 @@ export function DesktopBookmarks({ onNav, params }: { onNav: any; params?: Recor
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
             <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>BOOKMARKS</div>
-            <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{coll === 'All bookmarks' ? 'Saved for later.' : coll}</h1>
+            <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>
+              {activeId ? activeName : 'Saved for later.'}
+            </h1>
           </div>
-          <button className="btn btn-ghost" onClick={() => app.openModal('newcollection')}><Icon name="plus" size={14} /> New collection</button>
+          <button className="btn btn-ghost" onClick={() => app.openModal('newcollection')}>
+            <Icon name="plus" size={14} /> New collection
+          </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24 }}>
-          {/* Collections */}
+        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24, alignItems: 'start' }}>
+          {/* Collections sidebar */}
           <div>
             <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', marginBottom: 8, letterSpacing: '.05em' }}>COLLECTIONS</div>
-            {([
-              ['All bookmarks', 84],
-              ['Build out solar', 14],
-              ['Read this week', 9],
-              ['Recipes', 22],
-              ['Policy reading', 18],
-              ['Project ideas', 21],
-            ] as Array<[string, number]>).map(([n, c]) => {
-              const active = coll === n;
+            {/* All bookmarks row */}
+            <button onClick={() => setActiveId(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', borderRadius: 10, background: activeId === null ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeId === null ? 'var(--green)' : 'var(--ink-2)', fontSize: 13, fontWeight: activeId === null ? 600 : 500, cursor: 'pointer', marginBottom: 2 }}>
+              <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
+                <Icon name="bookmark" size={15} /> All bookmarks
+              </span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-3)' }}>{counts.__all__ ?? 0}</span>
+            </button>
+            {/* User collections */}
+            {collections.map(col => {
+              const active = activeId === col.id;
               return (
-              <button key={n} onClick={() => setColl(n)} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                width: '100%', padding: '10px 12px', borderRadius: 10,
-                background: active ? 'var(--green-tint)' : 'transparent', border: 'none',
-                color: active ? 'var(--green)' : 'var(--ink-2)',
-                fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer', marginBottom: 2,
-              }}>
-                <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
-                  <Icon name="bookmark" size={15} /> {n}
-                </span>
-                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-3)' }}>{c}</span>
-              </button>
+                <div key={col.id} style={{ position: 'relative' }} className="group">
+                  <button onClick={() => setActiveId(col.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 12px', borderRadius: 10, background: active ? 'var(--green-tint)' : 'transparent', border: 'none', color: active ? 'var(--green)' : 'var(--ink-2)', fontSize: 13, fontWeight: active ? 600 : 500, cursor: 'pointer', marginBottom: 2 }}>
+                    <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
+                      <span style={{ fontSize: 15 }}>{col.emoji}</span> {col.name}
+                    </span>
+                    <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-3)' }}>{counts[col.id] ?? 0}</span>
+                  </button>
+                  <button onClick={() => handleDeleteCollection(col.id)} title="Delete collection" style={{ position: 'absolute', right: 36, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 4, opacity: 0, transition: 'opacity .15s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0'; }}>
+                    <Icon name="close" size={12} />
+                  </button>
+                </div>
               );
             })}
+            {collections.length === 0 && (
+              <p style={{ fontSize: 12, color: 'var(--ink-3)', padding: '8px 12px', margin: 0 }}>No collections yet.</p>
+            )}
           </div>
 
-          {/* Grid */}
+          {/* Bookmark grid */}
           <div>
-            <BookmarkTabs />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-              {(coll === 'Recipes' ? MOCK.posts.slice(1, 3) : coll === 'Read this week' ? MOCK.posts.slice(2, 4) : coll === 'Build out solar' ? MOCK.posts.slice(0, 1) : MOCK.posts.slice(0, 4)).map(p => <PostCard key={p.id} post={p} dense />)}
-            </div>
+            {loading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                {[1,2,3,4].map(i => (
+                  <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--line)', animation: 'skeleton-pulse 1.4s ease-in-out infinite' }} />
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ width: '60%', height: 12, borderRadius: 6, background: 'var(--line)', animation: 'skeleton-pulse 1.4s ease-in-out infinite' }} />
+                        <div style={{ width: '40%', height: 10, borderRadius: 6, background: 'var(--line)', animation: 'skeleton-pulse 1.4s ease-in-out infinite' }} />
+                      </div>
+                    </div>
+                    <div style={{ width: '100%', height: 100, borderRadius: 10, background: 'var(--line)', animation: 'skeleton-pulse 1.4s ease-in-out infinite' }} />
+                  </div>
+                ))}
+              </div>
+            ) : posts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '64px 24px', color: 'var(--ink-3)' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🔖</div>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>Nothing saved here yet</div>
+                <div style={{ fontSize: 13, marginTop: 6 }}>Tap the bookmark icon on any post to save it.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                {posts.map((p: any) => <BookmarkPostCard key={p.id} post={p} onNav={onNav} />)}
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -868,19 +954,48 @@ export function MCreateChallenge({ close }) {
 };
 
 // --- New collection ---
+const COLLECTION_EMOJIS = ['🔖','📚','💡','🌱','⚡','🌍','🔬','🎯','🛠️','🌿','📋','🏗️'];
+
 export function MNewCollection({ close }) {
   const app = useApp();
   const [name, setName] = React.useState('');
+  const [emoji, setEmoji] = React.useState('🔖');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setLoading(true);
+    try {
+      await app.createColl(name.trim(), emoji);
+      close();
+      app.toast({ kind: 'success', msg: 'Collection created', sub: `"${name.trim()}" is ready for bookmarks.`, icon: 'bookmark' });
+    } catch {
+      app.toast({ msg: 'Could not create collection', kind: 'error', icon: 'close' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Modal onClose={close} width={440}>
       <ModalHead icon="bookmark" title="New collection" sub="Group your saved posts, articles and products." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
+        <span className="fld-label">Emoji</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+          {COLLECTION_EMOJIS.map(e => (
+            <button key={e} onClick={() => setEmoji(e)} style={{ width: 36, height: 36, fontSize: 18, borderRadius: 8, border: emoji === e ? '2px solid var(--green)' : '2px solid var(--line)', background: emoji === e ? 'var(--green-tint)' : 'var(--surface)', cursor: 'pointer' }}>
+              {e}
+            </button>
+          ))}
+        </div>
         <span className="fld-label">Collection name</span>
-        <input className="fld" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Weekend reading" />
+        <input className="fld" autoFocus value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreate()} placeholder="e.g. Weekend reading" />
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Collection created', sub: `"${name}" is ready for bookmarks.`, icon: 'bookmark' }); }} disabled={!name.trim()} style={{ opacity: name.trim() ? 1 : .5 }}>Create</button>
+        <button className="btn btn-green" onClick={handleCreate} disabled={!name.trim() || loading} style={{ opacity: name.trim() && !loading ? 1 : .5 }}>
+          {loading ? 'Creating…' : 'Create'}
+        </button>
       </ModalFoot>
     </Modal>
   );

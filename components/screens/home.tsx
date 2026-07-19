@@ -493,8 +493,8 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
         <BookmarkSheet
           postId={post.id}
           saved={!!app.save?.has(post.id)}
-          onSave={(col) => { if (!app.save?.has(post.id)) app.save?.toggle(post.id); app.toast?.({ msg: `Saved to "${col}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
-          onRemove={() => { if (app.save?.has(post.id)) app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
+          onSave={(colId, colName) => { app.save?.addToCollection(post.id, colId); app.toast?.({ msg: `Saved to "${colName}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
+          onRemove={() => { app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
           onClose={() => setShowBookmark(false)}
         />
       )}

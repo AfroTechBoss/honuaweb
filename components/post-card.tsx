@@ -239,8 +239,8 @@ export function PostCard({ post, dense = false }) {
         <BookmarkSheet
           postId={post.id}
           saved={!!saved}
-          onSave={(col) => { if (!saved) app.save?.toggle(post.id); app.toast?.({ msg: `Saved to "${col}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
-          onRemove={() => { if (saved) app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
+          onSave={(colId, colName) => { app.save?.addToCollection(post.id, colId) ?? app.save?.toggle(post.id, colId); app.toast?.({ msg: `Saved to "${colName}"`, kind: 'success', icon: 'bookmark' }); setShowBookmark(false); }}
+          onRemove={() => { app.save?.toggle(post.id); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); setShowBookmark(false); }}
           onClose={() => setShowBookmark(false)}
         />
       )}
@@ -256,15 +256,15 @@ export function PostCard({ post, dense = false }) {
 };
 
 // =============== Bookmark sheet ===============
-const MOCK_COLLECTIONS = ['All bookmarks', 'Solar energy', 'Zero-waste tips', 'Climate reads', 'Cool tech'];
-
 export function BookmarkSheet({ postId, saved, onSave, onRemove, onClose }: {
   postId: string; saved: boolean;
-  onSave: (col: string) => void;
+  onSave: (collectionId: string | undefined, collectionName: string) => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
   const app = useApp();
+  const collections: any[] = app.collections ?? [];
+
   React.useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', h);
@@ -280,40 +280,46 @@ export function BookmarkSheet({ postId, saved, onSave, onRemove, onClose }: {
             <Icon name="close" size={15} />
           </button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {MOCK_COLLECTIONS.map(col => (
-            <button key={col} onClick={() => onSave(col)} style={{
-              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
-              background: 'transparent', border: 'none', borderRadius: 10, padding: '10px 12px',
-              cursor: 'pointer', textAlign: 'left', transition: 'background .1s',
-            }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 280, overflowY: 'auto' }}>
+          {/* Save without a collection */}
+          <button onClick={() => onSave(undefined, 'Bookmarks')} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', background: 'transparent', border: 'none', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <Icon name="bookmark" size={16} color="var(--green)" />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>All bookmarks</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Save without a collection</div>
+            </div>
+          </button>
+          {/* User collections */}
+          {collections.map(col => (
+            <button key={col.id} onClick={() => onSave(col.id, col.name)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', background: 'transparent', border: 'none', borderRadius: 10, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                <Icon name="bookmark" size={16} color="var(--ink-3)" />
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', flexShrink: 0, fontSize: 18 }}>
+                {col.emoji}
               </div>
-              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{col}</span>
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{col.name}</span>
             </button>
           ))}
+          {collections.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', padding: '4px 12px', margin: 0 }}>No collections yet — create one below.</p>
+          )}
         </div>
         <div style={{ height: 1, background: 'var(--line)', margin: '12px 0' }} />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{
-            flex: 1, padding: '9px 0', background: 'var(--surface)', border: '1px solid var(--line)',
-            borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'Satoshi',
-          }}
+          <button style={{ flex: 1, padding: '9px 0', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'Satoshi', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--line)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'var(--surface)')}
-            onClick={() => { app.openModal('newcollection'); onClose(); }}
-          >
+            onClick={() => { app.openModal('newcollection'); onClose(); }}>
             <Icon name="plus" size={13} /> New collection
           </button>
           {saved && (
-            <button onClick={onRemove} style={{
-              padding: '9px 16px', background: 'transparent', border: '1px solid var(--line)',
-              borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: 'var(--clay)', fontFamily: 'Satoshi',
-            }}>Remove</button>
+            <button onClick={onRemove} style={{ padding: '9px 16px', background: 'transparent', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: 'pointer', color: 'var(--clay)', fontFamily: 'Satoshi' }}>
+              Remove
+            </button>
           )}
         </div>
       </div>
