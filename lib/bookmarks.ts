@@ -8,11 +8,12 @@ const POST_SELECT = `
 // ── Collections ───────────────────────────────────────────────
 
 export async function getCollections(userId: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("collections")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: true });
+  if (error) console.error('[bookmarks] getCollections failed:', error.message);
   return data ?? [];
 }
 
@@ -47,7 +48,8 @@ export async function getBookmarks(userId: string, collectionId?: string) {
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (collectionId) q = q.eq("collection_id", collectionId);
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) console.error('[bookmarks] getBookmarks failed:', error.message);
   return data ?? [];
 }
 
