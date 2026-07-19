@@ -690,7 +690,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
               </div>
             ) : (
               <>
-                <button onClick={() => setActiveTag(null)} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>â† All tags</button>
+                <button onClick={() => setActiveTag(null)} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>← All tags</button>
                 {tagLoading ? (
                   <>{[1,2,3].map(i => <PostCardSkeleton key={i} />)}</>
                 ) : tagPosts.length === 0 ? (
