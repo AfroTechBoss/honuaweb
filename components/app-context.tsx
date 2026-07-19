@@ -238,15 +238,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     has: (postId: any) => st.liked.includes(postId),
     toggle: async (postId: any) => {
       const isLiked = st.liked.includes(postId);
-      // Optimistic local update immediately
+      // Optimistic UI: update heart state + bump count delta immediately
       setSt((s: any) => ({ ...s, liked: isLiked ? s.liked.filter((x: any) => x !== postId) : [...s.liked, postId] }));
+      bumpDelta(postId, 'likes', isLiked ? -1 : 1);
       if (!st.user?.id) return;
       try {
         if (isLiked) {
           await supabase.from('post_likes').delete().match({ user_id: st.user.id, post_id: postId });
         } else {
           await supabase.from('post_likes').insert({ user_id: st.user.id, post_id: postId });
-          // Notify post owner
           const { data: post } = await supabase.from('posts').select('user_id').eq('id', postId).single();
           if (post?.user_id) {
             await createNotification({ userId: post.user_id, actorId: st.user.id, type: 'like', postId, body: 'liked your post' });
@@ -262,6 +262,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggle: async (postId: any) => {
       const isReposted = st.reposted?.includes(postId) ?? false;
       setSt((s: any) => ({ ...s, reposted: isReposted ? (s.reposted || []).filter((x: any) => x !== postId) : [...(s.reposted || []), postId] }));
+      bumpDelta(postId, 'reposts', isReposted ? -1 : 1);
       if (!st.user?.id) return;
       try {
         if (isReposted) {

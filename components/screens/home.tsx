@@ -481,9 +481,9 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
       )}
 
       <footer onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
-        <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+        <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
         <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
-        <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
+        <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
           <ActionBtn icon="bookmark" active={app.save?.has(post.id)} onClick={() => setShowBookmark(true)} />
           <ActionBtn icon="share" onClick={() => setShowShare(true)} />
