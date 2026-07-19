@@ -363,7 +363,7 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
             <img src={isRepost ? original.image_url : post.image_url} style={{ width: '100%', borderRadius: 12, marginBottom: 10, objectFit: 'cover', maxHeight: 320 }} />
           )}
           <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--ink-3)' }}>
-            <ActionBtn icon="heart" count={post.likes_count} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+            <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
             <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
             <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
           </div>
