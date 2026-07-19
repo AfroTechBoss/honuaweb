@@ -10,7 +10,7 @@ import { updateProfile } from "@/lib/profile";
 export function pathFor(key: string, params: any = {}): string {
   switch (key) {
     case "home": return "/";
-    case "explore": return "/explore";
+    case "explore": return params?.tag ? `/explore?tag=${encodeURIComponent(params.tag)}` : "/explore";
     case "impact": return "/impact";
     case "map": return "/map";
     case "carbon": return "/carbon";
