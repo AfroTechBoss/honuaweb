@@ -16,7 +16,7 @@ export async function createNotification({
   communityId?: string;
 }) {
   if (!userId || userId === actorId) return; // never notify yourself
-  await supabase.from("notifications").insert({
+  const { error } = await supabase.from("notifications").insert({
     user_id: userId,
     actor_id: actorId ?? null,
     type,
@@ -25,6 +25,7 @@ export async function createNotification({
     badge_name: badgeName ?? null,
     community_id: communityId ?? null,
   });
+  if (error) console.error('[notifications] insert failed:', error.message, error.details);
 }
 
 export async function getNotifications(userId: string) {
