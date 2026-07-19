@@ -331,13 +331,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Polling fallback: re-check unread count every 20s so notifications show
     // even if the Realtime subscription for notifications isn't active yet.
-    const poll = setInterval(() => refreshUnread(userId), 20_000);
+    const poll = setInterval(async () => {
+      const count = await getUnreadCount(userId);
+      setUnreadNotifs(count);
+    }, 20_000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(poll);
     };
-  }, [st.user?.id, bumpDelta, refreshUnread]);
+  }, [st.user?.id, bumpDelta]);
 
   // login / logout are now thin wrappers — the auth listener does the real state update
   const login = useCallback(async (email: string, password: string) => {
