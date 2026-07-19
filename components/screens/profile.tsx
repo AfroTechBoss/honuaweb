@@ -467,7 +467,9 @@ export function DesktopPostDetail({ onNav, params }) {
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle} {isMock ? `· ${(post as any).time} ago · ${(post as any).location}` : ''}</div>
               </div>
-              <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
+              {app.user?.id !== (dbPost?.user_id) && displayProfile?.handle !== app.user?.handle && (
+                <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
+              )}
             </header>
             <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>
               {(isMock ? (post as any).content : post.content)?.split(/(\s+)/).map((word: string, i: number) => {
@@ -527,7 +529,7 @@ export function DesktopPostDetail({ onNav, params }) {
 
           {/* Comment composer */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
-            <Avatar name="Y" size={40} />
+            <Avatar src={app.user?.avatar} name={app.user?.name || 'Y'} size={40} />
             <div style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 12 }}>
               <input id="pd-reply" value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') postReply(); }} placeholder="Add a comment…" style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 14 }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, alignItems: 'center' }}>
