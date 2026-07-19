@@ -469,10 +469,13 @@ export function DesktopPostDetail({ onNav, params }) {
               </div>
               <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
             </header>
-            <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>{isMock ? (post as any).content : post.content}</p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-              {(isMock ? (post as any).tags : post.tags ?? []).map((t: string) => <span key={t} onClick={() => onNav?.('explore', { tag: t })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>#{t}</span>)}
-            </div>
+            <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>
+              {(isMock ? (post as any).content : post.content)?.split(/(\s+)/).map((word: string, i: number) => {
+                const match = word.match(/^(#\w+)(.*)/);
+                if (match) return <React.Fragment key={i}><span onClick={() => onNav?.('explore', { tag: match[1].slice(1) })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
+                return word;
+              })}
+            </p>
             {isMock && (post as any).image && <ImagePlaceholder label={(post as any).image} height={420} src={(post as any).imageUrl} />}
             {!isMock && post.image_url && (
               <img
