@@ -2,6 +2,8 @@
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
+import { supabase } from "@/lib/supabase";
+import { ImageLightbox } from "@/components/post-card";
 
 function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
   const [profile, setProfile] = React.useState<any>(null);
@@ -407,15 +409,38 @@ export function Stat({ n, l, green, light, onClick }: { n: any; l: any; green?: 
 // =============== Desktop Post Detail ===============
 export function DesktopPostDetail({ onNav, params }) {
   const app = useApp();
-  const post = MOCK.posts.find(p => p.id === params?.id) || MOCK.posts[0];
-  const user = MOCK.users[post.user];
+  const [dbPost, setDbPost] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [lightbox, setLightbox] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const id = params?.id;
+    if (!id) { setLoading(false); return; }
+    supabase
+      .from('posts')
+      .select('*, profile:profiles!posts_user_id_fkey(full_name, handle, avatar_url, verified)')
+      .eq('id', id)
+      .single()
+      .then(({ data, error }) => { if (error) console.error('[PostDetail]', error); setDbPost(data); setLoading(false); });
+  }, [params?.id]);
+
+  const post = dbPost || MOCK.posts.find(p => p.id === params?.id) || MOCK.posts[0];
+  const isMock = !dbPost;
+  const user = isMock ? MOCK.users[(post as any).user] : null;
+  const displayProfile = isMock ? user : post.profile;
   const liked = app.like?.has(post.id);
   const saved = app.save?.has(post.id);
-  const following = app.follow?.has(user.handle);
+  const following = isMock ? app.follow?.has(user?.handle) : app.follow?.has(displayProfile?.handle);
   const [tree, setTree] = React.useState(makeCommentSeed);
   const [reply, setReply] = React.useState('');
   const [showBookmark, setShowBookmark] = React.useState(false);
   const postReply = () => { if (!reply.trim()) return; setTree(c => [{ id: Date.now(), user: 'you', text: reply.trim(), time: 'now', likes: 0, replies: [] }, ...c]); setReply(''); app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' }); };
+  if (loading) return (
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <DesktopSidebar active="home" onNav={onNav} />
+      <main style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--ink-3)' }}>Loading post…</main>
+    </div>
+  );
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="home" onNav={onNav} />
@@ -431,23 +456,32 @@ export function DesktopPostDetail({ onNav, params }) {
           }}><span style={{ transform: 'rotate(180deg)', display: 'inline-block' }}><Icon name="arrow" size={14} /></span> Back to feed</button>
 
           {/* Main post */}
+          {lightbox && <ImageLightbox label={lightbox} onClose={() => setLightbox(null)} />}
           <article className="post-detail-article" style={{ background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)', padding: 28, marginBottom: 16 }}>
             <header style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-              <span onClick={() => onNav?.('profile', { handle: user.handle })} style={{ cursor: 'pointer' }}><Avatar src={user.avatar} name={user.name} size={56} verified={user.verified} /></span>
+              <span onClick={() => onNav?.('profile', { handle: displayProfile?.handle })} style={{ cursor: 'pointer' }}><Avatar src={isMock ? displayProfile?.avatar : displayProfile?.avatar_url} name={displayProfile?.full_name || displayProfile?.name} size={56} verified={displayProfile?.verified} /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 17 }}>{user.name}</span>
-                  {user.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 16, height: 16, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 10 }}>✓</span>}
+                  <span style={{ fontWeight: 600, fontSize: 17 }}>{displayProfile?.full_name || displayProfile?.name}</span>
+                  {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 16, height: 16, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 10 }}>✓</span>}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{user.handle} · {post.time} ago · {post.location}</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle} {isMock ? `· ${(post as any).time} ago · ${(post as any).location}` : ''}</div>
               </div>
-              <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(user.handle); app.toast?.(following ? { msg: `Unfollowed ${user.name}`, icon: 'user' } : { msg: `Following ${user.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
+              <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
             </header>
-            <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>{post.content}</p>
+            <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>{isMock ? (post as any).content : post.content}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-              {post.tags.map(t => <span key={t} style={{ color: 'var(--sky)', fontWeight: 500 }}>#{t}</span>)}
+              {(isMock ? (post as any).tags : post.tags ?? []).map((t: string) => <span key={t} onClick={() => onNav?.('explore', { tag: t })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>#{t}</span>)}
             </div>
-            {post.image && <ImagePlaceholder label={post.image} height={420} src={post.imageUrl} />}
+            {isMock && (post as any).image && <ImagePlaceholder label={(post as any).image} height={420} src={(post as any).imageUrl} />}
+            {!isMock && post.image_url && (
+              <img
+                src={post.image_url}
+                alt=""
+                onClick={() => setLightbox(post.image_url)}
+                style={{ width: '100%', borderRadius: 12, marginBottom: 16, objectFit: 'cover', maxHeight: 420, cursor: 'zoom-in' }}
+              />
+            )}
             <div className="post-detail-stats" style={{
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
               marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12,
@@ -469,9 +503,9 @@ export function DesktopPostDetail({ onNav, params }) {
               </div>
             </div>
             <footer style={{ display: 'flex', gap: 28, marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-              <ActionBtn icon="heart" count={post.likes + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
-              <ActionBtn icon="comment" count={post.comments} onClick={() => document.getElementById('pd-reply')?.focus()} />
-              <ActionBtn icon="repost" count={post.reposts + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
+              <ActionBtn icon="heart" count={(isMock ? (post as any).likes : (post.likes_count ?? 0)) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
+              <ActionBtn icon="comment" count={isMock ? (post as any).comments : (post.comments_count ?? 0)} onClick={() => document.getElementById('pd-reply')?.focus()} />
+              <ActionBtn icon="repost" count={(isMock ? (post as any).reposts : (post.reposts_count ?? 0)) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
                 <ActionBtn icon="bookmark" active={saved} onClick={() => setShowBookmark(true)} />
                 <ActionBtn icon="share" onClick={() => app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' })} />

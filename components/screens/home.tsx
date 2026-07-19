@@ -1,6 +1,7 @@
 ﻿"use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, ShareSheet, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { ImageLightbox } from "@/components/post-card";
 
 // =============== Story data ===============
 const STORY_KEYS = ["sarah", "marcus", "maya", "okafor", "greentech", "can", "tara"];
@@ -426,6 +427,7 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
   const liked = app.like?.has(post.id);
   const [showShare, setShowShare] = React.useState(false);
   const [showBookmark, setShowBookmark] = React.useState(false);
+  const [lightbox, setLightbox] = React.useState<string | null>(null);
 
   const timeAgo = (ts: string) => {
     const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -440,20 +442,21 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
   const displayProfile = profile;
   const tags: string[] = post.tags ?? [];
 
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
-    <article style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20, marginBottom: 12 }}>
+    <article onClick={() => onNav?.('post', { id: post.id })} style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20, marginBottom: 12, cursor: 'pointer' }}>
       {post.is_repost && original && (
         <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Icon name="repost" size={13} /> Reposted from <strong>@{original.profile?.handle}</strong>
         </div>
       )}
       <header style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-        <span style={{ cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: displayProfile?.handle })}>
+        <span style={{ cursor: 'pointer' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>
           <Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={42} verified={displayProfile?.verified} />
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: displayProfile?.handle })}>{displayProfile?.full_name}</span>
+            <span style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>{displayProfile?.full_name}</span>
             {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9 }}>✓</span>}
             <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· {timeAgo(post.created_at)}</span>
@@ -462,21 +465,22 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
         </div>
       </header>
 
-      {displayContent && <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>{displayContent}</p>}
-
-      {tags.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-          {tags.map(t => (
-            <span key={t} onClick={() => onNav?.('explore', { tag: t })} style={{ color: 'var(--sky)', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>#{t}</span>
-          ))}
-        </div>
+      {displayContent && (
+        <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>
+          {displayContent.split(/(\s+)/).map((word: string, i: number) => {
+            const match = word.match(/^(#\w+)(.*)/);
+            if (match) return <React.Fragment key={i}><span onClick={stop(() => onNav?.('explore', { tag: match[1].slice(1) }))} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
+            return word;
+          })}
+        </p>
       )}
 
+      {lightbox && <ImageLightbox label={lightbox} onClose={() => setLightbox(null)} />}
       {displayImage && (
-        <img src={displayImage} style={{ width: '100%', borderRadius: 12, marginBottom: 12, objectFit: 'cover', maxHeight: 340 }} />
+        <img src={displayImage} alt="" onClick={stop(() => setLightbox(displayImage))} style={{ width: '100%', borderRadius: 12, marginBottom: 12, objectFit: 'cover', maxHeight: 340, cursor: 'zoom-in' }} />
       )}
 
-      <footer style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
+      <footer onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
         <ActionBtn icon="heart" count={post.likes_count + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
         <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
         <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />

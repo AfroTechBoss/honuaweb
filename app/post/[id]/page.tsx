@@ -7,5 +7,5 @@ import { useParams } from "next/navigation";
 export default function Page() {
   const { nav } = useApp();
   const routeParams = useParams();
-  return <DesktopPostDetail onNav={nav} params={{ id: Number(routeParams.id) }} />;
+  return <DesktopPostDetail onNav={nav} params={{ id: routeParams.id }} />;
 }
