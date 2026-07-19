@@ -22,20 +22,48 @@ export async function updateProfile(userId: string, updates: Record<string, any>
 }
 
 export async function getProfilePosts(userId: string) {
-  const { data, error } = await supabase
-    .from("posts")
-    .select(`
+  const postSelect = `
+    *,
+    profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified),
+    original:original_post_id (
       *,
-      profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified),
-      original:original_post_id (
-        *,
-        profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)
-      )
-    `)
+      profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)
+    )
+  `;
+
+  // Own posts
+  const { data: ownPosts, error } = await supabase
+    .from("posts")
+    .select(postSelect)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+
+  // Posts the user has reposted (from post_reposts table)
+  const { data: repostRows } = await supabase
+    .from("post_reposts")
+    .select("post_id, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  let repostedPosts: any[] = [];
+  if (repostRows && repostRows.length > 0) {
+    const ids = repostRows.map((r: any) => r.post_id);
+    const { data: originals } = await supabase
+      .from("posts")
+      .select(postSelect)
+      .in("id", ids);
+    if (originals) {
+      repostedPosts = originals.map((p: any) => ({
+        ...p,
+        is_repost: true,
+        reposted_at: repostRows.find((r: any) => r.post_id === p.id)?.created_at,
+        original: p,
+      }));
+    }
+  }
+
+  return [...(ownPosts ?? []), ...repostedPosts];
 }
 
 export async function getFollowerCount(userId: string) {
