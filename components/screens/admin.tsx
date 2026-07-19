@@ -81,14 +81,14 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const badges = { moderation: openCount, products: flaggedCount, sellers: pendingSellers };
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       {/* ---- Admin left rail ---- */}
       <aside style={{ width: 232, flexShrink: 0, background: 'var(--ink-solid)', color: '#fff', display: 'flex', flexDirection: 'column', padding: '20px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 18px' }}>
           <span style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Logo size={18} /></span>
           <div style={{ lineHeight: 1.1 }}>
             <div className="font-display" style={{ fontSize: 15, fontWeight: 600 }}>Honua</div>
-            <div style={{ fontSize: 10.5, opacity: .55, fontFamily: 'Geist Mono', letterSpacing: '.08em' }}>ADMIN CONSOLE</div>
+            <div style={{ fontSize: 10.5, opacity: .55, fontFamily: 'JetBrains Mono', letterSpacing: '.08em' }}>ADMIN CONSOLE</div>
           </div>
         </div>
         <nav style={{ display: 'grid', gap: 2, flex: 1 }}>
@@ -97,12 +97,12 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
             return (
               <button key={k} onClick={() => setSection(k)} style={{
                 display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 11, cursor: 'pointer',
-                border: 'none', textAlign: 'left', fontFamily: 'Geist', fontSize: 14, fontWeight: on ? 600 : 500,
+                border: 'none', textAlign: 'left', fontFamily: 'Satoshi', fontSize: 14, fontWeight: on ? 600 : 500,
                 background: on ? 'rgba(255,255,255,.12)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.62)',
               }}>
                 <Icon name={icon} size={18} stroke={on ? 2.1 : 1.8} />
                 <span style={{ flex: 1 }}>{label}</span>
-                {badges[k] > 0 && <span style={{ minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: k === 'sellers' ? 'var(--sun)' : 'var(--clay)', color: '#fff', fontSize: 11, fontWeight: 600, fontFamily: 'Geist Mono', display: 'grid', placeItems: 'center' }}>{badges[k]}</span>}
+                {badges[k] > 0 && <span style={{ minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: k === 'sellers' ? 'var(--sun)' : 'var(--clay)', color: '#fff', fontSize: 11, fontWeight: 600, fontFamily: 'JetBrains Mono', display: 'grid', placeItems: 'center' }}>{badges[k]}</span>}
               </button>
             );
           })}
@@ -117,7 +117,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
         {/* topbar */}
         <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 28px', background: 'color-mix(in srgb, var(--bg) 88%, transparent)', backdropFilter: 'blur(10px)', borderBottom: '1px solid var(--line)' }}>
           <div>
-            <div style={{ fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>ADMIN / {section.toUpperCase()}</div>
+            <div style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>ADMIN / {section.toUpperCase()}</div>
             <h1 className="font-display" style={{ margin: '2px 0 0', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{ADMIN_NAV.find(n => n[0] === section)[1]}</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -130,7 +130,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
               <Avatar name="Admin" size={32} />
               <div style={{ lineHeight: 1.15 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>You</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>Owner</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>Owner</div>
               </div>
             </div>
           </div>
@@ -174,7 +174,7 @@ function AdminOverview({ reports, users, products, audit, onSection }) {
               <div style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>Gross marketplace volume</div>
               <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 2 }}>{sMoney(s.gmv, 0)}</div>
             </div>
-            <span style={{ fontFamily: 'Geist Mono', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>↑ {s.gmvTrend}%</span>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>↑ {s.gmvTrend}%</span>
           </div>
           <div style={{ marginTop: 14 }}><SSpark data={MOCK_ADMIN.gmvSeries} color="var(--green)" w={620} h={120} /></div>
         </div>
@@ -229,7 +229,7 @@ export function AuditLine({ a, compact }) {
       <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.4 }}>
         <span style={{ fontWeight: 600 }}>{a.actor}</span> <span style={{ color: 'var(--ink-3)' }}>{a.action}</span> <span style={{ fontWeight: 500 }}>{a.target}</span>
       </div>
-      <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono', flexShrink: 0 }}>{a.time}</span>
+      <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', flexShrink: 0 }}>{a.time}</span>
     </div>
   );
 };
@@ -250,7 +250,7 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[['open', 'Open'], ['escalated', 'Escalated'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed'], ['all', 'All']].map(([k, l]) => (
           <button key={k} onClick={() => { setFilter(k); setSel(null); }} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>
-            {l} {k === 'open' && <span style={{ fontFamily: 'Geist Mono', opacity: .7 }}>· {reports.filter(r => r.status === 'open').length}</span>}
+            {l} {k === 'open' && <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}>· {reports.filter(r => r.status === 'open').length}</span>}
           </button>
         ))}
       </div>
@@ -267,9 +267,9 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: sevColor[r.severity], flexShrink: 0 }} />
-                  <span className="chip" style={{ fontSize: 10.5, fontFamily: 'Geist Mono', padding: '2px 7px' }}>{r.type}</span>
+                  <span className="chip" style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', padding: '2px 7px' }}>{r.type}</span>
                   <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--clay)' }}>{r.reason}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{r.time}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{r.time}</span>
                 </div>
                 <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: '-0.01em' }}>{r.target}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -279,7 +279,7 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
               </button>
             );
           })}
-          {filtered.length === 0 && <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14, border: '1px dashed var(--line-2)', borderRadius: 16 }}>Nothing here — queue is clear ✨</div>}
+          {filtered.length === 0 && <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14, border: '1px dashed var(--line-2)', borderRadius: 16 }}>Nothing here — queue is clear</div>}
         </div>
 
         {/* detail */}
@@ -289,19 +289,19 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
               <span style={{ width: 36, height: 36, borderRadius: 10, background: sTint('var(--clay)', 12), color: 'var(--clay)', display: 'grid', placeItems: 'center' }}><Icon name="flame" size={18} /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{selR.reason}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{selR.type} · {selR.reporters} reporter{selR.reporters > 1 ? 's' : ''} · {selR.time}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{selR.type} · {selR.reporters} reporter{selR.reporters > 1 ? 's' : ''} · {selR.time}</div>
               </div>
               <SBadge status={selR.status} />
             </div>
             <div style={{ padding: 20 }}>
-              <div style={{ fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.05em', marginBottom: 6 }}>REPORTED {selR.type.toUpperCase()}</div>
+              <div style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.05em', marginBottom: 6 }}>REPORTED {selR.type.toUpperCase()}</div>
               <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>{selR.target}</div>
               <div style={{ marginTop: 12, padding: 14, borderRadius: 12, background: 'var(--bg-2)', borderLeft: '3px solid var(--clay)', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, fontStyle: 'italic' }}>{selR.excerpt}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: '12px 0', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
                 <Avatar name={selR.authorName} size={36} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{selR.authorName}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>@{selR.author}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{selR.author}</div>
                 </div>
                 <span className="chip" style={{ fontSize: 11 }}>posted the content</span>
               </div>

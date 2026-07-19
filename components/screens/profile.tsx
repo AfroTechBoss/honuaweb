@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
 
 function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
@@ -72,13 +72,10 @@ export function DesktopProfile({ onNav, params }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
         <DesktopSidebar active="profile" onNav={onNav} />
-        <main style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--ink-3)' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-            <span style={{ fontSize: 13, fontFamily: 'Geist Mono' }}>Loading profile…</span>
-          </div>
+        <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
+          <ProfileSkeleton />
         </main>
       </div>
     );
@@ -86,12 +83,11 @@ export function DesktopProfile({ onNav, params }) {
 
   if (!profile) {
     return (
-      <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
         <DesktopSidebar active="profile" onNav={onNav} />
         <main style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
           <div style={{ textAlign: 'center', color: 'var(--ink-3)' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🌍</div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>Profile not found</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>Profile not found</div>
             <div style={{ fontSize: 14, marginTop: 6 }}>This account doesn't exist or may have been removed.</div>
           </div>
         </main>
@@ -100,7 +96,7 @@ export function DesktopProfile({ onNav, params }) {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="profile" onNav={onNav} />
       <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
         {/* Cover */}
@@ -124,9 +120,9 @@ export function DesktopProfile({ onNav, params }) {
           )}
         </div>
 
-        <div style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
+        <div className="profile-content" style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
           {/* Identity row */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -50, marginBottom: 18, position: 'relative', zIndex: 1 }}>
+          <div className="profile-identity-row" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -50, marginBottom: 18, position: 'relative', zIndex: 1 }}>
             <div style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
               <Avatar src={profile.avatar_url} name={profile.full_name} size={132} verified={profile.verified} />
               {isOwn && (
@@ -141,7 +137,7 @@ export function DesktopProfile({ onNav, params }) {
                 {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
                 {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 2 }}>
+              <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
                 @{profile.handle}
                 {profile.location && ` · ${profile.location}`}
                 {joinedDate && ` · Joined ${joinedDate}`}
@@ -164,7 +160,7 @@ export function DesktopProfile({ onNav, params }) {
           </div>
 
           {/* Bio + stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 18, marginBottom: 18 }}>
+          <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: 18, marginBottom: 18 }}>
             <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20 }}>
               {profile.bio
                 ? <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>{profile.bio}</p>
@@ -185,7 +181,7 @@ export function DesktopProfile({ onNav, params }) {
             </div>
 
             <div style={{ background: 'linear-gradient(135deg, #1f6f3f, #2e9a5b)', color: '#fff', borderRadius: 16, padding: 20, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, fontFamily: 'Geist Mono', opacity: .85, letterSpacing: '.05em' }}>VERIFIED IMPACT · LIFETIME</div>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .85, letterSpacing: '.05em' }}>VERIFIED IMPACT · LIFETIME</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
                 <Stat n={profile.co2_avoided_kg >= 1000 ? `${(profile.co2_avoided_kg / 1000).toFixed(1)}t` : `${profile.co2_avoided_kg || 0}kg`} l="CO₂ avoided" light />
                 <Stat n={profile.green_points?.toLocaleString() || 0} l="Green points" light />
@@ -214,7 +210,7 @@ export function DesktopProfile({ onNav, params }) {
                 background: 'transparent', border: 'none', padding: '12px 16px',
                 color: tab === t.toLowerCase() ? 'var(--ink)' : 'var(--ink-3)',
                 fontWeight: tab === t.toLowerCase() ? 600 : 500, fontSize: 14,
-                cursor: 'pointer', position: 'relative', fontFamily: 'Geist',
+                cursor: 'pointer', position: 'relative', fontFamily: 'Satoshi',
               }}>
                 {t}
                 {tab === t.toLowerCase() && <div style={{ position: 'absolute', bottom: -1, left: 12, right: 12, height: 2, background: 'var(--green)', borderRadius: 2 }} />}
@@ -223,27 +219,27 @@ export function DesktopProfile({ onNav, params }) {
           </div>
 
           {/* Tab content */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18, paddingBottom: 40 }}>
+          <div className="profile-tab-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18, paddingBottom: 40 }}>
             <div>
               {tab === 'posts' && (
                 ownPosts.length === 0
-                  ? <EmptyTab icon="✍️" msg={isOwn ? "You haven't posted yet. Share your first action!" : "No posts yet."} />
+                  ? <EmptyTab icon="" msg={isOwn ? "You haven't posted yet. Share your first action!" : "No posts yet."} />
                   : ownPosts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} />)
               )}
               {tab === 'reposts' && (
                 reposts.length === 0
-                  ? <EmptyTab icon="🔁" msg="No reposts yet." />
+                  ? <EmptyTab icon="" msg="No reposts yet." />
                   : reposts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} isRepost />)
               )}
               {tab === 'projects' && (
                 projects.length === 0
-                  ? <EmptyTab icon="🌱" msg={isOwn ? "Start a project to track real-world impact." : "No projects yet."} />
+                  ? <EmptyTab icon="" msg={isOwn ? "Start a project to track real-world impact." : "No projects yet."} />
                   : projects.map((pr: any) => (
                     <div key={pr.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, marginBottom: 12 }}>
                       {pr.cover_url && <img src={pr.cover_url} style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 10, marginBottom: 12 }} />}
                       <div style={{ fontSize: 16, fontWeight: 600 }}>{pr.title}</div>
                       {pr.description && <div style={{ fontSize: 14, color: 'var(--ink-3)', marginTop: 4, lineHeight: 1.55 }}>{pr.description}</div>}
-                      <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>
+                      <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
                         <span>{pr.members} member{pr.members !== 1 ? 's' : ''}</span>
                         {pr.impact_kg > 0 && <span>{pr.impact_kg}kg CO₂</span>}
                         <span style={{ textTransform: 'capitalize' }}>{pr.status}</span>
@@ -253,11 +249,11 @@ export function DesktopProfile({ onNav, params }) {
               )}
               {tab === 'achievements' && (
                 achievements.length === 0
-                  ? <EmptyTab icon="🏆" msg="No achievements yet. Log your first action to earn one!" />
+                  ? <EmptyTab icon="" msg="No achievements yet. Log your first action to earn one!" />
                   : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                     {achievements.map((a: any) => (
                       <div key={a.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <div style={{ fontSize: 32 }}>{a.icon || '🌱'}</div>
+                        <div style={{ display: 'grid', placeItems: 'center', width: 40, height: 40, borderRadius: 10, background: 'var(--green-tint)' }}><Icon name="award" size={20} color="var(--green)" /></div>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 600 }}>{a.title}</div>
                           {a.description && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{a.description}</div>}
@@ -268,7 +264,7 @@ export function DesktopProfile({ onNav, params }) {
               )}
               {tab === 'media' && (
                 mediaPosts.length === 0
-                  ? <EmptyTab icon="🖼️" msg="No media posts yet." />
+                  ? <EmptyTab icon="" msg="No media posts yet." />
                   : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
                     {mediaPosts.map((p: any) => (
                       <img key={p.id} src={p.image_url} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8, cursor: 'pointer' }} />
@@ -278,14 +274,14 @@ export function DesktopProfile({ onNav, params }) {
             </div>
 
             {/* Sidebar */}
-            <div>
+            <div className="right-panel">
               {/* Interests */}
               {achievements.length > 0 && (
                 <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
                   <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Achievements</h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                     {achievements.slice(0, 8).map((a: any) => (
-                      <div key={a.id} title={a.title} style={{ aspectRatio: '1', borderRadius: 10, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', fontSize: 22, cursor: 'pointer' }}>{a.icon || '🌱'}</div>
+                      <div key={a.id} title={a.title} style={{ aspectRatio: '1', borderRadius: 10, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="award" size={18} color="var(--green)" /></div>
                     ))}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 10 }}>{achievements.length} earned</div>
@@ -356,7 +352,7 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name}</span>
-            <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
+            <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
           </div>
           {(isRepost && original ? original.content : post.content) && (
             <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }}>{isRepost && original ? original.content : post.content}</p>
@@ -383,7 +379,7 @@ export function CommentRow({ usr, text, time, likes, onNav }) {
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{usr.name}</span>
-          <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{usr.handle} · {time}</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {time}</span>
         </div>
         <p style={{ margin: '4px 0 6px', fontSize: 14, lineHeight: 1.55 }}>{text}</p>
         <div style={{ display: 'flex', gap: 18, fontSize: 12, color: 'var(--ink-3)' }}>
@@ -400,10 +396,10 @@ export function Stat({ n, l, green, light, onClick }: { n: any; l: any; green?: 
   return (
     <div onClick={onClick} className={onClick ? 'row-hover' : undefined} style={onClick ? { cursor: 'pointer', margin: '-4px -8px', padding: '4px 8px', borderRadius: 8 } : undefined}>
       <div style={{
-        fontSize: 22, fontWeight: 600, fontFamily: 'Bricolage Grotesque', letterSpacing: '-0.02em',
+        fontSize: 22, fontWeight: 600, fontFamily: 'Lora', letterSpacing: '-0.02em',
         color: light ? '#fff' : green ? 'var(--green)' : 'var(--ink)',
       }}>{n}</div>
-      <div style={{ fontSize: 11, color: light ? 'rgba(255,255,255,.8)' : 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 2 }}>{l.toUpperCase()}</div>
+      <div style={{ fontSize: 11, color: light ? 'rgba(255,255,255,.8)' : 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{l.toUpperCase()}</div>
     </div>
   );
 };
@@ -420,13 +416,13 @@ export function DesktopPostDetail({ onNav, params }) {
   const [reply, setReply] = React.useState('');
   const postReply = () => { if (!reply.trim()) return; setTree(c => [{ id: Date.now(), user: 'you', text: reply.trim(), time: 'now', likes: 0, replies: [] }, ...c]); setReply(''); app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' }); };
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="home" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
         <div style={{
           flex: 1, padding: '20px 28px', overflow: 'auto', maxWidth: 720,
           borderRight: '1px solid var(--line)',
-        }} className="no-scrollbar">
+        }} className="no-scrollbar post-detail-main">
           <button onClick={() => onNav?.('home')} style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
             color: 'var(--ink-3)', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13,
@@ -434,7 +430,7 @@ export function DesktopPostDetail({ onNav, params }) {
           }}><span style={{ transform: 'rotate(180deg)', display: 'inline-block' }}><Icon name="arrow" size={14} /></span> Back to feed</button>
 
           {/* Main post */}
-          <article style={{ background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)', padding: 28, marginBottom: 16 }}>
+          <article className="post-detail-article" style={{ background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)', padding: 28, marginBottom: 16 }}>
             <header style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
               <span onClick={() => onNav?.('profile', { handle: user.handle })} style={{ cursor: 'pointer' }}><Avatar src={user.avatar} name={user.name} size={56} verified={user.verified} /></span>
               <div style={{ flex: 1 }}>
@@ -442,7 +438,7 @@ export function DesktopPostDetail({ onNav, params }) {
                   <span style={{ fontWeight: 600, fontSize: 17 }}>{user.name}</span>
                   {user.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 16, height: 16, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 10 }}>✓</span>}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{user.handle} · {post.time} ago · {post.location}</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{user.handle} · {post.time} ago · {post.location}</div>
               </div>
               <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(user.handle); app.toast?.(following ? { msg: `Unfollowed ${user.name}`, icon: 'user' } : { msg: `Following ${user.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
             </header>
@@ -451,23 +447,23 @@ export function DesktopPostDetail({ onNav, params }) {
               {post.tags.map(t => <span key={t} style={{ color: 'var(--sky)', fontWeight: 500 }}>#{t}</span>)}
             </div>
             {post.image && <ImagePlaceholder label={post.image} height={420} src={post.imageUrl} />}
-            <div style={{
+            <div className="post-detail-stats" style={{
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
               marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12,
             }}>
               <div>
-                <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--green)', letterSpacing: '.05em' }}>VERIFIED IMPACT</div>
-                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Bricolage Grotesque', color: 'var(--green)' }}>−1.4 t</div>
+                <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>VERIFIED IMPACT</div>
+                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>−1.4 t</div>
                 <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>CO₂ /yr · oracle-verified May 19</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--green)', letterSpacing: '.05em' }}>ENERGY SAVED</div>
-                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Bricolage Grotesque', color: 'var(--green)' }}>3.2 MWh</div>
+                <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>ENERGY SAVED</div>
+                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>3.2 MWh</div>
                 <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>vs 2024 baseline</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--green)', letterSpacing: '.05em' }}>$ SAVED</div>
-                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Bricolage Grotesque', color: 'var(--green)' }}>$3,012</div>
+                <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>$ SAVED</div>
+                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>$3,012</div>
                 <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>annual co-op savings</div>
               </div>
             </div>
@@ -503,7 +499,7 @@ export function DesktopPostDetail({ onNav, params }) {
         </div>
 
         {/* Right rail */}
-        <div style={{ width: 340, padding: 20, overflow: 'auto', flexShrink: 0 }} className="no-scrollbar">
+        <div style={{ width: 340, padding: 20, overflow: 'auto', flexShrink: 0 }} className="no-scrollbar right-panel">
           <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
             <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>About this project</h3>
             <ImagePlaceholder label="project hero" height={140} />

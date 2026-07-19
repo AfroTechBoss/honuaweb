@@ -31,7 +31,7 @@ export const ADMIN_ROLES = {
 
 export function RoleChip({ role }) {
   const c = ADMIN_ROLES[role] || 'var(--ink-3)';
-  return <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'Geist Mono', color: c, background: sTint(c), padding: '2px 8px', borderRadius: 6 }}>{role}</span>;
+  return <span style={{ fontSize: 11, fontWeight: 600, fontFamily: 'JetBrains Mono', color: c, background: sTint(c), padding: '2px 8px', borderRadius: 6 }}>{role}</span>;
 };
 
 export const REPORT_REASONS = ['Spam', 'Harassment or bullying', 'Hateful content', 'Misinformation', 'Malicious content', 'Inappropriate content', 'Copyright violation', 'Other'];

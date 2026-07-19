@@ -3,12 +3,79 @@ import React from "react";
 import { Icon } from "./icons";
 import { useApp } from "./app-context";
 
+// ── Skeleton system ──────────────────────────────────────────────────────────
+
+function Skel({ w, h, r = 8, style = {} }: { w?: number | string; h?: number | string; r?: number; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: r,
+      background: 'var(--line)',
+      animation: 'skeleton-pulse 1.4s ease-in-out infinite',
+      flexShrink: 0,
+      ...style,
+    }} />
+  );
+}
+
+export function PostCardSkeleton() {
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '18px 20px', marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <Skel w={40} h={40} r={999} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Skel w={120} h={13} />
+            <Skel w={72} h={13} />
+          </div>
+          <Skel w="90%" h={13} />
+          <Skel w="75%" h={13} />
+          <Skel w="55%" h={13} />
+          <div style={{ display: 'flex', gap: 20, marginTop: 6 }}>
+            <Skel w={36} h={13} />
+            <Skel w={36} h={13} />
+            <Skel w={36} h={13} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProfileSkeleton() {
+  return (
+    <>
+      {/* Cover */}
+      <Skel w="100%" h={180} r={0} />
+      {/* Header */}
+      <div style={{ padding: '0 32px', position: 'relative' }}>
+        <div style={{ marginTop: -48, marginBottom: 12 }}>
+          <Skel w={96} h={96} r={999} style={{ border: '4px solid var(--bg)' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+          <Skel w={160} h={20} />
+          <Skel w={100} h={13} />
+          <Skel w={280} h={13} />
+          <Skel w={220} h={13} />
+          <div style={{ display: 'flex', gap: 20, marginTop: 4 }}>
+            <Skel w={60} h={13} />
+            <Skel w={60} h={13} />
+            <Skel w={80} h={13} />
+          </div>
+        </div>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--line)', marginBottom: 16 }}>
+          {[80, 64, 60, 56].map((w, i) => <Skel key={i} w={w} h={13} style={{ margin: '0 12px 14px 0' }} />)}
+        </div>
+        {/* Post skeletons */}
+        {[1, 2, 3].map(i => <PostCardSkeleton key={i} />)}
+      </div>
+    </>
+  );
+}
+
 export function Logo({ size = 28 }: any) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-      <span style={{ width: size, height: size, borderRadius: 8, background: "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontFamily: "Bricolage Grotesque", fontWeight: 700, fontSize: size * 0.55, letterSpacing: "-0.05em" }}>h</span>
-      <span className="font-display" style={{ fontWeight: 600, fontSize: size * 0.6, color: "var(--ink)" }}>honua</span>
-    </span>
+    <span className="font-display" style={{ fontWeight: 700, fontSize: size * 0.75, color: "var(--ink)", letterSpacing: "-0.02em" }}>Honua</span>
   );
 }
 
@@ -16,12 +83,12 @@ export function Avatar({ src, name = "U", size = 36, verified = false, score }: 
   const initial = (name || "U").charAt(0).toUpperCase();
   return (
     <span style={{ position: "relative", width: size, height: size, display: "inline-block", flexShrink: 0 }}>
-      <span style={{ width: size, height: size, borderRadius: "50%", background: src ? `url(${src}) center/cover` : "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 600, fontSize: size * 0.4, fontFamily: "Geist", border: "2px solid var(--surface)" }}>{!src && initial}</span>
+      <span style={{ width: size, height: size, borderRadius: "50%", background: src ? `url(${src}) center/cover` : "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 600, fontSize: size * 0.4, fontFamily: "Satoshi", border: "2px solid var(--surface)" }}>{!src && initial}</span>
       {verified && (
         <span style={{ position: "absolute", bottom: -2, right: -2, width: size * 0.36, height: size * 0.36, borderRadius: "50%", background: "var(--sky)", display: "grid", placeItems: "center", color: "#fff", fontSize: size * 0.18, border: "2px solid var(--surface)" }}>✓</span>
       )}
       {typeof score === "number" && !verified && (
-        <span style={{ position: "absolute", bottom: -3, right: -3, padding: "1px 5px", borderRadius: 8, background: "var(--green)", color: "#fff", fontSize: 9, fontFamily: "Geist Mono", fontWeight: 600, border: "2px solid var(--surface)" }}>{score}</span>
+        <span style={{ position: "absolute", bottom: -3, right: -3, padding: "1px 5px", borderRadius: 8, background: "var(--green)", color: "#fff", fontSize: 9, fontFamily: "JetBrains Mono", fontWeight: 600, border: "2px solid var(--surface)" }}>{score}</span>
       )}
     </span>
   );
@@ -34,7 +101,7 @@ export function ImagePlaceholder({ label = "photo", height = 240, src, ratio }: 
   }
   return (
     <div className="placeholder-stripes" style={style}>
-      <div style={{ position: "absolute", bottom: 10, left: 10, padding: "4px 8px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6, fontFamily: "Geist Mono", fontSize: 11, color: "var(--ink-3)" }}>{label}</div>
+      <div style={{ position: "absolute", bottom: 10, left: 10, padding: "4px 8px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6, fontFamily: "JetBrains Mono", fontSize: 11, color: "var(--ink-3)" }}>{label}</div>
     </div>
   );
 }
@@ -42,7 +109,7 @@ export function ImagePlaceholder({ label = "photo", height = 240, src, ratio }: 
 export function ScorePill({ score, label = "impact" }: any) {
   const color = score >= 80 ? "var(--green)" : score >= 50 ? "var(--green-2)" : "var(--sun)";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px 3px 4px", borderRadius: 999, background: "var(--green-tint)", color: "var(--green)", fontSize: 11, fontWeight: 600, fontFamily: "Geist Mono" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px 3px 4px", borderRadius: 999, background: "var(--green-tint)", color: "var(--green)", fontSize: 11, fontWeight: 600, fontFamily: "JetBrains Mono" }}>
       <span style={{ width: 20, height: 20, borderRadius: "50%", background: color, color: "#fff", display: "grid", placeItems: "center", fontSize: 10 }}>{score}</span>
       {label}
     </span>
@@ -106,8 +173,8 @@ export function ToggleC({ on, onChange }: any) {
 export function Stat({ n, l, green, light }: any) {
   return (
     <div>
-      <div style={{ fontSize: 22, fontWeight: 600, fontFamily: "Bricolage Grotesque", letterSpacing: "-0.02em", color: light ? "#fff" : green ? "var(--green)" : "var(--ink)" }}>{n}</div>
-      <div style={{ fontSize: 11, color: light ? "rgba(255,255,255,.8)" : "var(--ink-3)", fontFamily: "Geist Mono", marginTop: 2 }}>{l.toUpperCase()}</div>
+      <div style={{ fontSize: 22, fontWeight: 600, fontFamily: "Lora", letterSpacing: "-0.02em", color: light ? "#fff" : green ? "var(--green)" : "var(--ink)" }}>{n}</div>
+      <div style={{ fontSize: 11, color: light ? "rgba(255,255,255,.8)" : "var(--ink-3)", fontFamily: "JetBrains Mono", marginTop: 2 }}>{l.toUpperCase()}</div>
     </div>
   );
 }

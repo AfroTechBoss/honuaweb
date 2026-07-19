@@ -31,7 +31,7 @@ function ChipGroup({ options, value = [], onToggle, single }: { options: string[
         return (
           <button key={o} onClick={() => onToggle?.(o)} style={{
             padding: '8px 14px', borderRadius: 999, fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            fontFamily: 'Geist', display: 'inline-flex', alignItems: 'center', gap: 7,
+            fontFamily: 'Satoshi', display: 'inline-flex', alignItems: 'center', gap: 7,
             background: on ? 'var(--green-tint)' : 'var(--surface)',
             color: on ? 'var(--green)' : 'var(--ink-2)',
             border: '1px solid ' + (on ? 'transparent' : 'var(--line)'),
@@ -78,7 +78,7 @@ export function DesktopSell({ onNav, params }: { onNav: any; params?: Record<str
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="" onNav={onNav} />
       <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">{body()}</main>
     </div>
@@ -102,7 +102,7 @@ function SellLanding({ onStart }) {
       {/* Hero */}
       <div style={{ padding: '64px 56px 48px', background: 'linear-gradient(160deg, var(--green-tint), transparent 70%)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 900 }}>
-          <span className="chip chip-green" style={{ fontFamily: 'Geist Mono', fontSize: 11 }}>HONUA FOR SELLERS</span>
+          <span className="chip chip-green" style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>HONUA FOR SELLERS</span>
           <h1 className="font-display" style={{ fontSize: 56, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1.02, margin: '20px 0 0', maxWidth: '16ch' }}>
             Sell the things that help the planet.
           </h1>
@@ -113,7 +113,7 @@ function SellLanding({ onStart }) {
             <button className="btn btn-green" onClick={onStart} style={{ padding: '13px 22px', fontSize: 15 }}>
               Start your application <Icon name="arrow" size={16} stroke={2.2} />
             </button>
-            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>Free to apply · no listing fees</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>Free to apply · no listing fees</span>
           </div>
         </div>
       </div>
@@ -137,7 +137,7 @@ function SellLanding({ onStart }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {steps.map(([t, d], i) => (
             <div key={t} style={{ position: 'relative', padding: '24px 22px', borderRadius: 18, border: '1px solid var(--line)', background: 'var(--surface)' }}>
-              <span className="font-display" style={{ fontSize: 13, fontFamily: 'Geist Mono', color: 'var(--green)', fontWeight: 600 }}>STEP {i + 1}</span>
+              <span className="font-display" style={{ fontSize: 13, fontFamily: 'JetBrains Mono', color: 'var(--green)', fontWeight: 600 }}>STEP {i + 1}</span>
               <h3 className="font-display" style={{ fontSize: 20, fontWeight: 600, margin: '8px 0 6px' }}>{t}</h3>
               <p style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.55, margin: 0 }}>{d}</p>
             </div>
@@ -216,7 +216,7 @@ function ApplyWizard({ onNav, onCancel }) {
           <button className="btn btn-ghost" onClick={onCancel} style={{ padding: '7px 12px' }}><span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Icon name="arrow" size={15} /></span> Exit</button>
           <div>
             <div className="font-display" style={{ fontSize: 17, fontWeight: 600 }}>Seller application</div>
-            <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>Step {step + 1} of {APPLY_STEPS.length} · progress saved</div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>Step {step + 1} of {APPLY_STEPS.length} · progress saved</div>
           </div>
         </div>
         <div style={{ width: 440, maxWidth: '40vw' }}><SStepper steps={APPLY_STEPS} current={step} onJump={setStep} compact /></div>
@@ -226,7 +226,7 @@ function ApplyWizard({ onNav, onCancel }) {
       <div style={{ flex: 1, display: 'grid', placeItems: 'start center', padding: '36px 24px 120px' }}>
         <div style={{ width: '100%', maxWidth: 660 }}>
           <div style={{ marginBottom: 22 }}>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--green)', letterSpacing: '.05em' }}>{APPLY_STEPS[step].toUpperCase()}</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>{APPLY_STEPS[step].toUpperCase()}</div>
             <h2 className="font-display" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em', margin: '6px 0 0' }}>{STEP_TITLE[step]}</h2>
             <p style={{ fontSize: 14.5, color: 'var(--ink-3)', margin: '6px 0 0', lineHeight: 1.55 }}>{STEP_SUB[step]}</p>
           </div>
@@ -309,7 +309,7 @@ function ApplyWizard({ onNav, onCancel }) {
           {step === 4 && (
             <div style={{ display: 'grid', gap: 16 }}>
               <button onClick={() => set('payout', 'stripe')} className="opt-row" style={{ borderColor: f.payout === 'stripe' ? 'var(--green)' : 'var(--line)', background: f.payout === 'stripe' ? 'var(--green-tint)' : 'var(--surface)' }}>
-                <span style={{ width: 40, height: 40, borderRadius: 10, background: '#635bff', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontFamily: 'Geist', flexShrink: 0 }}>S</span>
+                <span style={{ width: 40, height: 40, borderRadius: 10, background: '#635bff', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontFamily: 'Satoshi', flexShrink: 0 }}>S</span>
                 <span style={{ flex: 1 }}>
                   <span style={{ fontSize: 14.5, fontWeight: 600 }}>Connect with Stripe</span>
                   <span style={{ display: 'block', fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>Recommended · fastest payouts, handles tax & currency</span>
@@ -363,7 +363,7 @@ function ApplyWizard({ onNav, onCancel }) {
       <div style={{ position: 'sticky', bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 40px', borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
         <button className="btn btn-ghost" onClick={() => step === 0 ? onCancel() : setStep(s => s - 1)} style={{ padding: '10px 18px' }}>{step === 0 ? 'Cancel' : 'Back'}</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{step + 1}/{APPLY_STEPS.length}</span>
+          <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{step + 1}/{APPLY_STEPS.length}</span>
           {step < APPLY_STEPS.length - 1 ? (
             <button className="btn btn-green" disabled={!canNext()} onClick={() => setStep(s => s + 1)} style={{ padding: '10px 22px', opacity: canNext() ? 1 : .45, cursor: canNext() ? 'pointer' : 'not-allowed' }}>Continue <Icon name="arrow" size={15} stroke={2.2} /></button>
           ) : (
@@ -446,7 +446,7 @@ function SellPending({ onNav }) {
         <button className="btn btn-ghost" onClick={() => onNav?.('marketplace')}>Back to marketplace</button>
         <button className="btn btn-ghost" onClick={() => onNav?.('admin')} style={{ color: 'var(--green)', borderColor: 'var(--green-3)' }}>Open admin review →</button>
       </div>
-      <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-4)', marginTop: 14, fontFamily: 'Geist Mono' }}>Demo: approve this application from the admin queue to unlock the dashboard.</p>
+      <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-4)', marginTop: 14, fontFamily: 'JetBrains Mono' }}>Demo: approve this application from the admin queue to unlock the dashboard.</p>
     </StatusShell>
   );
 }
@@ -458,7 +458,7 @@ function SellApproved({ onNav }) {
     <StatusShell>
       <div style={{ textAlign: 'center' }}>
         <span style={{ width: 64, height: 64, borderRadius: 20, background: 'var(--green-tint)', color: 'var(--green)', display: 'inline-grid', placeItems: 'center' }}><Icon name="check" size={32} stroke={2.6} /></span>
-        <h1 className="font-display" style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-0.03em', margin: '20px 0 0' }}>You're approved 🎉</h1>
+        <h1 className="font-display" style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-0.03em', margin: '20px 0 0' }}>You're approved</h1>
         <p style={{ fontSize: 15.5, color: 'var(--ink-3)', lineHeight: 1.6, margin: '10px 0 0' }}><strong style={{ color: 'var(--ink-2)' }}>{shop.name}</strong> is now a verified Honua shop. Your dashboard is unlocked — add your first product and you're live.</p>
       </div>
       <div style={{ marginTop: 28, display: 'grid', gap: 10 }}>

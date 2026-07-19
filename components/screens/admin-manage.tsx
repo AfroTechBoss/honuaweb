@@ -25,7 +25,7 @@ export function AdminProducts({ products, onStatus }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {[['all', 'All'], ['flagged', 'Flagged'], ['live', 'Live'], ['removed', 'Removed']].map(([k, l]) => (
             <button key={k} onClick={() => setFilter(k)} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>
-              {l} <span style={{ fontFamily: 'Geist Mono', opacity: .65 }}>· {counts[k]}</span>
+              {l} <span style={{ fontFamily: 'JetBrains Mono', opacity: .65 }}>· {counts[k]}</span>
             </button>
           ))}
         </div>
@@ -36,7 +36,7 @@ export function AdminProducts({ products, onStatus }) {
       </div>
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1.4fr 1fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1.4fr 1fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>
           <span>PRODUCT</span><span>SELLER</span><span>STATUS</span><span style={{ textAlign: 'right' }}>FLAGS</span><span></span>
         </div>
         {filtered.map(p => (
@@ -45,7 +45,7 @@ export function AdminProducts({ products, onStatus }) {
               <span style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', color: 'var(--ink-4)' }}><Icon name="bag" size={16} /></span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{sMoney(p.price, 0)} · {p.category}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{sMoney(p.price, 0)} · {p.category}</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
@@ -53,7 +53,7 @@ export function AdminProducts({ products, onStatus }) {
               <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.seller}</span>
             </div>
             <SBadge status={p.status} size="sm" />
-            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'Geist Mono', fontSize: 13, fontWeight: 600, color: p.flags > 0 ? 'var(--clay)' : 'var(--ink-4)' }}>{p.flags || '—'}</span>
+            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: p.flags > 0 ? 'var(--clay)' : 'var(--ink-4)' }}>{p.flags || '—'}</span>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {p.status !== 'removed' ? (
                 <>
@@ -109,7 +109,7 @@ export function AdminUsers({ users, onStatus, onRole }) {
       </div>
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 0.9fr 0.8fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 0.9fr 0.8fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>
           <span>MEMBER</span><span>ROLE</span><span>STATUS</span><span style={{ textAlign: 'right' }}>IMPACT</span><span style={{ textAlign: 'right' }}>REPORTS</span><span></span>
         </div>
         {filtered.map(u => (
@@ -118,13 +118,13 @@ export function AdminUsers({ users, onStatus, onRole }) {
               <Avatar name={u.name} size={34} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>@{u.handle} · {u.city}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{u.handle} · {u.city}</div>
               </div>
             </button>
             <RoleChip role={u.role} />
             <SBadge status={u.status} size="sm" />
-            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'Geist Mono', fontSize: 13, fontWeight: 600 }}>{u.impact}</span>
-            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'Geist Mono', fontSize: 13, fontWeight: 600, color: u.reports > 0 ? 'var(--clay)' : 'var(--ink-4)' }}>{u.reports || '—'}</span>
+            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600 }}>{u.impact}</span>
+            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: u.reports > 0 ? 'var(--clay)' : 'var(--ink-4)' }}>{u.reports || '—'}</span>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {u.status === 'active' ? (
                 <>
@@ -156,7 +156,7 @@ function UserDrawer({ u, onClose, onStatus, onRole }) {
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(10,13,11,.34)', zIndex: 80 }} />
       <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '92vw', zIndex: 81, background: 'var(--surface)', borderLeft: '1px solid var(--line)', boxShadow: '-20px 0 50px rgba(0,0,0,.12)', overflow: 'auto', animation: 'slideIn .2s ease' }} className="no-scrollbar">
         <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.05em' }}>MEMBER DETAIL</span>
+          <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.05em' }}>MEMBER DETAIL</span>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><Icon name="close" size={16} /></button>
         </div>
         <div style={{ padding: 22 }}>
@@ -164,7 +164,7 @@ function UserDrawer({ u, onClose, onStatus, onRole }) {
             <Avatar name={u.name} size={56} verified={u.role === 'Seller' || u.role === 'Moderator'} />
             <div>
               <div className="font-display" style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>{u.name}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>@{u.handle}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}><RoleChip role={u.role} /><SBadge status={u.status} size="sm" /></div>
@@ -172,7 +172,7 @@ function UserDrawer({ u, onClose, onStatus, onRole }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 20 }}>
             {[['Impact score', u.impact], ['Posts', u.posts], ['Reports', u.reports], ['Joined', u.joined]].map(([k, v]) => (
               <div key={k} style={{ padding: 13, borderRadius: 12, background: 'var(--bg-2)' }}>
-                <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{k.toUpperCase()}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{k.toUpperCase()}</div>
                 <div className="font-display tabular" style={{ fontSize: 19, fontWeight: 600, marginTop: 2, color: k === 'Reports' && u.reports > 0 ? 'var(--clay)' : 'var(--ink)' }}>{v}</div>
               </div>
             ))}
@@ -240,7 +240,7 @@ export function AdminSellers({ onNav }) {
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>Applications</span>
-          <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{all.length} pending</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{all.length} pending</span>
         </div>
         <div style={{ maxHeight: 560, overflow: 'auto' }} className="no-scrollbar">
           {all.map(a => {
@@ -251,12 +251,12 @@ export function AdminSellers({ onNav }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.shop}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>{a.applicant} · {a.country}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4 }}>{a.submitted}{a.isUser ? ' · your application' : ''}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 4 }}>{a.submitted}{a.isUser ? ' · your application' : ''}</div>
                 </div>
               </button>
             );
           })}
-          {all.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>Queue is clear 🎉</div>}
+          {all.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>Queue is clear</div>}
         </div>
       </div>
 

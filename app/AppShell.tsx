@@ -4,8 +4,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { AppProvider, useApp } from "@/components/app-context";
 import { ToastHost } from "@/components/primitives";
 import { ModalRoot } from "@/components/screens/desktop-rest";
+import { MobileNav } from "@/components/sidebar";
 
-const PUBLIC_PATHS = ["/login", "/terms"];
+const PUBLIC_PATHS = ["/login", "/terms", "/seller-policy", "/proposition"];
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { authed, state } = useApp();
@@ -41,6 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <ToastHost />
       <ModalRoot />
+      <MobileNav />
     </AppProvider>
   );
 }

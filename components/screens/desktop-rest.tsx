@@ -10,13 +10,13 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
   const joined = app.community?.has('Urban gardeners');
   const going = app.community?.has('seedling-swap');
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="forum" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
         {/* Left: communities sidebar */}
-        <div style={{ width: 260, borderRight: '1px solid var(--line)', background: 'var(--surface)', padding: '20px 16px', overflow: 'auto' }} className="no-scrollbar">
+        <div style={{ width: 260, borderRight: '1px solid var(--line)', background: 'var(--surface)', padding: '20px 16px', overflow: 'auto' }} className="no-scrollbar community-sidebar">
           <h2 className="font-display" style={{ margin: '0 0 14px', fontSize: 20, fontWeight: 600 }}>Communities</h2>
-          <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--ink-3)', margin: '14px 0 8px', letterSpacing: '.05em' }}>YOUR COMMUNITIES</div>
+          <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '14px 0 8px', letterSpacing: '.05em' }}>YOUR COMMUNITIES</div>
           {['Urban gardeners', 'Solar DIY', 'Ocean cleanup crew'].map(n => (
             <button key={n} style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
@@ -28,7 +28,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
               <span style={{ flex: 1, textAlign: 'left' }}>{n}</span>
             </button>
           ))}
-          <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--ink-3)', margin: '18px 0 8px', letterSpacing: '.05em' }}>DISCOVER</div>
+          <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 8px', letterSpacing: '.05em' }}>DISCOVER</div>
           {MOCK.communities.slice(3).map(c => (
             <button key={c.name} style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
@@ -51,11 +51,11 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.4))' }} />
           </div>
           <div style={{ padding: '0 28px', maxWidth: 900 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: -36, position: 'relative', zIndex: 1 }}>
+            <div className="community-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: -36, position: 'relative', zIndex: 1 }}>
               <div style={{
                 width: 80, height: 80, borderRadius: 18, background: 'var(--green)',
                 border: '6px solid var(--bg)', color: '#fff',
-                display: 'grid', placeItems: 'center', fontSize: 34, fontFamily: 'Bricolage Grotesque', fontWeight: 600,
+                display: 'grid', placeItems: 'center', fontSize: 34, fontFamily: 'Lora', fontWeight: 600,
               }}>U</div>
               <div style={{ flex: 1, paddingBottom: 4 }}>
                 <h1 className="font-display" style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Urban gardeners</h1>
@@ -99,16 +99,16 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
                     }}>
                       <div style={{ width: 30, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <Icon name="arrow" size={14} color="var(--ink-3)" />
-                        <span style={{ fontSize: 12, fontFamily: 'Geist Mono', fontWeight: 600, margin: '4px 0' }}>{42 + i * 13}</span>
+                        <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono', fontWeight: 600, margin: '4px 0' }}>{42 + i * 13}</span>
                         <Icon name="arrow" size={14} color="var(--ink-3)" />
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{
                             background: kindColor + '20', color: kindColor, padding: '2px 8px', borderRadius: 6,
-                            fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 600, textTransform: 'uppercase',
+                            fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 600, textTransform: 'uppercase',
                           }}>{p.kind}</span>
-                          <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>by @{u.handle} · {p.time}</span>
+                          <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>by @{u.handle} · {p.time}</span>
                         </div>
                         <h3 style={{ margin: '8px 0 4px', fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>{p.title}</h3>
                         <div style={{ display: 'flex', gap: 18, marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>
@@ -137,14 +137,14 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
                   <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
                   {['Starter guide for balcony growing', 'Tool library — borrow & lend', 'Soil testing — DIY', 'Pollinator-friendly plant list'].map((r, i) => (
                     <a key={i} onClick={() => app.toast({ msg: r, sub: 'Pinned resource would open here.', icon: 'bookmark' })} style={{ display: 'block', padding: '8px 0', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
-                      📎 {r}
+                      {r}
                     </a>
                   ))}
                 </div>
                 <div style={{ background: 'var(--green)', color: '#fff', borderRadius: 14, padding: 16 }}>
                   <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>Seedling swap · Saturday</h3>
                   <p style={{ margin: '0 0 12px', fontSize: 13, opacity: .9 }}>14 members already going. Bring 5+ to share.</p>
-                  <button className="btn" style={{ background: '#fff', color: 'var(--green)', padding: '6px 12px', fontSize: 12 }} onClick={() => { app.community.toggle('seedling-swap'); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going! 🌱", sub: 'Seedling swap · Saturday', kind: 'success', icon: 'check' }); }}>{going ? 'Going ✓' : "I'm going →"}</button>
+                  <button className="btn" style={{ background: '#fff', color: 'var(--green)', padding: '6px 12px', fontSize: 12 }} onClick={() => { app.community.toggle('seedling-swap'); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: 'Seedling swap · Saturday', kind: 'success', icon: 'check' }); }}>{going ? 'Going ✓' : "I'm going →"}</button>
                 </div>
               </div>
             </div>
@@ -159,12 +159,12 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
 export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="tasks" onNav={onNav} />
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CHALLENGES · WEEK 19</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CHALLENGES · WEEK 19</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Small streaks. Big swings.</h1>
             <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Pick a challenge, log daily, watch your numbers move. Community multipliers stack with personal streaks.</p>
           </div>
@@ -176,7 +176,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Today · Thursday May 22</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>3 / 5 logged</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>3 / 5 logged</span>
               <div style={{ width: 100, height: 6, background: 'var(--line)', borderRadius: 999 }}>
                 <div style={{ width: '60%', height: '100%', background: 'var(--green)', borderRadius: 999 }} />
               </div>
@@ -205,7 +205,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
                   {done && <Icon name="check" size={14} stroke={2.5} />}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{t}</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 4 }}>{r}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 4 }}>{r}</div>
               </div>
             ))}
           </div>
@@ -225,9 +225,9 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{c.t}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{c.sub} · {c.joined} joined</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.sub} · {c.joined} joined</div>
                 </div>
-                <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => app.openModal('celebrate', { emoji: '🔥', title: 'Logged for today!', sub: `Your "${c.t}" streak continues — ${c.sub.toLowerCase()}. Keep it going.` })}>Log today</button>
+                <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.t}" streak continues — ${c.sub.toLowerCase()}. Keep it going.` })}>Log today</button>
               </div>
               <div style={{ height: 8, background: 'var(--line)', borderRadius: 999, marginBottom: 8 }}>
                 <div style={{ width: (c.p * 100) + '%', height: '100%', background: c.col, borderRadius: 999 }} />
@@ -258,11 +258,11 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
             <div key={c.id} className="post-card" onClick={() => app.openModal('challenge', c)} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, cursor: 'pointer' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <span className="chip chip-green">{c.cat}</span>
-                <span style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)' }}>{c.days}d</span>
+                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{c.days}d</span>
               </div>
               <h3 style={{ margin: '12px 0 4px', fontSize: 15, fontWeight: 600 }}>{c.title}</h3>
-              <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{c.joined} joined · earn {c.reward}</div>
-              <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.challenge.toggle(c.id); app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined! 🔥', sub: c.title, kind: 'success', icon: 'flame' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join challenge'}</button>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.joined} joined · earn {c.reward}</div>
+              <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.challenge.toggle(c.id); app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: c.title, kind: 'success', icon: 'flame' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join challenge'}</button>
             </div>
             );
           })}
@@ -277,12 +277,12 @@ export function DesktopBookmarks({ onNav, params }: { onNav: any; params?: Recor
   const app = useApp();
   const [coll, setColl] = React.useState('All bookmarks');
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="bookmarks" onNav={onNav} />
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>BOOKMARKS</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>BOOKMARKS</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>{coll === 'All bookmarks' ? 'Saved for later.' : coll}</h1>
           </div>
           <button className="btn btn-ghost" onClick={() => app.openModal('newcollection')}><Icon name="plus" size={14} /> New collection</button>
@@ -291,7 +291,7 @@ export function DesktopBookmarks({ onNav, params }: { onNav: any; params?: Recor
         <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 24 }}>
           {/* Collections */}
           <div>
-            <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--ink-3)', marginBottom: 8, letterSpacing: '.05em' }}>COLLECTIONS</div>
+            <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', marginBottom: 8, letterSpacing: '.05em' }}>COLLECTIONS</div>
             {([
               ['All bookmarks', 84],
               ['Build out solar', 14],
@@ -312,7 +312,7 @@ export function DesktopBookmarks({ onNav, params }: { onNav: any; params?: Recor
                 <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
                   <Icon name="bookmark" size={15} /> {n}
                 </span>
-                <span style={{ fontFamily: 'Geist Mono', fontSize: 11, color: 'var(--ink-3)' }}>{c}</span>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-3)' }}>{c}</span>
               </button>
               );
             })}
@@ -350,10 +350,10 @@ export function DesktopSettings({ onNav, params }: { onNav: any; params?: Record
     ['Connected apps', 'bolt'], ['Help & support', 'comment'],
   ];
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="settings" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
-        <div style={{ width: 240, borderRight: '1px solid var(--line)', background: 'var(--surface)', padding: '24px 16px', overflow: 'auto' }} className="no-scrollbar">
+        <div style={{ width: 240, borderRight: '1px solid var(--line)', background: 'var(--surface)', padding: '24px 16px', overflow: 'auto' }} className="no-scrollbar settings-nav">
           <h2 className="font-display" style={{ margin: '0 0 14px', fontSize: 20, fontWeight: 600 }}>Settings</h2>
           {nav.map(([l, i]) => {
             const a = sec === l;
@@ -495,7 +495,7 @@ export function SettingsSection({ sec, app, onNav }) {
       {sec === 'Help & support' && (
         <Section title="Get help">
           {[['Help center', 'comment', 'Help Center.html'], ['Contact support', 'msg', 'Contact Support.html'], ['Community guidelines', 'users', 'Community Guidelines.html'], ['Report a problem', 'bolt', 'Report a Problem.html'], ['Terms & privacy', 'lock', 'Terms & Privacy.html']].map(([t, ic, file]) => (
-            <button key={t} onClick={() => { app.toast?.({ msg: 'Opening…', sub: 'Support docs would open here.', icon: 'comment' }); app.toast({ msg: t, sub: 'Opened in a new tab.', icon: ic }); }} className="row-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 10px', margin: '0 -10px', border: 'none', borderTop: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', fontFamily: 'Geist', textAlign: 'left' }}>
+            <button key={t} onClick={() => { app.toast?.({ msg: 'Opening…', sub: 'Support docs would open here.', icon: 'comment' }); app.toast({ msg: t, sub: 'Opened in a new tab.', icon: ic }); }} className="row-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '12px 10px', margin: '0 -10px', border: 'none', borderTop: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', fontFamily: 'Satoshi', textAlign: 'left' }}>
               <Icon name={ic} size={16} color="var(--ink-3)" /> <span style={{ flex: 1 }}>{t}</span> <Icon name="arrow" size={15} color="var(--ink-4)" />
             </button>
           ))}
@@ -598,7 +598,7 @@ export function MCompose({ close }) {
       }
       const { error } = result;
       if (error) throw error;
-      app.toast?.({ kind: 'success', msg: 'Post published 🌱', sub: 'Your update is live on the feed.', icon: 'check' });
+      app.toast?.({ kind: 'success', msg: 'Post published', sub: 'Your update is live on the feed.', icon: 'check' });
       close();
     } catch (err: any) {
       app.toast?.({ kind: 'error', msg: 'Failed to publish', sub: err.message, icon: 'bolt' });
@@ -660,7 +660,7 @@ export function MLogAction({ close }) {
             <button key={l} onClick={() => setSel(i)} className={'opt-row ' + (sel === i ? 'sel' : '')} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
               <span style={{ color: sel === i ? 'var(--green)' : 'var(--ink-3)' }}><Icon name={ic} size={18} stroke={2} /></span>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{l}</span>
-              <span style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--green)' }}>{gp}</span>
+              <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>{gp}</span>
             </button>
           ))}
         </div>
@@ -669,7 +669,7 @@ export function MLogAction({ close }) {
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { emoji: '🌱', title: `Action logged · ${opts[sel][2]}`, sub: `Nice work. That's another entry in your verified impact ledger — streak now at 13 days.` }); }}>Log action</button>
+        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: `Action logged · ${opts[sel][2]}`, sub: `Nice work. That's another entry in your verified impact ledger — streak now at 13 days.` }); }}>Log action</button>
       </ModalFoot>
     </Modal>
   );
@@ -753,7 +753,7 @@ export function MCreateChallenge({ close }) {
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Challenge created 🔥', sub: `"${title}" is live — invite your community to join.`, icon: 'flame' }); }} disabled={!title.trim()} style={{ opacity: title.trim() ? 1 : .5 }}>Create</button>
+        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Challenge created', sub: `"${title}" is live — invite your community to join.`, icon: 'flame' }); }} disabled={!title.trim()} style={{ opacity: title.trim() ? 1 : .5 }}>Create</button>
       </ModalFoot>
     </Modal>
   );
@@ -860,8 +860,8 @@ export function MEditProfile({ close }) {
 
   const avatarSrc = avatarPreview || currentAvatar;
   const coverSrc = coverPreview || currentCover;
-  const fld: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 13px', fontSize: 14, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none' };
-  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block', marginBottom: 5 };
+  const fld: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 13px', fontSize: 14, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none' };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block', marginBottom: 5 };
 
   return (
     <Modal onClose={close} width={560}>
@@ -869,21 +869,23 @@ export function MEditProfile({ close }) {
       <div style={{ padding: '18px 24px 0' }}>
 
         {/* Cover photo */}
-        <div style={{
-          height: 110, borderRadius: 12, position: 'relative', marginBottom: 48, overflow: 'hidden',
-          background: coverSrc ? `url(${coverSrc}) center/cover` : 'linear-gradient(135deg,#1f6f3f,#2e9a5b)',
-        }}>
-          <button onClick={() => coverRef.current?.click()} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,.5)', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
-            {coverSrc ? 'Change cover' : '+ Add cover'}
-          </button>
-          <input ref={coverRef} type="file" accept="image/*" onChange={pickCover} style={{ display: 'none' }} />
+        <div style={{ position: 'relative', marginBottom: 48 }}>
+          <div style={{
+            height: 110, borderRadius: 12, overflow: 'hidden', position: 'relative',
+            background: coverSrc ? `url(${coverSrc}) center/cover` : 'linear-gradient(135deg,#1f6f3f,#2e9a5b)',
+          }}>
+            <button onClick={() => coverRef.current?.click()} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,.5)', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
+              {coverSrc ? 'Change cover' : '+ Add cover'}
+            </button>
+            <input ref={coverRef} type="file" accept="image/*" onChange={pickCover} style={{ display: 'none' }} />
+          </div>
 
-          {/* Avatar */}
+          {/* Avatar — sits below cover, no longer clipped by overflow:hidden */}
           <div style={{ position: 'absolute', bottom: -36, left: 16 }}>
             <div style={{ width: 72, height: 72, borderRadius: 18, border: '4px solid var(--surface)', overflow: 'hidden', background: 'var(--green)', position: 'relative', cursor: 'pointer' }} onClick={() => avatarRef.current?.click()}>
               {avatarSrc
                 ? <img src={avatarSrc} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 28, color: '#fff', fontFamily: 'Bricolage Grotesque' }}>{fullName.charAt(0) || '?'}</div>
+                : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 28, color: '#fff', fontFamily: 'Lora' }}>{fullName.charAt(0) || '?'}</div>
               }
               <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.4)', display: 'grid', placeItems: 'center', opacity: 0, transition: 'opacity .15s' }} className="avatar-edit-overlay">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -894,7 +896,7 @@ export function MEditProfile({ close }) {
         </div>
 
         {/* Fields */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div className="edit-profile-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div>
             <label style={lab}>DISPLAY NAME</label>
             <input style={fld} value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" />
@@ -935,17 +937,17 @@ export function MTip({ data, close }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
           {[5, 10, 25].map(a => (
             <button key={a} onClick={() => setAmt(a)} className={'opt-row ' + (amt === a ? 'sel' : '')} style={{ justifyContent: 'center', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 20, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>{a}</span>
-              <span style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)' }}>IT</span>
+              <span style={{ fontSize: 20, fontWeight: 600, fontFamily: 'Lora' }}>{a}</span>
+              <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>IT</span>
             </button>
           ))}
         </div>
         <input className="fld" type="number" value={amt} onChange={e => setAmt(Math.max(1, +e.target.value || 1))} />
-        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8, fontFamily: 'Geist Mono' }}>Your balance: 24 IT</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8, fontFamily: 'JetBrains Mono' }}>Your balance: 24 IT</div>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { emoji: '🎁', title: `Tipped ${amt} IT`, sub: `${u.name} will be notified of your support. Thank you for backing real impact.` }); }}>Send {amt} IT</button>
+        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: `Tipped ${amt} IT`, sub: `${u.name} will be notified of your support. Thank you for backing real impact.` }); }}>Send {amt} IT</button>
       </ModalFoot>
     </Modal>
   );
@@ -959,7 +961,7 @@ export function MAutoOffset({ close }) {
       <ModalHead icon="leaf" title="Start auto-offset" sub="We match your tracked footprint with verified credits, every month." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
         <div style={{ background: 'var(--green-tint)', borderRadius: 14, padding: 18, textAlign: 'center' }}>
-          <div style={{ fontSize: 40, fontWeight: 600, fontFamily: 'Bricolage Grotesque', color: 'var(--green)' }}>$14<span style={{ fontSize: 16 }}>/mo</span></div>
+          <div style={{ fontSize: 40, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>$14<span style={{ fontSize: 16 }}>/mo</span></div>
           <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>≈ 0.7 t CO₂ retired monthly</div>
         </div>
         <div style={{ marginTop: 16 }}>
@@ -970,7 +972,7 @@ export function MAutoOffset({ close }) {
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Not now</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Auto-offset active 🌍', sub: '$14/mo · first credit retires Jun 1. Manage in Settings.', icon: 'leaf' }); }}>Subscribe · $14/mo</button>
+        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Auto-offset active', sub: '$14/mo · first credit retires Jun 1. Manage in Settings.', icon: 'leaf' }); }}>Subscribe · $14/mo</button>
       </ModalFoot>
     </Modal>
   );
@@ -984,19 +986,19 @@ export function MOffsetYear({ close }) {
       <ModalHead icon="globe" title="Offset your 2026 footprint" sub="Based on your tracked actions, here's your estimated remaining footprint." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, justifyContent: 'center', padding: '6px 0 14px' }}>
-          <span style={{ fontSize: 46, fontWeight: 600, fontFamily: 'Bricolage Grotesque', color: 'var(--green)' }}>1.4 t</span>
+          <span style={{ fontSize: 46, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>1.4 t</span>
           <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>CO₂ to offset</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--line)', fontSize: 14 }}>
-          <span style={{ color: 'var(--ink-3)' }}>1.4 t × $24.10 spot</span><span style={{ fontFamily: 'Geist Mono', fontWeight: 600 }}>$33.74</span>
+          <span style={{ color: 'var(--ink-3)' }}>1.4 t × $24.10 spot</span><span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600 }}>$33.74</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--line)', fontSize: 16, fontWeight: 600 }}>
-          <span>Total</span><span style={{ fontFamily: 'Geist Mono', color: 'var(--green)' }}>$33.74</span>
+          <span>Total</span><span style={{ fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>$33.74</span>
         </div>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { emoji: '🌍', title: 'Year offset — you\'re net zero!', sub: '1.4 t CO₂ retired across your project mix. Certificate added to your wallet.' }); }}>Offset 1.4 t · $33.74</button>
+        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: 'Year offset — you\'re net zero!', sub: '1.4 t CO₂ retired across your project mix. Certificate added to your wallet.' }); }}>Offset 1.4 t · $33.74</button>
       </ModalFoot>
     </Modal>
   );

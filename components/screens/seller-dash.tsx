@@ -44,7 +44,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Seller header strip */}
@@ -56,7 +56,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
                 <h1 className="font-display" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>{shop.name}</h1>
                 <span className="verified-impact">verified · {shop.impactScore} impact</span>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 2 }}>honua.green/shop/{shop.handle} · ★ {shop.rating} ({shop.reviews})</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>honua.green/shop/{shop.handle} · ★ {shop.rating} ({shop.reviews})</div>
             </div>
             <button className="btn btn-ghost" onClick={() => onNav?.('marketplace')} style={{ padding: '8px 14px' }}>View storefront <Icon name="arrow" size={14} /></button>
             <button className="btn btn-green" onClick={() => setEditing('new')} style={{ padding: '8px 16px' }}><Icon name="plus" size={15} stroke={2.4} /> Add product</button>
@@ -95,7 +95,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
 // ---- Gate shown when not approved ----
 function DashGate({ onNav, status }) {
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="" onNav={onNav} />
       <main style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 40 }}>
         <div style={{ maxWidth: 440, textAlign: 'center' }}>
@@ -146,7 +146,7 @@ function OverviewTab({ products, orders, onTab }) {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Revenue</span>
-            <span className="chip" style={{ fontFamily: 'Geist Mono', fontSize: 11 }}>Last 30 days</span>
+            <span className="chip" style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>Last 30 days</span>
           </div>
           <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em' }}>{sMoney(MOCK_SELLER.revenueSeries.reduce((a, b) => a + b, 0), 0)}</div>
           <div style={{ marginTop: 10 }}><SSpark data={MOCK_SELLER.revenueSeries} color="var(--green)" w={520} h={90} /></div>
@@ -156,7 +156,7 @@ function OverviewTab({ products, orders, onTab }) {
         <div style={{ background: 'var(--ink-solid)', color: '#fff', borderRadius: 16, padding: 22 }}>
           <div style={{ fontSize: 13, opacity: .7 }}>Available to withdraw</div>
           <div className="font-display tabular" style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 4 }}>{sMoney(net)}</div>
-          <div style={{ fontSize: 12, opacity: .6, marginTop: 4, fontFamily: 'Geist Mono' }}>Next auto-payout · Mon, weekly</div>
+          <div style={{ fontSize: 12, opacity: .6, marginTop: 4, fontFamily: 'JetBrains Mono' }}>Next auto-payout · Mon, weekly</div>
           <button className="btn" onClick={() => app.toast?.({ msg: 'Withdrawal requested', sub: sMoney(net) + ' to Stripe · arrives in 1–2 days', kind: 'success', icon: 'coin' })} style={{ background: '#fff', color: 'var(--ink)', width: '100%', justifyContent: 'center', marginTop: 16, fontWeight: 600, padding: '11px' }}>Withdraw to Stripe</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, fontSize: 12, opacity: .7 }}>
             <span>Sale fee 5%</span><span>Withdrawal 2%</span>
@@ -176,13 +176,13 @@ function OverviewTab({ products, orders, onTab }) {
               <Avatar name={o.buyer} size={34} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.product}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{o.id} · {o.buyer} · {o.date}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{o.id} · {o.buyer} · {o.date}</div>
               </div>
               <span className="tabular" style={{ fontSize: 14, fontWeight: 600 }}>{sMoney(o.total, 0)}</span>
               <SBadge status={o.status} size="sm" />
             </div>
           ))}
-          {openOrders.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>All caught up ✨</div>}
+          {openOrders.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>All caught up</div>}
         </div>
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18 }}>
@@ -193,7 +193,7 @@ function OverviewTab({ products, orders, onTab }) {
                 <div style={{ width: 38, height: 38, borderRadius: 9, overflow: 'hidden', flexShrink: 0 }}><ImagePlaceholder label="" height={38} /></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title.split(' · ')[0]}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{p.sales} sold</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{p.sales} sold</div>
                 </div>
                 <span className="tabular" style={{ fontSize: 13, fontWeight: 600 }}>{sMoney(p.sales * p.price, 0)}</span>
               </div>
@@ -219,7 +219,7 @@ function ProductsTab({ products, onEdit, onRemove, onToggle }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div className="pill-nav">
           {[['all', 'All'], ['active', 'Active'], ['draft', 'Drafts'], ['inactive', 'Inactive']].map(([k, l]) => (
-            <button key={k} className={filter === k ? 'active' : ''} onClick={() => setFilter(k)}>{l} <span style={{ opacity: .5, fontFamily: 'Geist Mono', fontSize: 11 }}>{counts[k]}</span></button>
+            <button key={k} className={filter === k ? 'active' : ''} onClick={() => setFilter(k)}>{l} <span style={{ opacity: .5, fontFamily: 'JetBrains Mono', fontSize: 11 }}>{counts[k]}</span></button>
           ))}
         </div>
         <div style={{ marginLeft: 'auto', background: 'var(--bg-2)', borderRadius: 999, padding: '8px 14px', display: 'flex', gap: 8, alignItems: 'center', width: 260 }}>
@@ -229,7 +229,7 @@ function ProductsTab({ products, onEdit, onRemove, onToggle }) {
       </div>
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr 1fr 1fr 0.8fr 90px', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr 1fr 1fr 0.8fr 90px', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
           <span>Product</span><span>Status</span><span>Price</span><span>Stock</span><span>Sold</span><span></span>
         </div>
         {filtered.map(p => {
@@ -240,7 +240,7 @@ function ProductsTab({ products, onEdit, onRemove, onToggle }) {
                 <div style={{ width: 44, height: 44, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}><ImagePlaceholder label="" height={44} /></div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono', display: 'flex', gap: 8 }}>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', display: 'flex', gap: 8 }}>
                     <span>{p.category}</span><span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="heart" size={11} /> {p.likes}</span>
                   </div>
                 </div>
@@ -351,12 +351,12 @@ function OrdersTab({ orders, onAdvance }) {
         ))}
       </div>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1.3fr 0.6fr 1fr 1fr 130px', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1.3fr 0.6fr 1fr 1fr 130px', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
           <span>Order</span><span>Product</span><span>Buyer</span><span>Qty</span><span>Total</span><span>Status</span><span></span>
         </div>
         {filtered.map(o => (
           <div key={o.id} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1.3fr 0.6fr 1fr 1fr 130px', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
-            <span style={{ fontSize: 12.5, fontFamily: 'Geist Mono', fontWeight: 600 }}>{o.id}</span>
+            <span style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{o.id}</span>
             <span style={{ fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.product}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}><Avatar name={o.buyer} size={26} /><span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.buyer}</span></span>
             <span className="tabular" style={{ fontSize: 13 }}>{o.qty}</span>
@@ -365,7 +365,7 @@ function OrdersTab({ orders, onAdvance }) {
             <span style={{ textAlign: 'right' }}>
               {nextLabel[o.status]
                 ? <button className="btn btn-ghost" onClick={() => onAdvance(o.id)} style={{ padding: '6px 11px', fontSize: 12 }}>{nextLabel[o.status]}</button>
-                : <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{o.dateFull}</span>}
+                : <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{o.dateFull}</span>}
             </span>
           </div>
         ))}
@@ -412,7 +412,7 @@ function AnalyticsTab({ products }) {
                 <div style={{ flex: 1, height: 8, borderRadius: 999, background: 'var(--bg-2)', overflow: 'hidden' }}>
                   <div style={{ width: pct + '%', height: '100%', borderRadius: 999, background: 'var(--green)' }} />
                 </div>
-                <span className="tabular" style={{ width: 70, textAlign: 'right', fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{p.views.toLocaleString()}</span>
+                <span className="tabular" style={{ width: 70, textAlign: 'right', fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.views.toLocaleString()}</span>
               </div>
             );
           })}
@@ -431,7 +431,7 @@ function CustomersTab() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: sel ? '1fr 380px' : '1fr', gap: 16, alignItems: 'start' }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.2fr 1fr', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'Geist Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.2fr 1fr', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
           <span>Customer</span><span>Orders</span><span>Spent</span><span>Location</span><span>Last</span>
         </div>
         {MOCK_SELLER.customers.map(c => (
@@ -440,7 +440,7 @@ function CustomersTab() {
             <span className="tabular" style={{ fontSize: 13 }}>{c.orders}</span>
             <span className="tabular" style={{ fontSize: 13.5, fontWeight: 600 }}>{sMoney(c.spent, 0)}</span>
             <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{c.city}</span>
-            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{c.last}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{c.last}</span>
           </button>
         ))}
       </div>
@@ -448,7 +448,7 @@ function CustomersTab() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Avatar name={cust.name} size={48} />
-            <div><div className="font-display" style={{ fontSize: 18, fontWeight: 600 }}>{cust.name}</div><div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>@{cust.handle} · {cust.city}</div></div>
+            <div><div className="font-display" style={{ fontSize: 18, fontWeight: 600 }}>{cust.name}</div><div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{cust.handle} · {cust.city}</div></div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
             <MiniStat label="Lifetime spend" value={sMoney(cust.spent, 0)} />
@@ -490,16 +490,16 @@ function MessagesTab() {
           <button key={th.handle} onClick={() => setSel(th.handle)} style={{ display: 'flex', gap: 11, width: '100%', textAlign: 'left', padding: '14px 16px', border: 'none', borderBottom: '1px solid var(--line)', cursor: 'pointer', background: sel === th.handle ? 'var(--green-tint)' : 'transparent', alignItems: 'center' }}>
             <span style={{ position: 'relative' }}><Avatar name={th.name} size={38} />{th.online && <span style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: 'var(--green)', border: '2px solid var(--surface)' }} />}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13.5, fontWeight: 600 }}>{th.name}</span><span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{th.time}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13.5, fontWeight: 600 }}>{th.name}</span><span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{th.time}</span></div>
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{th.last}</div>
             </div>
-            {th.unread > 0 && <span style={{ background: 'var(--green)', color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 10, fontFamily: 'Geist Mono' }}>{th.unread}</span>}
+            {th.unread > 0 && <span style={{ background: 'var(--green)', color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 10, fontFamily: 'JetBrains Mono' }}>{th.unread}</span>}
           </button>
         ))}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar name={t.name} size={34} /><div><div style={{ fontSize: 14, fontWeight: 600 }}>{t.name}</div><div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>{t.online ? 'Active now' : 'Offline'}</div></div>
+          <Avatar name={t.name} size={34} /><div><div style={{ fontSize: 14, fontWeight: 600 }}>{t.name}</div><div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{t.online ? 'Active now' : 'Offline'}</div></div>
         </div>
         <div style={{ flex: 1, overflow: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
           {msgs.map(([who, text], i) => (
@@ -536,7 +536,7 @@ function StorefrontTab({ shop }) {
                 <span className="font-display" style={{ fontSize: 22, fontWeight: 600 }}>{shop.name}</span>
                 <span className="verified-impact">verified shop</span>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>honua.green/shop/{shop.handle}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>honua.green/shop/{shop.handle}</div>
             </div>
           </div>
           <div style={{ marginTop: 20, display: 'grid', gap: 16 }}>
@@ -548,7 +548,7 @@ function StorefrontTab({ shop }) {
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>Joined {shop.joined} · ★ {shop.rating}</span>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>Joined {shop.joined} · ★ {shop.rating}</span>
             <button className="btn btn-green" onClick={() => app.toast?.({ msg: 'Storefront saved', kind: 'success', icon: 'check' })}>Save changes</button>
           </div>
         </div>

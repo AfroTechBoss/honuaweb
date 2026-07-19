@@ -16,7 +16,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     { id: 6, t: 'Climate policy phonebank', cat: 'Policy', when: 'Wed, May 28 · 6pm', host: 'Climate Action Net.', going: 48, color: 'var(--ink)', x: 72, y: 60 },
   ];
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="map" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
         {/* List column */}
@@ -25,7 +25,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
           background: 'var(--surface)', height: '100%', overflow: 'auto',
         }} className="no-scrollbar">
           <div style={{ padding: '24px 24px 12px' }}>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>ACTION MAP · BROOKLYN, NY</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>ACTION MAP · BROOKLYN, NY</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em' }}>147 verified projects near you</h1>
             <p style={{ margin: '4px 0 12px', color: 'var(--ink-3)', fontSize: 13 }}>Find something to do this weekend — or start your own.</p>
             <div style={{
@@ -59,7 +59,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                   <Icon name="pin" size={20} stroke={2.2} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)' }}>{p.cat.toUpperCase()} · {p.when}</div>
+                  <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{p.cat.toUpperCase()} · {p.when}</div>
                   <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{p.t}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>by {p.host}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
@@ -72,7 +72,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                         }} />
                       ))}
                     </div>
-                    <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{p.going} going</span>
+                    <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.going} going</span>
                   </div>
                 </div>
               </div>
@@ -113,7 +113,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
               <Icon name="globe" size={20} />
             </div>
             <div>
-              <div style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)' }}>THIS MONTH IN YOUR AREA</div>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>THIS MONTH IN YOUR AREA</div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>2,840 hours · 380 kg waste removed · 92 trees planted</div>
             </div>
           </div>
@@ -164,7 +164,7 @@ export function BigMap({ projects = [], onPick }) {
         }}>
           <div style={{
             background: p.color, color: '#fff', padding: '6px 10px',
-            borderRadius: 14, fontSize: 11, fontWeight: 600, fontFamily: 'Geist Mono',
+            borderRadius: 14, fontSize: 11, fontWeight: 600, fontFamily: 'JetBrains Mono',
             boxShadow: '0 4px 12px -4px rgba(0,0,0,.2)',
             whiteSpace: 'nowrap',
           }}>{p.cat}</div>
@@ -200,12 +200,12 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
   const matches = (c) => filter === 'All credits' ? true : filter === 'Removal' ? c.tag === 'Removal' : c.type === filter;
   const shown = credits.filter(matches);
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="carbon" onNav={onNav} />
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CARBON MARKET · LIVE</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CARBON MARKET · LIVE</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Offset what you can't avoid.</h1>
             <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Every credit on Honua is on-chain verified, third-party audited, and traceable to a project you can actually visit.</p>
           </div>
@@ -227,9 +227,9 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
               background: 'var(--surface)', border: '1px solid var(--line)',
               borderRadius: 14, padding: 16,
             }}>
-              <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.06em' }}>{l}</div>
-              <div style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Bricolage Grotesque', marginTop: 4, letterSpacing: '-0.02em' }}>{v}</div>
-              <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2, fontFamily: 'Geist Mono' }}>↗ {d}</div>
+              <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.06em' }}>{l}</div>
+              <div style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Lora', marginTop: 4, letterSpacing: '-0.02em' }}>{v}</div>
+              <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2, fontFamily: 'JetBrains Mono' }}>↗ {d}</div>
             </div>
           ))}
         </div>
@@ -253,7 +253,7 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
           <div style={{
             display: 'grid', gridTemplateColumns: '2.4fr 1fr 1fr 1fr 1fr 1fr 1fr 110px',
             padding: '12px 18px', background: 'var(--bg-2)', borderBottom: '1px solid var(--line)',
-            fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em',
+            fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em',
             gap: 12, alignItems: 'center',
           }}>
             <span>PROJECT</span>
@@ -285,10 +285,10 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
               </div>
               <span>{c.type}</span>
               <span>{c.region}</span>
-              <span style={{ fontFamily: 'Geist Mono', fontSize: 12 }}>{c.verifier}</span>
-              <span style={{ fontFamily: 'Geist Mono' }}>{c.vintage}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'Geist Mono', fontWeight: 600 }}>{c.price}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'Geist Mono', color: 'var(--ink-3)' }}>{c.volume}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{c.verifier}</span>
+              <span style={{ fontFamily: 'JetBrains Mono' }}>{c.vintage}</span>
+              <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{c.price}</span>
+              <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{c.volume}</span>
               <button className="btn btn-green" onClick={(e) => { e.stopPropagation(); app.openModal?.('credit', c); }} style={{ padding: '6px 12px', fontSize: 12, justifyContent: 'center' }}>Buy</button>
             </div>
           ))}
@@ -316,12 +316,12 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
           }}>
             <span style={{
               background: 'rgba(255,255,255,.12)', color: '#fff', padding: '3px 10px', borderRadius: 999,
-              fontSize: 11, fontFamily: 'Geist Mono', fontWeight: 600,
+              fontSize: 11, fontFamily: 'JetBrains Mono', fontWeight: 600,
             }}>NEW</span>
             <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>Honua impact NFT</h2>
             <p style={{ margin: 0, color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>Mint a soulbound token tied to your offsets. Wears your year on-chain.</p>
             <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
-              <button className="btn" style={{ background: '#fff', color: '#0a0d0b' }} onClick={() => app.openModal?.('celebrate', { emoji: '🪙', title: 'Impact NFT minted', sub: 'Your soulbound 2026 token is on-chain. It updates as your verified offsets grow.' })}>Mint 2026</button>
+              <button className="btn" style={{ background: '#fff', color: '#0a0d0b' }} onClick={() => app.openModal?.('celebrate', { title: 'Impact NFT minted', sub: 'Your soulbound 2026 token is on-chain. It updates as your verified offsets grow.' })}>Mint 2026</button>
             </div>
           </div>
         </div>

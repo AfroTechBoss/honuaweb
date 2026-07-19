@@ -1,17 +1,17 @@
 ﻿"use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 
 // =============== Story data ===============
 const STORY_KEYS = ["sarah", "marcus", "maya", "okafor", "greentech", "can", "tara"];
 const STORY_CONTENT: Record<string, { caption: string; bg: [string, string] }> = {
-  sarah:    { caption: "First sun on the 20 new panels â˜€ï¸ co-op is officially off coal.", bg: ["#1f6f3f", "#2e9a5b"] },
-  marcus:   { caption: "Week 3, zero-waste. The compost is finally cooking ðŸ”¥", bg: ["#6b4f2a", "#9c7a3c"] },
-  maya:     { caption: "Two more pollinators today. Tiny balcony, big week ðŸ", bg: ["#2e7d32", "#7cb342"] },
+  sarah:    { caption: "First sun on the 20 new panels — co-op is officially off coal.", bg: ["#1f6f3f", "#2e9a5b"] },
+  marcus:   { caption: "Week 3, zero-waste. The compost is finally cooking.", bg: ["#6b4f2a", "#9c7a3c"] },
+  maya:     { caption: "Two more pollinators today. Tiny balcony, big week.", bg: ["#2e7d32", "#7cb342"] },
   okafor:   { caption: "New blade design hit 40% efficiency in testing. Paper Monday.", bg: ["#13315c", "#2a6fae"] },
   greentech:{ caption: "Prototype #7 is on the truck. Field trial starts Thursday.", bg: ["#0d3b66", "#1d6dc4"] },
   can:      { caption: "47 cities confirmed for Friday. Find yours on the map.", bg: ["#3a1c71", "#6d3bbf"] },
-  tara:     { caption: "Repaired instead of replaced. 5th item this month ðŸª¡", bg: ["#7a3b2e", "#c4623a"] },
+  tara:     { caption: "Repaired instead of replaced. 5th item this month.", bg: ["#7a3b2e", "#c4623a"] },
 };
 const DURATION = 4500;
 
@@ -89,7 +89,7 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{u.name}</div>
-          <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'Geist Mono' }}>@{u.handle} Â· {2 + idx}h</div>
+          <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'JetBrains Mono' }}>@{u.handle} · {2 + idx}h</div>
         </div>
         <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#fff', padding: 6 }}>
           <Icon name="close" size={20} />
@@ -103,7 +103,7 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
       }}>
         {/* Placeholder image label */}
         <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-          <span style={{ color: 'rgba(255,255,255,.4)', fontFamily: 'Geist Mono', fontSize: 13 }}>{key} Â· story image</span>
+          <span style={{ color: 'rgba(255,255,255,.4)', fontFamily: 'JetBrains Mono', fontSize: 13 }}>{key} · story image</span>
         </div>
 
         {/* Tap zones */}
@@ -124,11 +124,11 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
               value={reply} onChange={e => setReply(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
               onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
-              placeholder={`Reply to ${u.name.split(' ')[0]}â€¦`}
+              placeholder={`Reply to ${u.name.split(' ')[0]}…`}
               style={{
                 flex: 1, border: '1px solid rgba(255,255,255,.45)', background: 'transparent',
                 color: '#fff', borderRadius: 999, padding: '10px 16px', fontSize: 14,
-                outline: 'none', fontFamily: 'Geist',
+                outline: 'none', fontFamily: 'Satoshi',
               }}
             />
             <button onClick={() => setLiked(v => !v)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
@@ -173,7 +173,7 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="image" size={11} /> Photo</span>
-            <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="bolt" size={11} /> Video Â· max 1 min</span>
+            <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="bolt" size={11} /> Video · max 1 min</span>
           </div>
         </button>
         {/* Text card */}
@@ -208,20 +208,20 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <Icon name="check" size={36} color="var(--green)" stroke={2} />
               <span style={{ fontWeight: 600, color: 'var(--green)' }}>{mediaType === 'photo' ? 'Photo' : 'Video'} ready</span>
-              {mediaType === 'video' && <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>max 1:00</span>}
+              {mediaType === 'video' && <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>max 1:00</span>}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <Icon name={mediaType === 'photo' ? 'image' : 'bolt'} size={32} color="var(--ink-4)" stroke={1.5} />
               <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>Click to {mediaType === 'photo' ? 'choose a photo' : 'pick a video'}</span>
-              {mediaType === 'video' && <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>Maximum 1 minute</span>}
+              {mediaType === 'video' && <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>Maximum 1 minute</span>}
             </div>
           )}
         </div>
         <div>
-          <label style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', display: 'block', marginBottom: 6 }}>CAPTION (OPTIONAL)</label>
-          <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 150))} placeholder="Add a captionâ€¦" rows={3} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: 'var(--ink)', resize: 'none', fontFamily: 'Geist', boxSizing: 'border-box' }} />
-          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 2 }}>{caption.length}/150</div>
+          <label style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', display: 'block', marginBottom: 6 }}>CAPTION (OPTIONAL)</label>
+          <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 150))} placeholder="Add a caption…" rows={3} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: 'var(--ink)', resize: 'none', fontFamily: 'Satoshi', boxSizing: 'border-box' }} />
+          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{caption.length}/150</div>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost" onClick={() => setMode('pick')}>Back</button>
@@ -239,13 +239,13 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
         {/* Live preview */}
         <div style={{ height: 200, borderRadius: 16, background: `linear-gradient(135deg, ${bg[0]}, ${bg[1]})`, display: 'grid', placeItems: 'center', padding: 24 }}>
           <p style={{ margin: 0, color: text ? '#fff' : 'rgba(255,255,255,.4)', fontSize: text.length > 80 ? 18 : 22, fontWeight: 600, textAlign: 'center', lineHeight: 1.4 }}>
-            {text || 'Your text will appear hereâ€¦'}
+            {text || 'Your text will appear here…'}
           </p>
         </div>
-        <textarea value={text} onChange={e => setText(e.target.value.slice(0, 280))} placeholder="What's on your mind?" rows={4} autoFocus style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 15, color: 'var(--ink)', resize: 'none', fontFamily: 'Geist', boxSizing: 'border-box' }} />
-        <div style={{ textAlign: 'right', fontSize: 11, fontFamily: 'Geist Mono', color: text.length > 240 ? 'var(--clay)' : 'var(--ink-4)', marginTop: -10 }}>{text.length}/280</div>
+        <textarea value={text} onChange={e => setText(e.target.value.slice(0, 280))} placeholder="What's on your mind?" rows={4} autoFocus style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 15, color: 'var(--ink)', resize: 'none', fontFamily: 'Satoshi', boxSizing: 'border-box' }} />
+        <div style={{ textAlign: 'right', fontSize: 11, fontFamily: 'JetBrains Mono', color: text.length > 240 ? 'var(--clay)' : 'var(--ink-4)', marginTop: -10 }}>{text.length}/280</div>
         <div>
-          <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', marginBottom: 10 }}>BACKGROUND</div>
+          <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', marginBottom: 10 }}>BACKGROUND</div>
           <div style={{ display: 'flex', gap: 10 }}>
             {BG_PRESETS.map(([a, b], i) => (
               <button key={i} onClick={() => setBgIdx(i)} style={{ width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg, ${a}, ${b})`, border: bgIdx === i ? '3px solid var(--ink)' : '2px solid transparent', cursor: 'pointer', transition: 'border .15s' }} />
@@ -271,7 +271,7 @@ function StoryRail({ onOpen, onNav, onAddStatus }: { onOpen: (i: number) => void
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--green-tint)', border: '2px dashed var(--green)', display: 'grid', placeItems: 'center', color: 'var(--green)' }}>
           <Icon name="plus" size={20} stroke={2} />
         </div>
-        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Add</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Add</span>
       </div>
 
       {STORY_KEYS.map((k, i) => {
@@ -279,12 +279,12 @@ function StoryRail({ onOpen, onNav, onAddStatus }: { onOpen: (i: number) => void
         const bg = STORY_CONTENT[k]?.bg[0] ?? 'var(--green)';
         return (
           <div key={k} onClick={() => onOpen(i)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
-            <div style={{ padding: 2, borderRadius: '50%', background: `linear-gradient(135deg, ${bg}, ${STORY_CONTENT[k]?.bg[1] ?? bg})` }}>
-              <div style={{ padding: 2, borderRadius: '50%', background: 'var(--bg)' }}>
+            <div style={{ padding: 2, borderRadius: '50%', background: `linear-gradient(135deg, ${bg}, ${STORY_CONTENT[k]?.bg[1] ?? bg})`, display: 'flex' }}>
+              <div style={{ padding: 2, borderRadius: '50%', background: 'var(--bg)', display: 'flex' }}>
                 <Avatar src={u.avatar} name={u.name} size={44} />
               </div>
             </div>
-            <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name.split(' ')[0]}</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name.split(' ')[0]}</span>
           </div>
         );
       })}
@@ -308,7 +308,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
       const { supabase } = await import('@/lib/supabase');
       let query = supabase
         .from('posts')
-        .select(`*, profile:profiles(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles(id, handle, full_name, avatar_url, verified))`)
+        .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
         .order('created_at', { ascending: false })
         .limit(50);
       if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
@@ -325,14 +325,14 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   const joinedChallenge = app.challenge?.has('week19');
   return (
     <>
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="home" onNav={onNav} />
       <main style={{ flex: 1, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
         {/* Feed column */}
         <div style={{
           flex: '1 1 auto', maxWidth: 660, padding: '20px 28px',
           borderRight: '1px solid var(--line)', height: '100%', overflow: 'auto',
-        }} className="no-scrollbar">
+        }} className="no-scrollbar feed-col">
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             marginBottom: 18,
@@ -355,36 +355,15 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
             display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer',
           }}>
             <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={40} />
-            <span style={{ flex: 1, fontSize: 15, color: 'var(--ink-4)', fontFamily: 'Geist' }}>Share an action, idea, or updateâ€¦</span>
+            <span style={{ flex: 1, fontSize: 15, color: 'var(--ink-4)', fontFamily: 'Satoshi' }}>Share an action, idea, or update…</span>
             <span style={{ color: 'var(--ink-3)', display: 'inline-flex' }}><Icon name="image" size={16} /></span>
             <span style={{ color: 'var(--ink-3)', display: 'inline-flex' }}><Icon name="pin" size={16} /></span>
             <button className="btn btn-primary" style={{ padding: '7px 14px' }} onClick={(e) => { e.stopPropagation(); app.openModal?.('compose'); }}>Post</button>
           </div>
 
-          {/* Sticky challenge ribbon */}
-          <div onClick={() => onNav?.('tasks')} style={{
-            background: 'linear-gradient(90deg, var(--green-tint), var(--surface))',
-            border: '1px solid var(--green-3)',
-            borderRadius: 16, padding: '14px 16px', marginBottom: 12,
-            display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
-          }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 12, background: 'var(--green)',
-              display: 'grid', placeItems: 'center', color: '#fff',
-            }}>
-              <Icon name="flame" size={20} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontFamily: 'Geist Mono', color: 'var(--green)', fontWeight: 600 }}>WEEK 19 CHALLENGE Â· 4 days left</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Bike to work â€” 12.4k joined</div>
-            </div>
-            <button className={joinedChallenge ? 'btn btn-ghost' : 'btn btn-green'} style={{ padding: '7px 14px' }} onClick={(e) => { e.stopPropagation(); app.challenge.toggle('week19'); app.toast?.(joinedChallenge ? { msg: 'Left the challenge', icon: 'close' } : { msg: 'Joined Bike to work ðŸ”¥', sub: 'Log daily to keep your streak.', kind: 'success', icon: 'flame' }); }}>{joinedChallenge ? 'Joined âœ“' : 'Join'}</button>
-          </div>
 
           {loadingFeed ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-            </div>
+            <>{[1,2,3,4,5].map(i => <PostCardSkeleton key={i} />)}</>
           ) : feed.length > 0 ? (
             <>
               {feed.map(p => dbPosts.length > 0
@@ -397,7 +376,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
               <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: 'var(--ink-4)' }}><Icon name={tab === 'verified' ? 'leaf' : 'users'} size={26} /></div>
               <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)' }}>{tab === 'following' ? 'Nothing here yet' : 'No posts yet'}</div>
               <p style={{ fontSize: 14, maxWidth: 320, margin: '6px auto 0', lineHeight: 1.5 }}>{tab === 'following' ? 'Follow people to see their updates in this tab.' : 'Be the first to post something!'}</p>
-              {tab === 'following' && <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => setTab('foryou')}>Discover people â†’</button>}
+              {tab === 'following' && <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => setTab('foryou')}>Discover people →</button>}
             </div>
           )}
         </div>
@@ -406,7 +385,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
         <div style={{
           width: 340, padding: 20, height: '100%', overflow: 'auto',
           flexShrink: 0,
-        }} className="no-scrollbar">
+        }} className="no-scrollbar right-panel">
           {/* Search */}
           <div style={{
             background: 'var(--surface)', border: '1px solid var(--line)',
@@ -416,19 +395,19 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
             <Icon name="search" size={16} color="var(--ink-3)" />
             <input placeholder="Search posts, people, projects" style={{
               flex: 1, border: 'none', outline: 'none', background: 'transparent',
-              fontSize: 13, fontFamily: 'Geist',
+              fontSize: 13, fontFamily: 'Satoshi',
             }} />
             <span style={{
               padding: '2px 6px', border: '1px solid var(--line)',
-              borderRadius: 4, fontFamily: 'Geist Mono', fontSize: 10, color: 'var(--ink-3)',
+              borderRadius: 4, fontFamily: 'JetBrains Mono', fontSize: 10, color: 'var(--ink-3)',
             }}>/</span>
           </div>
           <MyImpactCard />
           <TrendingPanel />
           <SuggestedFollows />
-          <div style={{ padding: '12px 4px', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', lineHeight: 1.7 }}>
-            ABOUT Â· HELP Â· API Â· PRIVACY Â· TERMS<br/>
-            Â© 2026 honua coop
+          <div style={{ padding: '12px 4px', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', lineHeight: 1.7 }}>
+            ABOUT · HELP · API · PRIVACY · TERMS<br/>
+            © 2026 honua coop
           </div>
         </div>
       </main>
@@ -473,9 +452,9 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: displayProfile?.handle })}>{displayProfile?.full_name}</span>
-            {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9 }}>âœ“</span>}
-            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{displayProfile?.handle}</span>
-            <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>Â· {timeAgo(post.created_at)}</span>
+            {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9 }}>✓</span>}
+            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle}</span>
+            <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· {timeAgo(post.created_at)}</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginTop: 2, textTransform: 'capitalize' }}>{post.post_type}</div>
         </div>
@@ -515,13 +494,42 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
   const [activeTag, setActiveTag] = React.useState<string | null>(incomingTag ?? null);
   const [tagPosts, setTagPosts] = React.useState<any[]>([]);
   const [tagLoading, setTagLoading] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  const [searching, setSearching] = React.useState(false);
+  const [searchResults, setSearchResults] = React.useState<{ users: any[]; posts: any[]; communities: any[] } | null>(null);
+  const searchDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRef = React.useRef<HTMLInputElement>(null);
   const app = useApp();
-  const openArticle = (a) => app.openModal?.('article', a);
+  const openArticle = (a: any) => app.openModal?.('article', a);
+  const isSearching = query.trim().length > 0;
 
-  // When a tag comes in from params, switch to Tags tab
   React.useEffect(() => {
     if (incomingTag) { setActiveTag(incomingTag); setTab('tags'); }
   }, [incomingTag]);
+
+  const runSearch = React.useCallback(async (q: string) => {
+    if (!q.trim()) { setSearchResults(null); return; }
+    setSearching(true);
+    const { supabase } = await import('@/lib/supabase');
+    const term = q.trim();
+    const [{ data: users }, { data: posts }] = await Promise.all([
+      supabase.from('profiles').select('id, handle, full_name, avatar_url, verified, bio, impact_score').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(6),
+      supabase.from('posts').select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)').ilike('content', `%${term}%`).order('created_at', { ascending: false }).limit(8),
+    ]);
+    const communities = MOCK.communities.filter(c => c.name.toLowerCase().includes(term.toLowerCase()) || c.cat.toLowerCase().includes(term.toLowerCase()));
+    setSearchResults({ users: users ?? [], posts: posts ?? [], communities });
+    setSearching(false);
+  }, []);
+
+  const onQueryChange = (v: string) => {
+    setQuery(v);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!v.trim()) { setSearchResults(null); setSearching(false); return; }
+    setSearching(true);
+    searchDebounce.current = setTimeout(() => runSearch(v), 400);
+  };
+  const clearSearch = () => { setQuery(''); setSearchResults(null); setSearching(false); searchRef.current?.focus(); };
+  const totalResults = searchResults ? searchResults.users.length + searchResults.posts.length + searchResults.communities.length : 0;
 
   // Fetch posts for the selected tag
   React.useEffect(() => {
@@ -530,7 +538,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
     import('@/lib/supabase').then(({ supabase }) => {
       supabase
         .from('posts')
-        .select('*, profile:profiles(id, handle, full_name, avatar_url, verified)')
+        .select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)')
         .contains('tags', [activeTag])
         .order('created_at', { ascending: false })
         .limit(30)
@@ -539,27 +547,116 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
   }, [activeTag, tab]);
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="explore" onNav={onNav} />
       <main style={{ flex: 1, padding: '20px 28px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div>
-            <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>
-              {tab === 'tags' && activeTag ? `#${activeTag}` : 'Explore'}
-            </h1>
-            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>
-              {tab === 'tags' && activeTag ? `Posts tagged #${activeTag}` : 'What the community is building, planting, and fighting for right now.'}
-            </p>
-          </div>
-          <div className="pill-nav">
-            {['Trending', 'Nearby', 'Projects', 'People', 'Tags'].map(t => (
-              <button key={t} className={tab === t.toLowerCase() ? 'active' : ''} onClick={() => { setTab(t.toLowerCase()); if (t.toLowerCase() !== 'tags') setActiveTag(null); }}>{t}</button>
-            ))}
+        {/* Header */}
+        <h1 className="font-display page-title" style={{ margin: '0 0 16px', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Explore</h1>
+
+        {/* Search bar */}
+        <div style={{ maxWidth: 680, marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface)', border: '1.5px solid var(--line)', borderRadius: 14, padding: '12px 16px' }}>
+            {searching
+              ? <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+              : <Icon name="search" size={18} color="var(--ink-3)" />
+            }
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={e => onQueryChange(e.target.value)}
+              placeholder="Search people, posts, communities, #tags..."
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)' }}
+              onKeyDown={e => { if (e.key === 'Escape') clearSearch(); }}
+            />
+            {query && (
+              <button onClick={clearSearch} style={{ background: 'var(--bg-2)', border: 'none', borderRadius: '50%', width: 24, height: 24, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)', flexShrink: 0, fontSize: 13 }}>✕</button>
+            )}
           </div>
         </div>
 
+        {/* Tabs — hidden while searching */}
+        {!isSearching && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div className="pill-nav">
+              {['Trending', 'Projects', 'People', 'Tags'].map(t => (
+                <button key={t} className={tab === t.toLowerCase() ? 'active' : ''} onClick={() => { setTab(t.toLowerCase()); if (t.toLowerCase() !== 'tags') setActiveTag(null); }}>{t}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Search results */}
+        {isSearching && (
+          <div>
+            {searching && !searchResults ? (
+              <>{[1,2,3,4].map(i => <PostCardSkeleton key={i} />)}</>
+            ) : searchResults && totalResults === 0 ? (
+              <div style={{ padding: '64px 0', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>No results for &ldquo;{query}&rdquo;</div>
+                <p style={{ fontSize: 14, color: 'var(--ink-3)', marginTop: 6 }}>Try different keywords, a username, or a #hashtag</p>
+              </div>
+            ) : searchResults ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                {searchResults.users.length > 0 && (
+                  <section>
+                    <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.06em', marginBottom: 12 }}>PEOPLE — {searchResults.users.length} result{searchResults.users.length !== 1 ? 's' : ''}</div>
+                    <div className="explore-search-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                      {searchResults.users.map(u => (
+                        <div key={u.id} onClick={() => { onNav?.('profile', { handle: u.handle }); clearSearch(); }} className="row-hover"
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, cursor: 'pointer' }}>
+                          <Avatar src={u.avatar_url} name={u.full_name} size={48} verified={u.verified} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 }}>
+                              {u.full_name}
+                              {u.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 8 }}>✓</span>}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
+                            {u.bio && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.bio}</div>}
+                          </div>
+                          {u.impact_score > 0 && <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)', fontWeight: 600, flexShrink: 0 }}>{u.impact_score}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {searchResults.posts.length > 0 && (
+                  <section>
+                    <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.06em', marginBottom: 12 }}>POSTS — {searchResults.posts.length} result{searchResults.posts.length !== 1 ? 's' : ''}</div>
+                    {searchResults.posts.map(p => <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={() => {}} />)}
+                  </section>
+                )}
+                {searchResults.communities.length > 0 && (
+                  <section>
+                    <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.06em', marginBottom: 12 }}>COMMUNITIES — {searchResults.communities.length} result{searchResults.communities.length !== 1 ? 's' : ''}</div>
+                    <div className="explore-search-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                      {searchResults.communities.map(c => {
+                        const joined = app.community?.has(c.name);
+                        return (
+                          <div key={c.name} onClick={() => onNav?.('forum')} className="row-hover"
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, cursor: 'pointer' }}>
+                            <div style={{ width: 48, height: 48, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+                              <img src={c.coverUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</div>
+                              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{c.members} members · {c.cat}</div>
+                            </div>
+                            <button className={joined ? 'btn btn-green' : 'btn btn-ghost'}
+                              onClick={e => { e.stopPropagation(); app.community?.toggle(c.name); }}
+                              style={{ padding: '4px 10px', fontSize: 12, flexShrink: 0 }}>{joined ? 'Joined' : 'Join'}</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {/* Tags tab */}
-        {tab === 'tags' && (
+        {!isSearching && tab === 'tags' && (
           <div>
             {!activeTag ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
@@ -573,13 +670,10 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
               <>
                 <button onClick={() => setActiveTag(null)} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>â† All tags</button>
                 {tagLoading ? (
-                  <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-                  </div>
+                  <>{[1,2,3].map(i => <PostCardSkeleton key={i} />)}</>
                 ) : tagPosts.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--ink-3)' }}>
-                    <div style={{ fontSize: 36, marginBottom: 12 }}>ðŸŒ¿</div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-2)' }}>No posts yet for #{activeTag}</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 12 }}>No posts yet for #{activeTag}</div>
                     <p style={{ fontSize: 14, marginTop: 6 }}>Be the first to use this hashtag!</p>
                   </div>
                 ) : (
@@ -590,18 +684,18 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           </div>
         )}
 
-        {tab !== 'tags' && (<>
+        {!isSearching && tab !== 'tags' && (<>
 
         {/* Hero: editorial featured story */}
-        <div style={{
+        <div className="explore-hero-grid" style={{
           display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginBottom: 24,
         }}>
           <div style={{
             background: 'var(--surface)', borderRadius: 20,
             overflow: 'hidden', border: '1px solid var(--line)',
             display: 'grid', gridTemplateRows: '260px 1fr', cursor: 'pointer',
-          }} className="post-card" onClick={() => openArticle({ tag: 'Energy', title: 'How a Nairobi co-op put 4,200 homes on solar in 18 months', author: 'Dr. Adaeze Okafor', img: 'hero Â· solar farm at dawn' })}>
-            <ImagePlaceholder label="hero Â· solar farm at dawn" height={260} />
+          }} className="post-card" onClick={() => openArticle({ tag: 'Energy', title: 'How a Nairobi co-op put 4,200 homes on solar in 18 months', author: 'Dr. Adaeze Okafor', img: 'hero · solar farm at dawn' })}>
+            <ImagePlaceholder label="hero · solar farm at dawn" height={260} />
             <div style={{ padding: 20 }}>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                 <span className="chip chip-green">Editor's pick</span>
@@ -614,7 +708,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                 <Avatar src={MOCK.users.okafor.avatar} name="Dr. Okafor" size={32} verified />
                 <div style={{ fontSize: 13 }}>
                   <span style={{ fontWeight: 600 }}>Dr. Adaeze Okafor</span>
-                  <span style={{ color: 'var(--ink-3)' }}> Â· May 19</span>
+                  <span style={{ color: 'var(--ink-3)' }}> · May 19</span>
                 </div>
               </div>
             </div>
@@ -622,7 +716,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              { tag: 'Policy', t: 'EU Carbon Border Adjustment â€” what it means for steel', a: 'Climate Action Net.', img: 'steel mill' },
+              { tag: 'Policy', t: 'EU Carbon Border Adjustment — what it means for steel', a: 'Climate Action Net.', img: 'steel mill' },
               { tag: 'Energy', t: 'Heat pumps overtook gas boilers in 9 European markets', a: 'GreenTech', img: 'heat pump unit' },
               { tag: 'Ocean', t: 'Inside the 2026 North Sea kelp restoration trial', a: 'Sea Forests', img: 'kelp underwater' },
             ].map((s, i) => (
@@ -635,7 +729,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                 <div>
                   <span className="chip chip-green" style={{ marginBottom: 6 }}>{s.tag}</span>
                   <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.35, marginTop: 6 }}>{s.t}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'Geist Mono' }}>by {s.a}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>by {s.a}</div>
                 </div>
               </div>
             ))}
@@ -644,7 +738,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
 
         {/* Categories strip */}
         <h2 className="font-display" style={{ fontSize: 20, fontWeight: 600, margin: '0 0 12px' }}>Browse by category</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
+        <div className="explore-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
           {[
             ['Energy', 'leaf', '#1f6f3f'],
             ['Water', 'droplet', '#1d6dc4'],
@@ -653,7 +747,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
             ['Transport', 'bolt', '#e6b450'],
             ['Policy', 'globe', '#5c635e'],
           ].map(([label, icon, col]) => (
-            <div key={label} onClick={() => app.openModal?.('list', { title: label + ' on Honua', icon, sub: 'Recent posts and projects in this category', items: MOCK.posts.slice(0, 4).map(p => ({ icon, title: p.content.slice(0, 48) + 'â€¦', sub: '@' + MOCK.users[p.user].handle + ' Â· ' + p.time })) })} style={{
+            <div key={label} onClick={() => app.openModal?.('list', { title: label + ' on Honua', icon, sub: 'Recent posts and projects in this category', items: MOCK.posts.slice(0, 4).map(p => ({ icon, title: p.content.slice(0, 48) + '…', sub: '@' + MOCK.users[p.user].handle + ' · ' + p.time })) })} style={{
               background: 'var(--surface)', borderRadius: 14, padding: 16,
               border: '1px solid var(--line)', cursor: 'pointer',
             }} className="post-card">
@@ -664,7 +758,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                 <Icon name={icon} size={18} stroke={2} />
               </div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
                 {Math.floor(Math.random() * 9 + 2)}.{Math.floor(Math.random() * 9)}k posts
               </div>
             </div>
@@ -674,9 +768,9 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
         {/* Communities grid */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h2 className="font-display" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Communities you might love</h2>
-          <button style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 500, cursor: 'pointer', fontSize: 13 }} onClick={() => onNav?.('forum')}>See all â†’</button>
+          <button style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 500, cursor: 'pointer', fontSize: 13 }} onClick={() => onNav?.('forum')}>See all →</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
+        <div className="explore-community-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
           {MOCK.communities.slice(0, 3).map(c => {
             const joined = app.community?.has(c.name);
             return (
@@ -688,8 +782,8 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
               <div style={{ padding: 14 }}>
                 <span className="chip">{c.cat}</span>
                 <h3 style={{ margin: '8px 0 4px', fontSize: 16, fontWeight: 600 }}>{c.name}</h3>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{c.members} members</div>
-                <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.community.toggle(c.name); app.toast?.(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}`, kind: 'success', icon: 'users' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined âœ“' : 'Join community'}</button>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.members} members</div>
+                <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.community.toggle(c.name); app.toast?.(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}`, kind: 'success', icon: 'users' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join community'}</button>
               </div>
             </div>
             );
@@ -697,7 +791,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
         </div>
 
         {/* Project map preview */}
-        <div style={{
+        <div className="explore-map-grid" style={{
           background: 'var(--surface)', borderRadius: 20,
           border: '1px solid var(--line)', overflow: 'hidden',
           display: 'grid', gridTemplateColumns: '1.2fr 1fr',
@@ -706,7 +800,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           <div style={{ padding: 24 }}>
             <span className="chip chip-sky">Action map</span>
             <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>147 verified projects near you</h2>
-            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>Beach cleanups, community gardens, repair cafÃ©s, energy co-ops â€” find something to do this weekend.</p>
+            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>Beach cleanups, community gardens, repair cafés, energy co-ops — find something to do this weekend.</p>
             <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={() => onNav?.('map')}>Open map <Icon name="arrow" size={14} /></button>
           </div>
         </div>
@@ -717,7 +811,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
 };
 
 export function MapPreview({ height = 320 }) {
-  // Decorative map placeholder â€” toned earthy
+  // Decorative map placeholder — toned earthy
   return (
     <div style={{
       height, position: 'relative', overflow: 'hidden',

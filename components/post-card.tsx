@@ -169,7 +169,7 @@ export function PostCard({ post, dense = false }) {
               background: 'var(--sky)', color: '#fff', width: 14, height: 14,
               borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9,
             }}>✓</span>}
-            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{user.handle}</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{user.handle}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· {post.time}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -242,7 +242,7 @@ export function ActionBtn({ icon, count, active, activeColor = 'var(--green)', o
     <button onClick={onClick} style={{
       background: 'transparent', border: 'none', padding: 0, cursor: 'pointer',
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      color: active ? activeColor : 'var(--ink-3)', fontSize: 13, fontFamily: 'Geist Mono', fontWeight: 500,
+      color: active ? activeColor : 'var(--ink-3)', fontSize: 13, fontFamily: 'JetBrains Mono', fontWeight: 500,
       transition: 'color .12s',
     }}>
       <Icon name={icon} size={18} stroke={active ? 2.2 : 1.7} />
@@ -276,7 +276,7 @@ export function TrendingPanel() {
           cursor: 'pointer',
         }}>
           <div>
-            <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>#{i + 1} · trending</div>
+            <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>#{i + 1} · trending</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginTop: 2 }}>#{t.tag}</div>
             <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.posts} posts today</div>
           </div>
@@ -301,17 +301,17 @@ export function MyImpactCard() {
         borderRadius: '50%', background: 'rgba(255,255,255,.07)',
       }} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <span style={{ fontSize: 12, opacity: .85, fontFamily: 'Geist Mono', letterSpacing: '.05em' }}>YOUR IMPACT · MAY</span>
+        <span style={{ fontSize: 12, opacity: .85, fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>YOUR IMPACT · MAY</span>
         <Icon name="leaf" size={18} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div>
-          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>−164<span style={{ fontSize: 14, opacity: .7 }}> kg</span></div>
+          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>−164<span style={{ fontSize: 14, opacity: .7 }}> kg</span></div>
           <div style={{ fontSize: 11, opacity: .85 }}>CO₂ avoided</div>
         </div>
         <div>
-          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>12<span style={{ fontSize: 14, opacity: .7 }}> day</span></div>
-          <div style={{ fontSize: 11, opacity: .85 }}>streak 🔥</div>
+          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>12<span style={{ fontSize: 14, opacity: .7 }}> day</span></div>
+          <div style={{ fontSize: 11, opacity: .85 }}>streak</div>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, fontSize: 12, opacity: .9 }}>
@@ -350,7 +350,7 @@ export function SuggestedFollows() {
                   borderRadius: '50%', fontSize: 8, display: 'inline-grid', placeItems: 'center',
                 }}>✓</span>}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{u.handle} · {u.score} impact</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle} · {u.score} impact</div>
             </div>
             <button className={following ? 'btn btn-green' : 'btn btn-ghost'} onClick={() => { app.follow.toggle(u.handle); app.toast?.(following ? { msg: `Unfollowed ${u.name}`, icon: 'user' } : { msg: `Following ${u.name}`, kind: 'success', icon: 'user' }); }} style={{ padding: '5px 12px', fontSize: 12 }}>{following ? 'Following' : 'Follow'}</button>
           </div>
@@ -366,7 +366,7 @@ export function makeCommentSeed() {
   return [
     { id: ++__cid, user: 'marcus', text: 'How are you splitting the inverter cost across members?', time: '32m', likes: 12, replies: [
       { id: ++__cid, user: 'sarah', text: 'Per-panel share — everyone pays for what they pull. Happy to send the spreadsheet.', time: '28m', likes: 6, replies: [
-        { id: ++__cid, user: 'marcus', text: 'That would be amazing, thank you 🙏', time: '20m', likes: 2, replies: [] },
+        { id: ++__cid, user: 'marcus', text: 'That would be amazing, thank you!', time: '20m', likes: 2, replies: [] },
       ] },
     ] },
     { id: ++__cid, user: 'maya', text: 'Following — we’re trying the same in our building. Any vendor recs?', time: '1h', likes: 8, replies: [
@@ -410,24 +410,24 @@ export function CommentNode({ node, depth, like, reply, dense, defaultOpen }: { 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: dense ? 13 : 13.5, fontWeight: 600 }}>{usr.name}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'Geist Mono' }}>@{usr.handle} · {node.time}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {node.time}</span>
         </div>
         <p style={{ margin: '3px 0 6px', fontSize: dense ? 13.5 : 14, lineHeight: 1.5, color: 'var(--ink-2)', textWrap: 'pretty' }}>{node.text}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, color: 'var(--ink-3)' }}>
           <ActionBtn icon="heart" count={node.likes} active={node._liked} activeColor="var(--clay)" onClick={() => like(node.id)} />
-          <button onClick={() => setReplying(r => !r)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 12.5, fontWeight: 600, fontFamily: 'Geist Mono', padding: 0 }}>Reply</button>
+          <button onClick={() => setReplying(r => !r)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 12.5, fontWeight: 600, fontFamily: 'JetBrains Mono', padding: 0 }}>Reply</button>
         </div>
 
         {replying && (
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send(); if (e.key === 'Escape') setReplying(false); }}
-              placeholder={`Reply to @${usr.handle}…`} style={{ flex: 1, background: 'var(--bg-2)', border: '1px solid var(--line)', outline: 'none', borderRadius: 999, padding: '8px 13px', fontSize: 13.5, fontFamily: 'Geist', color: 'var(--ink)' }} />
+              placeholder={`Reply to @${usr.handle}…`} style={{ flex: 1, background: 'var(--bg-2)', border: '1px solid var(--line)', outline: 'none', borderRadius: 999, padding: '8px 13px', fontSize: 13.5, fontFamily: 'Satoshi', color: 'var(--ink)' }} />
             <button className="btn btn-primary" style={{ padding: '7px 13px', fontSize: 12 }} onClick={send}>Reply</button>
           </div>
         )}
 
         {kids.length > 0 && (
-          <button onClick={() => setOpen(o => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 12.5, fontWeight: 600, fontFamily: 'Geist', padding: '10px 0 0' }}>
+          <button onClick={() => setOpen(o => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 12.5, fontWeight: 600, fontFamily: 'Satoshi', padding: '10px 0 0' }}>
             <span style={{ width: 22, height: 1, background: 'var(--line-2)', display: 'inline-block' }} />
             <span style={{ display: 'inline-flex', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}><Icon name="chevron" size={13} stroke={2.4} /></span>
             {open ? 'Hide' : `View ${kids.length} ${kids.length === 1 ? 'reply' : 'replies'}`}

@@ -7,12 +7,12 @@ import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal,
 export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="marketplace" onNav={onNav} />
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
-          <div>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>MARKETPLACE</div>
+        <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>MARKETPLACE</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Sustainable goods, vouched by humans.</h1>
             <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Every product carries an impact label and a real review from someone on Honua.</p>
           </div>
@@ -24,7 +24,7 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
         </div>
 
         {/* Feature banner */}
-        <div style={{
+        <div className="feature-banner" style={{
           background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)',
           overflow: 'hidden', display: 'grid', gridTemplateColumns: '1.3fr 1fr', marginBottom: 24,
         }}>
@@ -33,7 +33,7 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
             <h2 className="font-display" style={{ margin: '12px 0 8px', fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em' }}>The repair kit. 92 tools, one foldable case.</h2>
             <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>By the Fix-it Collective. Every purchase funds a community repair café for a month.</p>
             <div style={{ display: 'flex', gap: 14, marginTop: 18, alignItems: 'center' }}>
-              <span style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>$84</span>
+              <span style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>$84</span>
               <span style={{ fontSize: 14, color: 'var(--ink-3)', textDecoration: 'line-through' }}>$120</span>
               <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => { app.addToCart({ name: 'The repair kit', price: '$84' }); app.toast?.({ msg: 'Added to cart', sub: 'The repair kit · $84', kind: 'success', icon: 'cart' }); }}>Add to cart</button>
             </div>
@@ -53,7 +53,7 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
         </div>
 
         {/* Product grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+        <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
           {MOCK.products.map((p, i) => {
             const wished = app.wishlist?.has(p.name);
             return (
@@ -68,13 +68,13 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
                 }}><Icon name="bookmark" size={14} stroke={wished ? 2.4 : 1.75} /></button>
               </div>
               <div style={{ padding: 14 }}>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{p.brand.toUpperCase()}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.brand.toUpperCase()}</div>
                 <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{p.name}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                  <span style={{ fontSize: 16, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>{p.price}</span>
+                  <span style={{ fontSize: 16, fontWeight: 600, fontFamily: 'Lora' }}>{p.price}</span>
                   <button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); app.addToCart({ name: p.name, price: p.price }); app.toast?.({ msg: 'Added to cart', sub: p.name, kind: 'success', icon: 'cart' }); }} style={{ padding: '5px 11px', fontSize: 12 }}>Add</button>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8, fontFamily: 'Geist Mono' }}>★★★★★ 4.{7 + i % 3} · {120 + i * 14} reviews</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8, fontFamily: 'JetBrains Mono' }}>★★★★★ 4.{7 + i % 3} · {120 + i * 14} reviews</div>
               </div>
             </div>
             );
@@ -105,16 +105,16 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   const convos: Array<[string, string, string, string, boolean, number]> = [
     ['sarah', 'Sarah Green', 'Wiring spec doc attached — let me know!', '2m', true, 2],
     ['marcus', 'Marcus Johnson', 'Got it — Saturday works for the compost drop', '14m', true, 0],
-    ['greentech', 'GreenTech Solutions', 'Pre-print is live, link below 👇', '1h', false, 0],
+    ['greentech', 'GreenTech Solutions', 'Pre-print is live, link below.', '1h', false, 0],
     ['maya', 'Maya Patel', 'Mind if I borrow that planter pattern?', '3h', false, 0],
     ['okafor', 'Dr. Adaeze Okafor', 'Thanks for the intro! Setting up a call for Tue.', '1d', false, 0],
-    ['can', 'Climate Action Network', 'Friday lineup looking strong 💪', '2d', false, 0],
+    ['can', 'Climate Action Network', 'Friday lineup looking strong.', '2d', false, 0],
   ];
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="messages" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
-        <div style={{ width: 340, borderRight: '1px solid var(--line)', background: 'var(--surface)', overflow: 'auto' }} className="no-scrollbar">
+        <div style={{ width: 340, borderRight: '1px solid var(--line)', background: 'var(--surface)', overflow: 'auto' }} className="no-scrollbar msg-list-col">
           <div style={{ padding: '24px 20px 14px' }}>
             <h1 className="font-display" style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Messages</h1>
             <div style={{ marginTop: 12, background: 'var(--bg-2)', borderRadius: 999, padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -137,7 +137,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ fontWeight: unread ? 600 : 500 }}>{n}</span>
-                  <span style={{ color: 'var(--ink-3)', fontFamily: 'Geist Mono', fontSize: 11 }}>{t}</span>
+                  <span style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{t}</span>
                 </div>
                 <div style={{
                   fontSize: 12, color: unread ? 'var(--ink-2)' : 'var(--ink-3)',
@@ -147,14 +147,14 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
               </div>
               {unread > 0 && <span style={{
                 background: 'var(--green)', color: '#fff', padding: '0 7px', borderRadius: 10,
-                fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 600, alignSelf: 'center',
+                fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 600, alignSelf: 'center',
               }}>{unread}</span>}
             </div>
           ))}
         </div>
 
         {/* Chat area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }} className="msg-detail-col">
           <div style={{
             padding: '18px 24px', borderBottom: '1px solid var(--line)', background: 'var(--surface)',
             display: 'flex', alignItems: 'center', gap: 12,
@@ -165,7 +165,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
                 Sarah Green
                 <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9 }}>✓</span>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>active now · Portland, OR</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>active now · Portland, OR</div>
             </div>
             <button className="btn btn-ghost" style={{ padding: '7px 12px', fontSize: 13 }} onClick={() => onNav?.('profile', { handle: 'sarahgreen' })}>View profile</button>
           </div>
@@ -188,7 +188,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
             </button>
             <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') send(); }} placeholder="Message Sarah…" style={{
               flex: 1, background: 'var(--bg-2)', border: 'none', outline: 'none',
-              padding: '11px 14px', borderRadius: 999, fontSize: 14, fontFamily: 'Geist',
+              padding: '11px 14px', borderRadius: 999, fontSize: 14, fontFamily: 'Satoshi',
             }} />
             <button className="btn btn-primary" style={{ padding: '8px 16px' }} onClick={send}>Send</button>
           </div>
@@ -202,7 +202,7 @@ export function DayLabel({ l }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0', color: 'var(--ink-4)' }}>
       <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-      <span style={{ fontSize: 11, fontFamily: 'Geist Mono', letterSpacing: '.05em' }}>{l.toUpperCase()}</span>
+      <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>{l.toUpperCase()}</span>
       <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
     </div>
   );
@@ -225,9 +225,9 @@ export function Msg({ from, children, attach }: { from: string; children: React.
           <div style={{
             background: me ? 'rgba(255,255,255,.15)' : 'var(--bg-2)',
             padding: '8px 10px', borderRadius: 8, marginBottom: 8,
-            fontSize: 12, fontFamily: 'Geist Mono', display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 12, fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6,
           }}>
-            📎 {attach}
+            {attach}
           </div>
         )}
         {children}
@@ -243,11 +243,11 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     { type: 'like', who: 'sarah', what: 'liked your post about composting routes', t: '2m', new: true },
     { type: 'verified', what: 'Your action "Switched to renewable plan" was verified · +200 GP · −42 kg CO₂', t: '14m', new: true },
     { type: 'follow', who: 'okafor', what: 'started following you', t: '34m', new: true },
-    { type: 'milestone', what: '🎉 You hit a 12-day streak. Keep going for the 30-day badge.', t: '1h', new: true },
+    { type: 'milestone', what: 'You hit a 12-day streak. Keep going for the 30-day badge.', t: '1h', new: true },
     { type: 'comment', who: 'marcus', what: 'replied to your post: "Got it — Saturday works for the compost drop"', t: '2h' },
     { type: 'project', what: '"Prospect Park cleanup" you joined is happening Saturday at 9am.', t: '4h' },
     { type: 'community', who: 'maya', what: 'invited you to "Urban gardeners" community', t: '1d' },
-    { type: 'level', what: 'You leveled up to Composter 🌱 — unlocked 4 new badges.', t: '2d' },
+    { type: 'level', what: 'You leveled up to Composter — unlocked 4 new badges.', t: '2d' },
   ];
   const handle = (n) => {
     switch (n.type) {
@@ -256,13 +256,13 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
       case 'community': return app.nav('forum');
       case 'verified': return app.nav('impact');
       case 'project': return app.nav('map');
-      case 'milestone': app.nav('tasks'); return app.openModal('celebrate', { emoji: '🔥', title: '12-day streak!', sub: "You're on fire. Hit 30 days for a 2× point multiplier — keep logging daily." });
-      case 'level': app.nav('profile'); return app.openModal('badge', { emoji: '🌱', name: 'Composter', desc: 'Awarded for reaching Level 7 — you composted consistently and diverted ~18 kg from landfill.', perks: ['+200 Green Points', '2× streak multiplier for 7 days', 'Composter flair on your profile'] });
+      case 'milestone': app.nav('tasks'); return app.openModal('celebrate', { title: '12-day streak!', sub: "Hit 30 days for a 2× point multiplier — keep logging daily." });
+      case 'level': app.nav('profile'); return app.openModal('badge', { name: 'Composter', desc: 'Awarded for reaching Level 7 — you composted consistently and diverted ~18 kg from landfill.', perks: ['+200 Green Points', '2× streak multiplier for 7 days', 'Composter flair on your profile'] });
       default: return null;
     }
   };
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="notifications" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
         <div style={{ flex: 1, padding: '24px 32px', overflow: 'auto', maxWidth: 760 }} className="no-scrollbar">
@@ -291,7 +291,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
                       {u && <strong style={{ color: 'var(--ink)' }}>{u.name} </strong>}
                       {n.what}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono', marginTop: 4 }}>{n.t} ago</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 4 }}>{n.t} ago</div>
                   </div>
                   {n.new && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', marginTop: 14 }} />}
                 </div>
@@ -299,7 +299,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
             })}
           </div>
         </div>
-        <div style={{ width: 320, padding: 24, overflow: 'auto' }} className="no-scrollbar">
+        <div style={{ width: 320, padding: 24, overflow: 'auto' }} className="no-scrollbar right-panel">
           <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18 }}>
             <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>Notification preferences</h3>
             <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--ink-3)' }}>Stay focused on what matters.</p>
@@ -357,7 +357,7 @@ export function QtyStepper({ value, set, min = 1, max = 99, suffix }: { value: n
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 0, border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
       <button onClick={() => set(Math.max(min, value - 1))} style={{ width: 36, height: 38, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' }}><Icon name="minus" size={15} /></button>
-      <span style={{ minWidth: 56, textAlign: 'center', fontFamily: 'Geist Mono', fontWeight: 600, fontSize: 14 }}>{value}{suffix}</span>
+      <span style={{ minWidth: 56, textAlign: 'center', fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 14 }}>{value}{suffix}</span>
       <button onClick={() => set(Math.min(max, value + 1))} style={{ width: 36, height: 38, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' }}><Icon name="plus" size={15} /></button>
     </div>
   );
@@ -409,7 +409,7 @@ export function MProject({ data, close }) {
       <ModalFoot>
         <button className="btn btn-ghost" onClick={() => { app.toast({ msg: 'Link copied', sub: 'Project link copied to clipboard.', icon: 'share' }); }}><Icon name="share" size={14} /> Share</button>
         <button className="btn btn-ghost" onClick={() => { close(); app.nav('messages'); }}><Icon name="msg" size={14} /> Message host</button>
-        <button className={going ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => { app.community.toggle('proj-' + data.id); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going! 🎉", sub: `${data.t} · ${data.when}`, kind: 'success', icon: 'check' }); }}>
+        <button className={going ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => { app.community.toggle('proj-' + data.id); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: `${data.t} · ${data.when}`, kind: 'success', icon: 'check' }); }}>
           {going ? 'Going ✓ — cancel' : "I'm going"}
         </button>
       </ModalFoot>
@@ -438,7 +438,7 @@ export function MArticle({ data, close }) {
           <Avatar src={MOCK.users.okafor.avatar} name={data.author} size={36} />
           <div style={{ fontSize: 13 }}>
             <div style={{ fontWeight: 600 }}>{data.author}</div>
-            <div style={{ color: 'var(--ink-3)', fontFamily: 'Geist Mono', fontSize: 11 }}>May 19 · 4.2k reads</div>
+            <div style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>May 19 · 4.2k reads</div>
           </div>
           <button className="btn btn-ghost" style={{ marginLeft: 'auto', padding: '6px 14px', fontSize: 13 }} onClick={() => app.toast({ msg: `Following ${data.author}`, icon: 'user' })}>Follow</button>
         </div>
@@ -458,7 +458,7 @@ export function MArticle({ data, close }) {
   );
 };
 function abtn(active, col = 'var(--green)') {
-  return { background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontFamily: 'Geist Mono', fontWeight: 600, color: active ? col : 'var(--ink-3)' };
+  return { background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontFamily: 'JetBrains Mono', fontWeight: 600, color: active ? col : 'var(--ink-3)' };
 }
 
 // --- Product detail (marketplace) ---
@@ -472,13 +472,13 @@ export function MProduct({ data, close }) {
         <ImagePlaceholder label={data.img} height={400} src={data.imgUrl} />
         <div style={{ padding: 24, position: 'relative' }}>
           <button onClick={close} style={{ position: 'absolute', top: 18, right: 18, background: 'var(--bg-2)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)' }}><Icon name="close" size={16} /></button>
-          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{data.brand.toUpperCase()}</div>
+          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{data.brand.toUpperCase()}</div>
           <h2 className="font-display" style={{ margin: '6px 0 8px', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{data.name}</h2>
           <span className="chip chip-green">{data.tag}</span>
-          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 12, fontFamily: 'Geist Mono' }}>★★★★★ 4.8 · 214 reviews</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 12, fontFamily: 'JetBrains Mono' }}>★★★★★ 4.8 · 214 reviews</div>
           <p style={{ margin: '14px 0', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)' }}>Vouched by 38 people on Honua. Ships plastic-free and carbon-neutral. Repairable and backed by a 5-year warranty.</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '18px 0' }}>
-            <span style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>{data.price}</span>
+            <span style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>{data.price}</span>
             <QtyStepper value={qty} set={setQty} />
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -508,8 +508,8 @@ export function MCredit({ data, close }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '16px 0' }}>
           {[['VERIFIER', data.verifier], ['AVAILABLE', data.volume], ['SPOT PRICE', data.price + ' /t']].map(([l, v]) => (
             <div key={l} style={{ background: 'var(--bg-2)', borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>{l}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3, fontFamily: 'Geist Mono' }}>{v}</div>
+              <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>{l}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3, fontFamily: 'JetBrains Mono' }}>{v}</div>
             </div>
           ))}
         </div>
@@ -522,13 +522,13 @@ export function MCredit({ data, close }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Total</div>
-            <div style={{ fontSize: 26, fontWeight: 600, fontFamily: 'Bricolage Grotesque', color: 'var(--green)' }}>${(unit * qty).toFixed(2)}</div>
+            <div style={{ fontSize: 26, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>${(unit * qty).toFixed(2)}</div>
           </div>
         </div>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { emoji: '🌳', title: `Offset ${qty} t CO₂`, sub: `You retired ${qty} tonne${qty > 1 ? 's' : ''} via ${data.name}. Certificate added to your wallet.` }); }}>
+        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: `Offset ${qty} t CO₂`, sub: `You retired ${qty} tonne${qty > 1 ? 's' : ''} via ${data.name}. Certificate added to your wallet.` }); }}>
           Buy {qty} t · ${(unit * qty).toFixed(2)}
         </button>
       </ModalFoot>
@@ -548,15 +548,15 @@ export function MChallenge({ data, close }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '16px 0' }}>
           {[['DURATION', data.days + ' days'], ['REWARD', data.reward], ['JOINED', data.joined]].map(([l, v]) => (
             <div key={l} style={{ background: 'var(--bg-2)', borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 10, fontFamily: 'Geist Mono', color: 'var(--ink-3)' }}>{l}</div>
+              <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{l}</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{v}</div>
             </div>
           ))}
         </div>
       </div>
       <ModalFoot>
-        {joined && <button className="btn btn-ghost" onClick={() => { close(); app.openModal('celebrate', { emoji: '🔥', title: 'Logged for today!', sub: `Your ${data.title} streak continues. Keep it going.` }); }}>Log today</button>}
-        <button className={joined ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => { app.challenge.toggle(data.id); app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined! 🔥', sub: data.title, kind: 'success', icon: 'flame' }); if (joined) close(); }}>
+        {joined && <button className="btn btn-ghost" onClick={() => { close(); app.openModal('celebrate', { title: 'Logged for today!', sub: `Your ${data.title} streak continues. Keep it going.` }); }}>Log today</button>}
+        <button className={joined ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => { app.challenge.toggle(data.id); app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: data.title, kind: 'success', icon: 'flame' }); if (joined) close(); }}>
           {joined ? 'Joined ✓ — leave' : 'Join challenge'}
         </button>
       </ModalFoot>
@@ -585,7 +585,7 @@ export function MDiscussion({ data, close }) {
             <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
               <Avatar src={cu.avatar} name={cu.name} size={34} verified={cu.verified} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13 }}><strong>{cu.name}</strong> <span style={{ color: 'var(--ink-3)', fontFamily: 'Geist Mono', fontSize: 11 }}>· {t}</span></div>
+                <div style={{ fontSize: 13 }}><strong>{cu.name}</strong> <span style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>· {t}</span></div>
                 <p style={{ margin: '3px 0 0', fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>{c}</p>
               </div>
             </div>
@@ -606,8 +606,8 @@ export function MBadge({ data, close }) {
     <Modal onClose={close} width={440}>
       <div style={{ padding: '30px 26px 22px', textAlign: 'center', position: 'relative' }}>
         <button onClick={close} style={{ position: 'absolute', top: 16, right: 16, background: 'var(--bg-2)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)' }}><Icon name="close" size={16} /></button>
-        <div className="celebrate-pop" style={{ width: 96, height: 96, borderRadius: 26, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', fontSize: 48, margin: '0 auto 16px', border: '1px solid var(--green-3)' }}>{data.emoji || '🏆'}</div>
-        <div style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--green)', letterSpacing: '.08em' }}>BADGE EARNED</div>
+        <div className="celebrate-pop" style={{ width: 96, height: 96, borderRadius: 26, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', margin: '0 auto 16px', border: '1px solid var(--green-3)' }}><Icon name="award" size={40} color="var(--green)" /></div>
+        <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.08em' }}>BADGE EARNED</div>
         <h2 className="font-display" style={{ margin: '6px 0 8px', fontSize: 24, fontWeight: 600 }}>{data.name || 'Composter'}</h2>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--ink-3)' }}>{data.desc || 'Awarded for composting food waste for 4 consecutive weeks. You diverted an estimated 18 kg from landfill.'}</p>
         <div style={{ textAlign: 'left', background: 'var(--bg-2)', borderRadius: 12, padding: 16, margin: '18px 0 0' }}>
@@ -630,7 +630,7 @@ export function MCelebrate({ data, close }) {
     <Modal onClose={close} width={420}>
       <div style={{ padding: '36px 28px 24px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <Confetti />
-        <div className="celebrate-pop" style={{ width: 100, height: 100, borderRadius: '50%', background: 'var(--green-tint)', display: 'grid', placeItems: 'center', fontSize: 52, margin: '0 auto 18px' }}>{data.emoji || '🎉'}</div>
+        <div className="celebrate-pop" style={{ width: 100, height: 100, borderRadius: '50%', background: 'var(--green-tint)', display: 'grid', placeItems: 'center', margin: '0 auto 18px' }}><Icon name="check" size={44} color="var(--green)" stroke={2} /></div>
         <h2 className="font-display" style={{ margin: '0 0 8px', fontSize: 27, fontWeight: 600, letterSpacing: '-0.02em' }}>{data.title || 'Hurray!'}</h2>
         <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: 'var(--ink-3)' }}>{data.sub}</p>
         <button className="btn btn-green" style={{ marginTop: 22, width: '100%', justifyContent: 'center' }} onClick={close}>Keep going →</button>
@@ -648,19 +648,19 @@ export function MWallet({ close }) {
       <div style={{ padding: '18px 24px 0' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#1f6f3f,#2e9a5b)', color: '#fff', borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 11, fontFamily: 'Geist Mono', opacity: .85 }}>GREEN POINTS</div>
-            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>1,240</div>
+            <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .85 }}>GREEN POINTS</div>
+            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>1,240</div>
           </div>
           <div style={{ background: 'var(--ink-solid)', color: '#fff', borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 11, fontFamily: 'Geist Mono', opacity: .7 }}>IMPACT TOKENS</div>
-            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Bricolage Grotesque' }}>24 <span style={{ fontSize: 14, opacity: .6 }}>IT</span></div>
+            <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .7 }}>IMPACT TOKENS</div>
+            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>24 <span style={{ fontSize: 14, opacity: .6 }}>IT</span></div>
           </div>
         </div>
-        <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>RECENT TRANSACTIONS</div>
+        <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>RECENT TRANSACTIONS</div>
         {[['Renewable plan switch', '+200 GP', 'May 18'], ['Offset purchase · Mau Forest', '−4 IT', 'May 16'], ['Bike commute streak', '+24 GP', 'May 15'], ['Compost log', '+18 GP', 'May 14']].map(([t, a, d], i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
-            <div><div style={{ fontSize: 13.5, fontWeight: 500 }}>{t}</div><div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{d}</div></div>
-            <span style={{ fontFamily: 'Geist Mono', fontWeight: 600, fontSize: 13, color: a.startsWith('+') ? 'var(--green)' : 'var(--clay)' }}>{a}</span>
+            <div><div style={{ fontSize: 13.5, fontWeight: 500 }}>{t}</div><div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{d}</div></div>
+            <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 13, color: a.startsWith('+') ? 'var(--green)' : 'var(--clay)' }}>{a}</span>
           </div>
         ))}
       </div>
@@ -683,9 +683,9 @@ export function MList({ data, close }) {
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name={it.icon || 'leaf'} size={17} stroke={2} /></div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 500 }}>{it.title}</div>
-              {it.sub && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{it.sub}</div>}
+              {it.sub && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{it.sub}</div>}
             </div>
-            {it.right && <span style={{ fontFamily: 'Geist Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>{it.right}</span>}
+            {it.right && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>{it.right}</span>}
           </div>
         ))}
       </div>
@@ -729,7 +729,7 @@ function BrandPanel() {
         <circle cx="470" cy="150" r="60" fill="rgba(255,255,255,.12)"/>
       </svg>
       <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ width: 34, height: 34, borderRadius: 9, background: '#fff', color: 'var(--green)', display: 'grid', placeItems: 'center', fontFamily: 'Bricolage Grotesque', fontWeight: 700, fontSize: 19, letterSpacing: '-0.05em' }}>h</span>
+        <span style={{ width: 34, height: 34, borderRadius: 9, background: '#fff', color: 'var(--green)', display: 'grid', placeItems: 'center', fontFamily: 'Lora', fontWeight: 700, fontSize: 19, letterSpacing: '-0.05em' }}>h</span>
         <span className="font-display" style={{ color: '#fff', fontWeight: 600, fontSize: 21 }}>honua</span>
       </div>
       <div style={{ position: 'relative', color: '#fff' }}>
@@ -738,20 +738,20 @@ function BrandPanel() {
           {[['2.4M', 'members'], ['18.6M', 'actions logged'], ['142kt', 'CO₂ avoided']].map(([n, l]) => (
             <div key={l}>
               <div className="font-display" style={{ fontSize: 26, fontWeight: 600 }}>{n}</div>
-              <div style={{ fontSize: 12, opacity: .85, fontFamily: 'Geist Mono' }}>{l}</div>
+              <div style={{ fontSize: 12, opacity: .85, fontFamily: 'JetBrains Mono' }}>{l}</div>
             </div>
           ))}
         </div>
       </div>
-      <div style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: 'Geist Mono' }}>© 2026 Honua Coop. All rights reserved.</div>
+      <div style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: 'JetBrains Mono' }}>© 2026 Honua Coop. All rights reserved.</div>
     </div>
   );
 }
 
 function PasswordField({ value, onChange, placeholder = 'Enter your password', label = 'PASSWORD' }: any) {
   const [show, setShow] = React.useState(false);
-  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 42px 12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
-  const lab = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 42px 12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const lab = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={lab}>{label}</label>
@@ -777,7 +777,7 @@ function PasswordField({ value, onChange, placeholder = 'Enter your password', l
 }
 
 function SocialButtons({ onGoogle, onApple }: { onGoogle: () => void; onApple: () => void }) {
-  const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '11px 16px', fontSize: 14, fontWeight: 500, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', marginBottom: 8, fontFamily: 'Geist', color: 'var(--ink)', transition: 'background .15s' };
+  const btn: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '11px 16px', fontSize: 14, fontWeight: 500, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', marginBottom: 8, fontFamily: 'Satoshi', color: 'var(--ink)', transition: 'background .15s' };
   return (
     <>
       <button style={btn} onClick={onGoogle}>
@@ -787,12 +787,12 @@ function SocialButtons({ onGoogle, onApple }: { onGoogle: () => void; onApple: (
       <button style={{ ...btn, opacity: .5, cursor: 'not-allowed', position: 'relative' }} disabled>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
         Continue with Apple
-        <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'Geist Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
+        <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'JetBrains Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
       </button>
       <button style={{ ...btn, opacity: .5, cursor: 'not-allowed', position: 'relative' }} disabled>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#FCFF52" strokeWidth="2"/><path d="M12 7v5l3 3" stroke="#FCFF52" strokeWidth="2" strokeLinecap="round"/></svg>
         Continue with Celo Wallet
-        <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'Geist Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
+        <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'JetBrains Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
       </button>
     </>
   );
@@ -804,8 +804,8 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
-  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
-  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -841,7 +841,7 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-4)', margin: '18px 0' }}>
         <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-        <span style={{ fontSize: 11, fontFamily: 'Geist Mono' }}>OR</span>
+        <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono' }}>OR</span>
         <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
       </div>
       <SocialButtons
@@ -862,7 +862,7 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
 }
 
 // ── Signup — multi-step onboarding ────────────────────────────────────────────
-function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
+function SignUpFlow({ onSwitch, onConfirm }: { onSwitch: () => void; onConfirm?: (email: string) => void }) {
   const app = useApp();
   const [step, setStep] = React.useState(1); // 1–5
   const totalSteps = 5;
@@ -894,8 +894,8 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
   const [agreed, setAgreed] = React.useState(false);
   const [agreedMarketing, setAgreedMarketing] = React.useState(false);
 
-  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Geist', color: 'var(--ink)', outline: 'none', marginTop: 6 };
-  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block' };
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block' };
 
   const handleHandleChange = (v: string) => {
     const clean = v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
@@ -938,11 +938,15 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
           interests,
           marketing_emails: agreedMarketing,
         });
-        // If user is immediately active (no email confirmation), upload avatar now
+        // If user is immediately active (no email confirmation needed), upload avatar now
         if (result?.user && avatarFile) {
           await app.uploadAvatar(result.user.id, avatarFile);
         }
-        app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}! 🌱`, sub: 'Check your email to confirm your account.', kind: 'success', icon: 'leaf' });
+        if (onConfirm) {
+          onConfirm(email);
+        } else {
+          app.toast?.({ msg: `Welcome to Honua, ${name.split(' ')[0]}!`, sub: 'Check your email to confirm your account.', kind: 'success', icon: 'leaf' });
+        }
       } catch (err: any) {
         app.toast?.({ msg: 'Sign up failed', sub: err.message, icon: 'bolt', kind: 'error' });
       } finally {
@@ -976,7 +980,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
             <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: i < step ? 'var(--green)' : 'var(--line)', transition: 'background .3s' }} />
           ))}
         </div>
-        <span style={{ fontSize: 11, fontFamily: 'Geist Mono', color: 'var(--ink-4)' }}>{step}/{totalSteps}</span>
+        <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)' }}>{step}/{totalSteps}</span>
       </div>
 
       <h2 className="font-display" style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>{stepTitle[step - 1]}</h2>
@@ -994,7 +998,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-4)', margin: '18px 0' }}>
             <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-            <span style={{ fontSize: 11, fontFamily: 'Geist Mono' }}>OR</span>
+            <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono' }}>OR</span>
             <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
           </div>
           <SocialButtons
@@ -1021,10 +1025,10 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>Profile photo</div>
               <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 8 }}>JPG, PNG or WebP · max 5 MB</div>
-              <button type="button" onClick={() => avatarInputRef.current?.click()} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--ink-2)', fontFamily: 'Geist' }}>
+              <button type="button" onClick={() => avatarInputRef.current?.click()} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', color: 'var(--ink-2)', fontFamily: 'Satoshi' }}>
                 {avatarPreview ? 'Change photo' : 'Upload photo'}
               </button>
-              {avatarPreview && <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--clay)', fontFamily: 'Geist', marginLeft: 6 }}>Remove</button>}
+              {avatarPreview && <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--clay)', fontFamily: 'Satoshi', marginLeft: 6 }}>Remove</button>}
             </div>
             <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
               const f = e.target.files?.[0];
@@ -1067,7 +1071,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
               )}
             </div>
             <span style={{
-              fontSize: 11, fontFamily: 'Geist Mono', marginTop: 4, display: 'block',
+              fontSize: 11, fontFamily: 'JetBrains Mono', marginTop: 4, display: 'block',
               color: handleStatus === 'taken' ? 'var(--clay)' : handleStatus === 'available' ? 'var(--green)' : 'var(--ink-4)',
             }}>
               {handleStatus === 'taken' ? `@${handle} is already taken.` :
@@ -1080,7 +1084,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
           <div style={{ marginBottom: 14 }}>
             <label style={lab}>DATE OF BIRTH</label>
             <input type="date" value={dob} onChange={e => setDob(e.target.value)} style={field} />
-            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4, display: 'block' }}>You must be 13 or older to join Honua.</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 4, display: 'block' }}>You must be 13 or older to join Honua.</span>
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={lab}>LOCATION (OPTIONAL)</label>
@@ -1096,13 +1100,13 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
             {INTERESTS.map(it => {
               const on = interests.includes(it);
               return (
-                <button key={it} onClick={() => setInterests(prev => on ? prev.filter(x => x !== it) : [...prev, it])} style={{ padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${on ? 'var(--green)' : 'var(--line)'}`, background: on ? 'var(--green)' : 'var(--surface)', color: on ? '#fff' : 'var(--ink-2)', fontSize: 13, fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'Geist', transition: 'all .15s' }}>
+                <button key={it} onClick={() => setInterests(prev => on ? prev.filter(x => x !== it) : [...prev, it])} style={{ padding: '8px 14px', borderRadius: 999, border: `1.5px solid ${on ? 'var(--green)' : 'var(--line)'}`, background: on ? 'var(--green)' : 'var(--surface)', color: on ? '#fff' : 'var(--ink-2)', fontSize: 13, fontWeight: on ? 600 : 500, cursor: 'pointer', fontFamily: 'Satoshi', transition: 'all .15s' }}>
                   {it}
                 </button>
               );
             })}
           </div>
-          <p style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 14 }}>{interests.length} selected · minimum 3</p>
+          <p style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 14 }}>{interests.length} selected · minimum 3</p>
         </div>
       )}
 
@@ -1112,7 +1116,7 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
           <div style={{ marginBottom: 14 }}>
             <label style={lab}>SHORT BIO (OPTIONAL)</label>
             <textarea value={bio} onChange={e => setBio(e.target.value.slice(0, 200))} placeholder="Tell the Honua community about yourself, your sustainability journey, and what drives you." rows={4} style={{ ...field, resize: 'none', lineHeight: 1.55 }} />
-            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'Geist Mono', marginTop: 4, display: 'block', textAlign: 'right' }}>{bio.length}/200</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 4, display: 'block', textAlign: 'right' }}>{bio.length}/200</span>
           </div>
 
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, maxHeight: 260, overflowY: 'auto' }} className="no-scrollbar">
@@ -1149,8 +1153,8 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
               <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--green)', display: 'grid', placeItems: 'center', fontSize: 28, color: '#fff', fontWeight: 700 }}>{name.charAt(0) || '?'}</div>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>{name || '—'}</div>
-                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>@{handle || '—'}</div>
-                {location && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>📍 {location}</div>}
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{handle || '—'}</div>
+                {location && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>{location}</div>}
               </div>
             </div>
             {bio && <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, margin: '0 0 14px' }}>{bio}</p>}
@@ -1161,13 +1165,13 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
             )}
           </div>
           <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6, background: 'var(--green-tint)', border: '1px solid var(--green-3)', borderRadius: 12, padding: 14 }}>
-            🌱 <strong>You're joining {(2400000).toLocaleString()} members</strong> who are making their climate impact visible and verifiable.
+            <strong>You're joining {(2400000).toLocaleString()} members</strong> who are making their climate impact visible and verifiable.
           </div>
         </div>
       )}
 
       <button onClick={next} disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 22, opacity: loading ? 0.7 : 1 }}>
-        {loading ? 'Creating account…' : step === totalSteps ? 'Create my account 🌱' : step === 4 ? 'I agree — continue' : 'Continue →'}
+        {loading ? 'Creating account…' : step === totalSteps ? 'Create my account' : step === 4 ? 'I agree — continue' : 'Continue'}
       </button>
 
       {step === 1 && (
@@ -1180,16 +1184,53 @@ function SignUpFlow({ onSwitch }: { onSwitch: () => void }) {
   );
 }
 
+function CheckEmailScreen({ email, onBackToSignIn }: { email: string; onBackToSignIn: () => void }) {
+  return (
+    <div style={{ width: '100%', maxWidth: 420, textAlign: 'center' }}>
+      <div style={{ width: 72, height: 72, borderRadius: 20, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', margin: '0 auto 20px' }}><Icon name="mail" size={32} color="var(--green)" /></div>
+      <h2 className="font-display" style={{ margin: '0 0 10px', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em' }}>Check your email</h2>
+      <p style={{ margin: '0 0 8px', fontSize: 15, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+        We sent a confirmation link to
+      </p>
+      <div style={{ display: 'inline-block', background: 'var(--green-tint)', color: 'var(--green)', fontFamily: 'JetBrains Mono', fontSize: 14, fontWeight: 600, padding: '6px 14px', borderRadius: 8, marginBottom: 20 }}>
+        {email}
+      </div>
+      <p style={{ margin: '0 0 28px', fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+        Click the link in that email to activate your account. It may take a minute or two to arrive — check your spam folder if you don't see it.
+      </p>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '16px 20px', marginBottom: 28, textAlign: 'left' }}>
+        <div style={{ fontSize: 13, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.04em', marginBottom: 10 }}>NEXT STEPS</div>
+        {[
+          ['1.', 'Open the confirmation email'],
+          ['2.', 'Click "Confirm your email"'],
+          ['', 'You\'re in — start your impact journey'],
+        ].map(([icon, text], i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+            <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>{text}</span>
+          </div>
+        ))}
+      </div>
+      <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 14 }} onClick={onBackToSignIn}>
+        Back to sign in
+      </button>
+    </div>
+  );
+}
+
 export function DesktopAuth({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
-  const [mode, setMode] = React.useState<'signin' | 'signup'>((params?.mode as any) || 'signin');
+  const [mode, setMode] = React.useState<'signin' | 'signup' | 'confirm'>((params?.mode as any) || 'signin');
+  const [confirmedEmail, setConfirmedEmail] = React.useState('');
   const app = useApp();
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <BrandPanel />
-      <div style={{ flex: '0 0 clamp(400px, 42%, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px clamp(24px,4vw,56px)', overflow: 'auto' }} className="no-scrollbar">
+      <div style={{ flex: '0 0 clamp(360px, 42%, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px clamp(20px,4vw,56px)', overflow: 'auto', width: '100%' }} className="no-scrollbar auth-content">
         {mode === 'signin'
           ? <SignInForm onSwitch={() => setMode('signup')} onSuccess={() => {}} />
-          : <SignUpFlow onSwitch={() => setMode('signin')} />
+          : mode === 'signup'
+          ? <SignUpFlow onSwitch={() => setMode('signin')} onConfirm={(email) => { setConfirmedEmail(email); setMode('confirm'); }} />
+          : <CheckEmailScreen email={confirmedEmail} onBackToSignIn={() => setMode('signin')} />
         }
       </div>
     </div>

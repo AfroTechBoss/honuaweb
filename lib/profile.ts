@@ -26,10 +26,10 @@ export async function getProfilePosts(userId: string) {
     .from("posts")
     .select(`
       *,
-      profile:profiles(id, handle, full_name, avatar_url, verified),
+      profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified),
       original:original_post_id (
         *,
-        profile:profiles(id, handle, full_name, avatar_url, verified)
+        profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)
       )
     `)
     .eq("user_id", userId)

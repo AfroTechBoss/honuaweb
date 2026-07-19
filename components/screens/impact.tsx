@@ -7,13 +7,13 @@ import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal,
 export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="impact" onNav={onNav} />
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>YOUR IMPACT · MAY 2026</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>YOUR IMPACT · MAY 2026</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 38, fontWeight: 600, letterSpacing: '-0.03em' }}>You're offsetting <span style={{ color: 'var(--green)' }}>1.4 tonnes</span> of CO₂ this year.</h1>
             <p style={{ margin: '6px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>That's the equivalent of taking a car off the road for 3.5 months. Keep going.</p>
           </div>
@@ -24,7 +24,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
         </div>
 
         {/* KPI cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
+        <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
           <KpiCard label="CO₂ avoided" value="164" unit="kg" delta="+12% vs Apr" color="var(--green)" icon="leaf" big />
           <KpiCard label="Trees funded" value="42" unit="trees" delta="+8 this month" color="var(--green-2)" icon="plant" />
           <KpiCard label="Water saved" value="3,840" unit="liters" delta="+220 L" color="var(--sky)" icon="droplet" />
@@ -32,7 +32,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
         </div>
 
         {/* Main chart + breakdown */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18, marginBottom: 18 }}>
+        <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18, marginBottom: 18 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 22 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <div>
@@ -61,8 +61,8 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
               background: 'linear-gradient(135deg, #1f6f3f, #2e9a5b)',
               borderRadius: 16, padding: 22, color: '#fff', position: 'relative', overflow: 'hidden',
             }}>
-              <div style={{ fontSize: 11, fontFamily: 'Geist Mono', opacity: .85, letterSpacing: '.05em' }}>CURRENT STREAK</div>
-              <div style={{ fontSize: 56, fontWeight: 600, fontFamily: 'Bricolage Grotesque', letterSpacing: '-0.04em', lineHeight: 1 }}>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .85, letterSpacing: '.05em' }}>CURRENT STREAK</div>
+              <div style={{ fontSize: 56, fontWeight: 600, fontFamily: 'Lora', letterSpacing: '-0.04em', lineHeight: 1 }}>
                 12<span style={{ fontSize: 24, opacity: .7 }}> days</span>
               </div>
               <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
@@ -76,19 +76,19 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
             <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 22 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span className="font-display" style={{ fontSize: 16, fontWeight: 600 }}>Level 7 · Composter</span>
-                <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>1240 / 2000 GP</span>
+                <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>1240 / 2000 GP</span>
               </div>
               <div style={{ height: 8, background: 'var(--line)', borderRadius: 999 }}>
                 <div style={{ width: '62%', height: '100%', background: 'var(--green)', borderRadius: 999 }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 14 }}>
-                {['🌱', '🌿', '🌳', '🏆'].map((e, i) => (
+                {['leaf', 'leaf', 'tree', 'award'].map((icon, i) => (
                   <div key={i} style={{
                     aspectRatio: '1', borderRadius: 10,
                     border: '1px dashed var(--line-2)',
-                    display: 'grid', placeItems: 'center', fontSize: 22,
+                    display: 'grid', placeItems: 'center',
                     opacity: i < 2 ? 1 : 0.3,
-                  }}>{e}</div>
+                  }}><Icon name={icon} size={20} color="var(--green)" /></div>
                 ))}
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 10 }}>2 of 4 badges this season</div>
@@ -122,11 +122,11 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 500, fontSize: 14 }}>{t}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{when}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{when}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--green)' }}>{gp}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{im}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{im}</div>
                 </div>
                 {verified && <VerifiedImpact value="✓" unit="" />}
               </div>
@@ -152,13 +152,13 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
                 padding: isYou ? '10px 8px' : '10px 0',
                 borderRadius: isYou ? 10 : 0,
               }}>
-                <span style={{ width: 22, fontFamily: 'Geist Mono', fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{rank}</span>
+                <span style={{ width: 22, fontFamily: 'JetBrains Mono', fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{rank}</span>
                 <Avatar name={n} size={32} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{n} {isYou && <span style={{ color: 'var(--green)', fontSize: 11 }}>(you)</span>}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono' }}>{h}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{h}</div>
                 </div>
-                <div style={{ fontFamily: 'Geist Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>−{v}</div>
+                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>−{v}</div>
               </div>
             ))}
           </div>
@@ -182,11 +182,11 @@ export function KpiCard({ label, value, unit, delta, color, icon, big }: { label
       }}>
         <Icon name={icon} size={16} stroke={2} />
       </div>
-      <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'Geist Mono', letterSpacing: '.05em' }}>{label.toUpperCase()}</div>
-      <div style={{ fontSize: big ? 38 : 32, fontWeight: 600, fontFamily: 'Bricolage Grotesque', letterSpacing: '-0.03em', marginTop: 6 }}>
+      <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: big ? 38 : 32, fontWeight: 600, fontFamily: 'Lora', letterSpacing: '-0.03em', marginTop: 6 }}>
         {value}<span style={{ fontSize: 14, color: 'var(--ink-3)', fontWeight: 500 }}> {unit}</span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--green)', marginTop: 4, fontFamily: 'Geist Mono' }}>↗ {delta}</div>
+      <div style={{ fontSize: 12, color: 'var(--green)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>↗ {delta}</div>
     </div>
   );
 };
@@ -232,7 +232,7 @@ export function BarChart() {
         );
       })}
       {[1, 8, 15, 22, 29].map(d => (
-        <text key={d} x={d * 16 + 8} y="218" fontSize="9" fontFamily="Geist Mono" textAnchor="middle" fill="var(--ink-4)">May {d}</text>
+        <text key={d} x={d * 16 + 8} y="218" fontSize="9" fontFamily="JetBrains Mono" textAnchor="middle" fill="var(--ink-4)">May {d}</text>
       ))}
     </svg>
   );

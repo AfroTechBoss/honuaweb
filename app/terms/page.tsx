@@ -77,12 +77,12 @@ export default function TermsPage() {
 
   return (
     // position:fixed + overflow-y:auto escapes #honua-app { overflow:hidden }
-    <div ref={scrollRef} style={{ position: "fixed", inset: 0, overflowY: "auto", background: "var(--bg)", color: "var(--ink)", fontFamily: "Geist, sans-serif", zIndex: 10 }}>
+    <div ref={scrollRef} style={{ position: "fixed", inset: 0, overflowY: "auto", background: "var(--bg)", color: "var(--ink)", fontFamily: "Satoshi, sans-serif", zIndex: 10 }}>
       {/* Header */}
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--bg)", borderBottom: "1px solid var(--line)", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--green)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 17, fontFamily: "Bricolage Grotesque, sans-serif", letterSpacing: "-0.05em" }}>h</span>
-          <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink)", fontFamily: "Bricolage Grotesque, sans-serif" }}>honua</span>
+          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--green)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 17, fontFamily: "Lora, sans-serif", letterSpacing: "-0.05em" }}>h</span>
+          <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink)", fontFamily: "Lora, sans-serif" }}>honua</span>
         </Link>
         <Link href="/login" style={{ fontSize: 13, color: "var(--green)", fontWeight: 600, textDecoration: "none" }}>← Back to sign up</Link>
       </header>
@@ -90,7 +90,7 @@ export default function TermsPage() {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 24px 80px", display: "flex", gap: 64, alignItems: "flex-start" }}>
         {/* Sidebar TOC */}
         <aside style={{ width: 220, flexShrink: 0, position: "sticky", top: 74, maxHeight: "calc(100vh - 90px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }} className="toc-aside no-scrollbar">
-          <div style={{ fontSize: 11, fontFamily: "Geist Mono", color: "var(--ink-4)", letterSpacing: ".08em", marginBottom: 10, textTransform: "uppercase" }}>Contents</div>
+          <div style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--ink-4)", letterSpacing: ".08em", marginBottom: 10, textTransform: "uppercase" }}>Contents</div>
           {SECTIONS.map((s, i) => {
             const id = `s${i + 1}`;
             const isActive = active === id;
@@ -103,8 +103,8 @@ export default function TermsPage() {
         {/* Body */}
         <main style={{ flex: 1, minWidth: 0 }}>
           <div style={{ marginBottom: 40 }}>
-            <h1 style={{ fontFamily: "Bricolage Grotesque, sans-serif", fontSize: "clamp(30px,4vw,48px)", fontWeight: 700, letterSpacing: "-0.03em", margin: "0 0 14px", lineHeight: 1.05 }}>Terms of Service &amp; Privacy Policy</h1>
-            <div style={{ display: "flex", gap: 20, fontSize: 13, color: "var(--ink-3)", fontFamily: "Geist Mono", flexWrap: "wrap" }}>
+            <h1 style={{ fontFamily: "Lora, sans-serif", fontSize: "clamp(30px,4vw,48px)", fontWeight: 700, letterSpacing: "-0.03em", margin: "0 0 14px", lineHeight: 1.05 }}>Terms of Service &amp; Privacy Policy</h1>
+            <div style={{ display: "flex", gap: 20, fontSize: 13, color: "var(--ink-3)", fontFamily: "JetBrains Mono", flexWrap: "wrap" }}>
               <span>Last updated: {last}</span>
               <span>Effective: {effective}</span>
               <span>Version 1.0</span>
@@ -469,7 +469,7 @@ export default function TermsPage() {
           {/* ── 19. DMCA ── */}
           <Section id="s19" title="19. Digital Millennium Copyright Act (DMCA)">
             <P>Honua respects intellectual property rights and complies with the DMCA. If you believe that User Content on our Platform infringes your copyright, submit a notice to our Designated Copyright Agent:</P>
-            <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 20px", fontSize: 14, fontFamily: "Geist Mono", marginBottom: 16, lineHeight: 2 }}>
+            <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 20px", fontSize: 14, fontFamily: "JetBrains Mono", marginBottom: 16, lineHeight: 2 }}>
               <div>Copyright Agent — Honua Cooperative Ltd</div>
               <div>Email: dmca@honua.earth</div>
               <div>Subject: DMCA Takedown Notice</div>
@@ -520,7 +520,7 @@ export default function TermsPage() {
                 ["Marketplace disputes", "marketplace@honua.earth"],
               ].map(([label, email]) => (
                 <div key={email} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 11, fontFamily: "Geist Mono", color: "var(--ink-4)", marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--ink-4)", marginBottom: 4 }}>{label}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>{email}</div>
                 </div>
               ))}

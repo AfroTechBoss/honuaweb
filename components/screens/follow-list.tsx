@@ -44,7 +44,7 @@ export function DesktopFollowList({ onNav, params, mode }: { onNav?: any; params
               <Avatar src={owner.avatar} name={owner.name} size={48} verified={owner.verified} />
               <div>
                 <h1 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em" }}>{owner.name}</h1>
-                <div style={{ fontSize: 13, color: "var(--ink-3)", fontFamily: "Geist Mono" }}>@{owner.handle}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)", fontFamily: "JetBrains Mono" }}>@{owner.handle}</div>
               </div>
             </div>
 
@@ -81,7 +81,7 @@ export function DesktopFollowList({ onNav, params, mode }: { onNav?: any; params
                       <span style={{ fontSize: 15, fontWeight: 600 }}>{u.name}</span>
                       {u.verified && <span style={{ background: "var(--sky)", color: "#fff", width: 14, height: 14, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 9 }}>✓</span>}
                     </div>
-                    <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontFamily: "Geist Mono" }}>@{u.handle} · {u.score} impact</div>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontFamily: "JetBrains Mono" }}>@{u.handle} · {u.score} impact</div>
                     <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 3, maxWidth: 440, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {u.handle === "sarahgreen" ? "Community solar organizer in Cascadia." : u.handle === "greentech" ? "Next-gen wind turbine technology." : "Working to shrink my footprint, one logged action at a time."}
                     </div>

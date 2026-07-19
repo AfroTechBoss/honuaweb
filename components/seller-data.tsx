@@ -38,9 +38,9 @@ export function SBadge({ status, dot = true, size = 'md' }) {
       padding: pad, borderRadius: 999,
       background: sTint(meta.color), color: meta.color,
       fontSize: size === 'sm' ? 11 : 12, fontWeight: 600,
-      fontFamily: 'Geist Mono', letterSpacing: '-0.01em', whiteSpace: 'nowrap',
+      fontFamily: 'JetBrains Mono', letterSpacing: '-0.01em', whiteSpace: 'nowrap',
     }}>
-      {dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: meta.color }} />}
+      {dot && <span style={{ width: 6, height: 6, minWidth: 6, minHeight: 6, borderRadius: '50%', background: meta.color, flexShrink: 0 }} />}
       {meta.label}
     </span>
   );
@@ -68,7 +68,7 @@ export function SStat({ label, value, sub, icon, accent = 'var(--green)', trend 
       {(sub || trend) && (
         <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
           {trend != null && (
-            <span style={{ color: trend >= 0 ? 'var(--green)' : 'var(--clay)', fontWeight: 600, fontFamily: 'Geist Mono' }}>
+            <span style={{ color: trend >= 0 ? 'var(--green)' : 'var(--clay)', fontWeight: 600, fontFamily: 'JetBrains Mono' }}>
               {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
             </span>
           )}
@@ -113,7 +113,7 @@ export function SStepper({ steps, current, onJump, compact }) {
             }}>
               <span style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 600, fontFamily: 'Geist Mono',
+                display: 'grid', placeItems: 'center', fontSize: 12.5, fontWeight: 600, fontFamily: 'JetBrains Mono',
                 background: active ? 'var(--green)' : done ? 'var(--green-tint)' : 'var(--bg-2)',
                 color: active ? '#fff' : done ? 'var(--green)' : 'var(--ink-4)',
                 border: active ? 'none' : '1px solid var(--line)',
@@ -141,7 +141,7 @@ export function SHead({ kicker, title, children }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
       <div>
-        {kicker && <div style={{ fontSize: 12, fontFamily: 'Geist Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>{kicker}</div>}
+        {kicker && <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>{kicker}</div>}
         <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em' }}>{title}</h1>
       </div>
       {children && <div style={{ display: 'flex', gap: 8 }}>{children}</div>}
@@ -208,8 +208,8 @@ export const MOCK_SELLER = {
   threads: [
     { handle: 'marcus', name: 'Marcus Johnson', last: 'Is the repair kit restocking soon?', time: '8m', unread: 2, online: true,
       msgs: [ ['them', 'Hey! Love the repair kit — is it restocking soon?'], ['them', 'Want to gift one for a workshop.'] ] },
-    { handle: 'maya', name: 'Maya Patel', last: 'Thanks — tracking came through 🙌', time: '2h', unread: 0, online: true,
-      msgs: [ ['them', 'Order arrived, the multi-tool is perfect.'], ['me', 'So glad! Tag us if you post a repair 🔧'], ['them', 'Thanks — tracking came through 🙌'] ] },
+    { handle: 'maya', name: 'Maya Patel', last: 'Thanks — tracking came through.', time: '2h', unread: 0, online: true,
+      msgs: [ ['them', 'Order arrived, the multi-tool is perfect.'], ['me', 'So glad! Tag us if you post a repair.'], ['them', 'Thanks — tracking came through.'] ] },
     { handle: 'tara', name: 'Tara Lin', last: 'Could you do a bulk order of 20?', time: '1d', unread: 1, online: false,
       msgs: [ ['them', 'Could you do a bulk order of 20 darning mushrooms for a mending circle?'] ] },
     { handle: 'okafor', name: 'Dr. Adaeze Okafor', last: 'The guide was super clear, thank you.', time: '2d', unread: 0, online: false,
