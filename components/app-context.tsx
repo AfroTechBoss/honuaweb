@@ -323,14 +323,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (p.old.user_id === userId) return;
         bumpDelta(p.old.post_id, 'reposts', -1);
       })
-      // Incoming notification for this user
+      // Incoming notification for this user (Realtime — requires migration to be run)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => {
         setUnreadNotifs(n => n + 1);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [st.user?.id, bumpDelta]);
+    // Polling fallback: re-check unread count every 20s so notifications show
+    // even if the Realtime subscription for notifications isn't active yet.
+    const poll = setInterval(() => refreshUnread(userId), 20_000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
+  }, [st.user?.id, bumpDelta, refreshUnread]);
 
   // login / logout are now thin wrappers — the auth listener does the real state update
   const login = useCallback(async (email: string, password: string) => {
