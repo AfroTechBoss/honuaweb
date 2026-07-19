@@ -789,11 +789,6 @@ function SocialButtons({ onGoogle, onApple }: { onGoogle: () => void; onApple: (
         Continue with Apple
         <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'JetBrains Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
       </button>
-      <button style={{ ...btn, opacity: .5, cursor: 'not-allowed', position: 'relative' }} disabled>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#FCFF52" strokeWidth="2"/><path d="M12 7v5l3 3" stroke="#FCFF52" strokeWidth="2" strokeLinecap="round"/></svg>
-        Continue with Celo Wallet
-        <span style={{ position: 'absolute', right: 12, fontSize: 10, fontFamily: 'JetBrains Mono', background: 'var(--bg-2)', color: 'var(--ink-3)', padding: '2px 7px', borderRadius: 999, border: '1px solid var(--line)' }}>Coming soon</span>
-      </button>
     </>
   );
 }
