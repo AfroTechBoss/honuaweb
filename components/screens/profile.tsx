@@ -108,7 +108,7 @@ export function DesktopProfile({ onNav, params }) {
       <DesktopSidebar active="profile" onNav={onNav} />
       <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
         {/* Cover */}
-        <div style={{
+        <div className="profile-cover" style={{
           height: 180,
           background: profile.cover_url
             ? `url(${profile.cover_url}) center/cover`
@@ -131,7 +131,7 @@ export function DesktopProfile({ onNav, params }) {
         <div className="profile-content" style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
           {/* Identity row */}
           <div className="profile-identity-row" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -50, marginBottom: 18, position: 'relative', zIndex: 1 }}>
-            <div style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+            <div className="profile-avatar-wrap" style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
               <Avatar src={profile.avatar_url} name={profile.full_name} size={132} verified={profile.verified} />
               {isOwn && (
                 <div onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Avatar change coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)', display: 'grid', placeItems: 'center', opacity: 0, cursor: 'pointer', transition: 'opacity .15s' }} className="avatar-edit-overlay">
@@ -141,7 +141,7 @@ export function DesktopProfile({ onNav, params }) {
             </div>
             <div style={{ flex: 1, paddingBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h1 className="font-display" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
+                <h1 className="font-display profile-name" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
                 {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
                 {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
               </div>
@@ -151,7 +151,7 @@ export function DesktopProfile({ onNav, params }) {
                 {joinedDate && ` · Joined ${joinedDate}`}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, paddingBottom: 8 }}>
+            <div className="profile-actions" style={{ display: 'flex', gap: 8, paddingBottom: 8 }}>
               {isOwn ? (
                 <>
                   <button className="btn btn-ghost" onClick={() => { navigator.clipboard?.writeText(window.location.href); app.toast?.({ msg: 'Link copied', icon: 'share' }); }}><Icon name="share" size={14} /> Share</button>
@@ -212,7 +212,7 @@ export function DesktopProfile({ onNav, params }) {
           )}
 
           {/* Tabs */}
-          <div style={{ borderBottom: '1px solid var(--line)', marginBottom: 18, display: 'flex', gap: 4 }}>
+          <div className="profile-tabs" style={{ borderBottom: '1px solid var(--line)', marginBottom: 18, display: 'flex', gap: 4 }}>
             {['Posts', 'Reposts', 'Projects', 'Achievements', 'Media'].map(t => (
               <button key={t} onClick={() => setTab(t.toLowerCase())} style={{
                 background: 'transparent', border: 'none', padding: '12px 16px',
