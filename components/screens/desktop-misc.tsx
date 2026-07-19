@@ -797,8 +797,8 @@ function BrandPanel() {
         <circle cx="470" cy="150" r="60" fill="rgba(255,255,255,.12)"/>
       </svg>
       <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ width: 34, height: 34, borderRadius: 9, background: '#fff', color: 'var(--green)', display: 'grid', placeItems: 'center', fontFamily: 'Lora', fontWeight: 700, fontSize: 19, letterSpacing: '-0.05em' }}>h</span>
-        <span className="font-display" style={{ color: '#fff', fontWeight: 600, fontSize: 21 }}>honua</span>
+        <span style={{ width: 34, height: 34, borderRadius: 9, background: '#fff', color: 'var(--green)', display: 'grid', placeItems: 'center', fontFamily: 'Lora', fontWeight: 700, fontSize: 19, letterSpacing: '-0.05em' }}>H</span>
+        <span className="font-display" style={{ color: '#fff', fontWeight: 600, fontSize: 21 }}>Honua</span>
       </div>
       <div style={{ position: 'relative', color: '#fff' }}>
         <h1 className="font-display" style={{ fontSize: 'clamp(30px,3.4vw,46px)', fontWeight: 600, lineHeight: 1.05, letterSpacing: '-0.03em', margin: 0, maxWidth: '14ch' }}>The social network for people fixing the planet.</h1>
