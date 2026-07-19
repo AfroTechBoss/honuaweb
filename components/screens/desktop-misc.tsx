@@ -258,7 +258,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
   React.useEffect(() => {
     if (!app.user?.id) { setLoading(false); return; }
     getNotifications(app.user.id).then(data => { setItems(data); setLoading(false); });
-  }, [app.user?.id]);
+  }, [app.user?.id, app.unreadNotifs]);
 
   const handleMarkAllRead = async () => {
     if (!app.user?.id) return;

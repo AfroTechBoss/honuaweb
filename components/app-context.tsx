@@ -269,6 +269,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await supabase.from('post_reposts').delete().match({ user_id: st.user.id, post_id: postId });
         } else {
           await supabase.from('post_reposts').insert({ user_id: st.user.id, post_id: postId });
+          const { data: post } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+          if (post?.user_id) {
+            await createNotification({ userId: post.user_id, actorId: st.user.id, type: 'like', postId, body: 'reposted your post' });
+          }
         }
       } catch {}
     },
