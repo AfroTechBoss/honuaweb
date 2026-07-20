@@ -445,6 +445,8 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
           0%, 60%, 100% { transform: translateY(0); }
           30% { transform: translateY(-6px); }
         }
+        .msg-time-hover { opacity: 0; max-height: 0; overflow: hidden; transition: opacity 0.15s, max-height 0.15s; }
+        .msg-row:hover .msg-time-hover { opacity: 1; max-height: 20px; }
       `}</style>
       <DesktopSidebar active="messages" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -550,32 +552,37 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
 
             {/* Messages area */}
             <div style={{ flex: 1, padding: '20px 24px', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
-              {groupedMessages.map(({ date, msgs }) => (
-                <React.Fragment key={date}>
-                  <DayLabel l={date} />
-                  {msgs.map(m => {
-                    const isMe = m.sender_id === userId;
-                    return (
-                      <div key={m.id} style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
-                          <div style={{
-                            background: isMe ? 'var(--green)' : 'var(--surface)',
-                            color: isMe ? '#fff' : 'var(--ink)',
-                            border: isMe ? 'none' : '1px solid var(--line)',
-                            padding: '10px 14px',
-                            borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                            fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                          }}>{m.content}</div>
-                          <div style={{ fontSize: 10, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
-                            {msgTimeAgo(m.created_at)}
-                            {isMe && isAccepted && m.seen_at && ' · Seen'}
+              {(() => {
+                const allMsgs = groupedMessages.flatMap(g => g.msgs);
+                const lastId = allMsgs[allMsgs.length - 1]?.id;
+                return groupedMessages.map(({ date, msgs }) => (
+                  <React.Fragment key={date}>
+                    <DayLabel l={date} />
+                    {msgs.map(m => {
+                      const isMe = m.sender_id === userId;
+                      const isLast = m.id === lastId;
+                      return (
+                        <div key={m.id} className="msg-row" style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+                          <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
+                            <div style={{
+                              background: isMe ? 'var(--green)' : 'var(--surface)',
+                              color: isMe ? '#fff' : 'var(--ink)',
+                              border: isMe ? 'none' : '1px solid var(--line)',
+                              padding: '10px 14px',
+                              borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                              fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            }}>{m.content}</div>
+                            <div className={isLast ? '' : 'msg-time-hover'} style={{ fontSize: 10, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
+                              {msgTimeAgo(m.created_at)}
+                              {isMe && isAccepted && m.seen_at && ' · Seen'}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
+                      );
+                    })}
+                  </React.Fragment>
+                ));
+              })()}
               {otherTyping && <TypingBubble />}
               <div ref={messagesEndRef} />
             </div>
