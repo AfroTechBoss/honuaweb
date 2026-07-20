@@ -46,6 +46,7 @@ export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor", f
     download: <><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></>,
     edit: <><path d="M11 4H4v16h16v-7" /><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></>,
     star: <path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.5 9.9 9 9z" />,
+    flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><path d="M4 22v-7" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     minus: <path d="M5 12h14" />,
     cart: <><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.5 13h11l2-9H6" /></>,

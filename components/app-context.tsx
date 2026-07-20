@@ -27,6 +27,7 @@ export function pathFor(key: string, params: any = {}): string {
     case "following": return params?.handle ? `/following/${params.handle}` : "/following";
     case "post": return `/post/${params?.id ?? 1}`;
     case "settings": return "/settings";
+    case "terms": return "/terms";
     case "auth": return "/login";
     case "sell": return "/sell";
     case "seller": return "/seller";

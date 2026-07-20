@@ -335,6 +335,83 @@ function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
   );
 }
 
+const REPORT_OPTIONS_LIST = ['Spam or misleading','Hate speech or harassment','Violence or dangerous content','False information','Nudity or sexual content','Intellectual property violation','Other'];
+
+function PostMoreMenu({ profile, postId }: { profile: any; postId: string }) {
+  const app = useApp();
+  const [open, setOpen] = React.useState(false);
+  const [showReport, setShowReport] = React.useState(false);
+  const [reason, setReason] = React.useState('');
+  const [submitted, setSubmitted] = React.useState(false);
+
+  const handleMute = (e: React.MouseEvent) => {
+    e.stopPropagation(); setOpen(false);
+    app.toast?.({ msg: `@${profile?.handle} muted`, sub: "You won't see their posts in your feed.", icon: 'bell' });
+  };
+  const handleReport = (e: React.MouseEvent) => {
+    e.stopPropagation(); setOpen(false); setReason(''); setSubmitted(false); setShowReport(true);
+  };
+  const submit = (e: React.MouseEvent) => {
+    e.stopPropagation(); if (!reason) return;
+    setSubmitted(true);
+    setTimeout(() => { setShowReport(false); setSubmitted(false); }, 1800);
+    app.toast?.({ msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
+  };
+
+  return (
+    <div style={{ position: 'relative', marginLeft: 'auto' }} onClick={e => e.stopPropagation()}>
+      <button onClick={e => { e.stopPropagation(); setOpen(o => !o); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: '2px 4px', borderRadius: 6, display: 'grid', placeItems: 'center' }}>
+        <Icon name="more" size={15} />
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
+          <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
+            <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
+              <Icon name="bell" size={15} /> Mute @{profile?.handle}
+            </button>
+            <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+              <Icon name="flag" size={15} /> Report post
+            </button>
+          </div>
+        </>
+      )}
+      {showReport && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { e.stopPropagation(); setShowReport(false); }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 28, width: 380, maxWidth: '90vw', boxShadow: '0 16px 48px rgba(0,0,0,.18)' }} onClick={e => e.stopPropagation()}>
+            {submitted ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Report submitted</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>Thanks for keeping Honua safe.</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>Report post</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 18 }}>Why are you reporting this post?</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                  {REPORT_OPTIONS_LIST.map(opt => (
+                    <button key={opt} onClick={() => setReason(opt)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${reason === opt ? 'var(--green)' : 'var(--line)'}`, background: reason === opt ? 'var(--green-tint)' : 'var(--bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', fontWeight: reason === opt ? 600 : 400 }}>
+                      <span style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${reason === opt ? 'var(--green)' : 'var(--line-2)'}`, background: reason === opt ? 'var(--green)' : 'transparent', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+                        {reason === opt && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                      </span>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowReport(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
+                  <button onClick={submit} disabled={!reason} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reason ? 'var(--clay)' : 'var(--line)', cursor: reason ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>Submit report</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any; isRepost?: boolean }) {
   const app = useApp();
   const profile = post.profile;
@@ -363,6 +440,7 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
+            <PostMoreMenu profile={profile} postId={post.id} />
           </div>
           {(isRepost && original ? original.content : post.content) && (
             <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }}>{isRepost && original ? original.content : post.content}</p>

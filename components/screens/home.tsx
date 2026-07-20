@@ -428,6 +428,42 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
   const [showShare, setShowShare] = React.useState(false);
   const [showBookmark, setShowBookmark] = React.useState(false);
   const [lightbox, setLightbox] = React.useState<string | null>(null);
+  const [showMenu, setShowMenu] = React.useState(false);
+  const [showReport, setShowReport] = React.useState(false);
+  const [reportReason, setReportReason] = React.useState('');
+  const [reportSubmitted, setReportSubmitted] = React.useState(false);
+
+  const REPORT_OPTIONS = [
+    'Spam or misleading',
+    'Hate speech or harassment',
+    'Violence or dangerous content',
+    'False information',
+    'Nudity or sexual content',
+    'Intellectual property violation',
+    'Other',
+  ];
+
+  const handleReport = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    setReportSubmitted(false);
+    setReportReason('');
+    setShowReport(true);
+  };
+
+  const submitReport = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!reportReason) return;
+    setReportSubmitted(true);
+    setTimeout(() => { setShowReport(false); setReportSubmitted(false); }, 1800);
+    app.toast?.({ msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
+  };
+
+  const handleMute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    app.toast?.({ msg: `@${displayProfile?.handle} muted`, sub: "You won't see their posts in your feed.", icon: 'bell' });
+  };
 
   const timeAgo = (ts: string) => {
     const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -463,7 +499,58 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
           </div>
           <div style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginTop: 2, textTransform: 'capitalize' }}>{post.post_type}</div>
         </div>
+        {/* ··· menu */}
+        <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+          <button onClick={e => { e.stopPropagation(); setShowMenu(m => !m); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: '4px 6px', borderRadius: 8, display: 'grid', placeItems: 'center' }}><Icon name="more" size={16} /></button>
+          {showMenu && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowMenu(false)} />
+              <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
+                <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
+                  <Icon name="bell" size={15} /> Mute @{displayProfile?.handle}
+                </button>
+                <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                  <Icon name="flag" size={15} /> Report post
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </header>
+
+      {/* Report modal */}
+      {showReport && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { e.stopPropagation(); setShowReport(false); }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 28, width: 380, maxWidth: '90vw', boxShadow: '0 16px 48px rgba(0,0,0,.18)' }} onClick={e => e.stopPropagation()}>
+            {reportSubmitted ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Report submitted</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>Thanks for keeping Honua safe.</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>Report post</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 18 }}>Why are you reporting this post?</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                  {REPORT_OPTIONS.map(opt => (
+                    <button key={opt} onClick={() => setReportReason(opt)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${reportReason === opt ? 'var(--green)' : 'var(--line)'}`, background: reportReason === opt ? 'var(--green-tint)' : 'var(--bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', fontWeight: reportReason === opt ? 600 : 400 }}>
+                      <span style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${reportReason === opt ? 'var(--green)' : 'var(--line-2)'}`, background: reportReason === opt ? 'var(--green)' : 'transparent', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+                        {reportReason === opt && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                      </span>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowReport(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
+                  <button onClick={submitReport} disabled={!reportReason} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reportReason ? 'var(--clay)' : 'var(--line)', cursor: reportReason ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>Submit report</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {displayContent && (
         <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>
