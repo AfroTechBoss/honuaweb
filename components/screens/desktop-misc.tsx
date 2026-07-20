@@ -237,11 +237,11 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
     let ch1: any, ch2: any;
     (async () => {
       const { supabase } = await import('@/lib/supabase');
-      const ts = Date.now();
-      ch1 = supabase.channel(`convos-u1-${userId}-${ts}`)
+      const rid = Math.random().toString(36).slice(2);
+      ch1 = supabase.channel(`convos-u1-${userId}-${rid}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user1_id=eq.${userId}` }, loadConvos)
         .subscribe();
-      ch2 = supabase.channel(`convos-u2-${userId}-${ts}`)
+      ch2 = supabase.channel(`convos-u2-${userId}-${rid}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user2_id=eq.${userId}` }, loadConvos)
         .subscribe();
     })();
