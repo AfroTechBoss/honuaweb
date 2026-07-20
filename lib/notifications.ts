@@ -29,14 +29,28 @@ export async function createNotification({
 }
 
 export async function getNotifications(userId: string) {
+  // Fetch notifications without join first (FK may not exist on pre-existing table)
   const { data, error } = await supabase
     .from("notifications")
-    .select("*, actor:profiles(id, handle, full_name, avatar_url)")
+    .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(60);
-  if (error) console.error('[notifications] getNotifications failed:', error.message);
-  return data ?? [];
+  if (error) { console.error('[notifications] getNotifications failed:', error.message); return []; }
+  if (!data?.length) return [];
+
+  // Fetch actor profiles separately
+  const actorIds = [...new Set(data.map((n: any) => n.actor_id).filter(Boolean))];
+  let actorMap: Record<string, any> = {};
+  if (actorIds.length) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, handle, full_name, avatar_url")
+      .in("id", actorIds);
+    (profiles ?? []).forEach((p: any) => { actorMap[p.id] = p; });
+  }
+
+  return data.map((n: any) => ({ ...n, actor: actorMap[n.actor_id] ?? null }));
 }
 
 export async function markAllRead(userId: string) {
