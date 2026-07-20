@@ -288,12 +288,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabase.from('post_likes').select('post_id').eq('user_id', userId),
       supabase.from('post_reposts').select('post_id').eq('user_id', userId),
       getBookmarkedPostIds(userId),
-    ]).then(([{ data: likes }, { data: reposts }, savedIds]) => {
+      supabase.from('follows').select('profiles!follows_following_id_fkey(id, handle)').eq('follower_id', userId),
+    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }]) => {
+      const followedHandles = (follows ?? []).map((f: any) => f.profiles?.handle).filter(Boolean);
       setSt((s: any) => ({
         ...s,
         liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
         reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
         saved: savedIds.length ? savedIds : s.saved,
+        following: followedHandles.length ? followedHandles : s.following,
       }));
     }).catch(() => {});
     refreshUnread(userId);
@@ -443,7 +446,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     mutedUsers: st.mutedUsers as string[],
     muteUser: (userId: string) => setSt((s: any) => ({ ...s, mutedUsers: s.mutedUsers.includes(userId) ? s.mutedUsers : [...s.mutedUsers, userId] })),
-    like: dbLike, save: dbSave, follow: mk("following"),
+    like: dbLike, save: dbSave,
+    follow: {
+      has: (handle: any) => st.following.includes(handle),
+      toggle: async (handle: any) => {
+        if (!handle || !st.user?.id) return;
+        const isFollowing = st.following.includes(handle);
+        // Optimistic update
+        setSt((s: any) => ({ ...s, following: isFollowing ? s.following.filter((x: any) => x !== handle) : [...s.following, handle] }));
+        try {
+          const { data: profile } = await supabase.from('profiles').select('id').eq('handle', handle).single();
+          if (!profile?.id) return;
+          if (isFollowing) {
+            await supabase.from('follows').delete().match({ follower_id: st.user.id, following_id: profile.id });
+          } else {
+            await supabase.from('follows').insert({ follower_id: st.user.id, following_id: profile.id });
+          }
+        } catch {}
+      },
+      add: (handle: any) => setSt((s: any) => ({ ...s, following: s.following.includes(handle) ? s.following : [...s.following, handle] })),
+      remove: (handle: any) => setSt((s: any) => ({ ...s, following: s.following.filter((x: any) => x !== handle) })),
+    },
     repost: dbRepost,
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),
     cart: st.cart, cartCount: st.cart.length,

@@ -575,6 +575,9 @@ export function DesktopPostDetail({ onNav, params }) {
               {app.user?.id !== (dbPost?.user_id) && displayProfile?.handle !== app.user?.handle && (
                 <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
               )}
+              {displayProfile?.handle !== app.user?.handle && (
+                <PostMoreMenu profile={displayProfile} postId={post.id} />
+              )}
             </header>
             <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>
               {(isMock ? (post as any).content : post.content)?.split(/(\s+)/).map((word: string, i: number) => {
