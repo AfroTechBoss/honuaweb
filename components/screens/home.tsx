@@ -307,17 +307,37 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
     setLoadingFeed(true);
     try {
       const { supabase } = await import('@/lib/supabase');
-      let query = supabase
-        .from('posts')
-        .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
-      const { data } = await query;
-      setDbPosts(data ?? []);
+
+      if (tab === 'following') {
+        const userId = app.user?.id;
+        if (!userId) { setDbPosts([]); setLoadingFeed(false); return; }
+        // Get IDs of users this person follows
+        const { data: follows } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', userId);
+        const followingIds = (follows ?? []).map((f: any) => f.following_id).filter(Boolean);
+        if (!followingIds.length) { setDbPosts([]); setLoadingFeed(false); return; }
+        const { data } = await supabase
+          .from('posts')
+          .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+          .in('user_id', followingIds)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        setDbPosts(data ?? []);
+      } else {
+        let query = supabase
+          .from('posts')
+          .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
+        const { data } = await query;
+        setDbPosts(data ?? []);
+      }
     } catch {}
     setLoadingFeed(false);
-  }, [tab]);
+  }, [tab, app.user?.id]);
 
   React.useEffect(() => { fetchFeed(); }, [fetchFeed]);
 
