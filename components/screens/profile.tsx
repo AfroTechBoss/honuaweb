@@ -129,8 +129,8 @@ export function DesktopProfile({ onNav, params }) {
         </div>
 
         <div className="profile-content" style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
-          {/* Identity row */}
-          <div className="profile-identity-row" style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -50, marginBottom: 18, position: 'relative', zIndex: 1 }}>
+          {/* Avatar row — straddles cover */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -72, marginBottom: 0, position: 'relative', zIndex: 1 }}>
             <div className="profile-avatar-wrap" style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
               <Avatar src={profile.avatar_url} name={profile.full_name} size={132} verified={profile.verified} />
               {isOwn && (
@@ -138,18 +138,6 @@ export function DesktopProfile({ onNav, params }) {
                   <Icon name="edit" size={20} />
                 </div>
               )}
-            </div>
-            <div style={{ flex: 1, paddingBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h1 className="font-display profile-name" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
-                {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
-                {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
-              </div>
-              <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
-                @{profile.handle}
-                {profile.location && ` · ${profile.location}`}
-                {joinedDate && ` · Joined ${joinedDate}`}
-              </div>
             </div>
             <div className="profile-actions" style={{ display: 'flex', gap: 8, paddingBottom: 8 }}>
               {isOwn ? (
@@ -165,6 +153,23 @@ export function DesktopProfile({ onNav, params }) {
                 </>
               )}
             </div>
+          </div>
+
+          {/* Identity: name + handle — always below cover */}
+          <div className="profile-identity-row" style={{ marginBottom: 18, paddingTop: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h1 className="font-display profile-name" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
+              {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
+              {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
+              @{profile.handle}
+              {profile.location && ` · ${profile.location}`}
+              {joinedDate && ` · Joined ${joinedDate}`}
+            </div>
+          </div>
+          <div style={{ display: 'none' }}>{/* legacy identity row spacer */}</div>
+          <div className="profile-identity-row-actions" style={{ display: 'none' }}>
           </div>
 
           {/* Bio + stats */}

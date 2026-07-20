@@ -289,14 +289,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabase.from('post_reposts').select('post_id').eq('user_id', userId),
       getBookmarkedPostIds(userId),
       supabase.from('follows').select('profiles!follows_following_id_fkey(id, handle)').eq('follower_id', userId),
-    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }]) => {
+      supabase.from('muted_users').select('muted_id').eq('user_id', userId),
+    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }, { data: mutes }]) => {
       const followedHandles = (follows ?? []).map((f: any) => f.profiles?.handle).filter(Boolean);
+      const mutedIds = (mutes ?? []).map((m: any) => m.muted_id);
       setSt((s: any) => ({
         ...s,
         liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
         reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
         saved: savedIds.length ? savedIds : s.saved,
         following: followedHandles.length ? followedHandles : s.following,
+        mutedUsers: mutedIds.length ? mutedIds : s.mutedUsers,
       }));
     }).catch(() => {});
     refreshUnread(userId);
@@ -445,7 +448,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     collections, createColl, refreshCollections,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     mutedUsers: st.mutedUsers as string[],
-    muteUser: (userId: string) => setSt((s: any) => ({ ...s, mutedUsers: s.mutedUsers.includes(userId) ? s.mutedUsers : [...s.mutedUsers, userId] })),
+    muteUser: async (targetId: string) => {
+      if (!targetId || !st.user?.id) return;
+      setSt((s: any) => ({ ...s, mutedUsers: s.mutedUsers.includes(targetId) ? s.mutedUsers : [...s.mutedUsers, targetId] }));
+      try { await supabase.from('muted_users').insert({ user_id: st.user.id, muted_id: targetId }); } catch {}
+    },
     like: dbLike, save: dbSave,
     follow: {
       has: (handle: any) => st.following.includes(handle),
