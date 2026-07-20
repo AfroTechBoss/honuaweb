@@ -347,7 +347,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
     (async () => {
       const { supabase } = await import('@/lib/supabase');
       channel = supabase
-        .channel('home-feed-inserts')
+        .channel(`home-feed-inserts-${tab}-${app.user?.id ?? 'anon'}-${Date.now()}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
           const newPost = payload.new as any;
           // Fetch the full post with joined profile so it renders correctly
