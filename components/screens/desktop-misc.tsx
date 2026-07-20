@@ -154,16 +154,20 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       const { data: existing } = await supabase.from('conversations').select('id')
         .or(`and(user1_id.eq.${userId},user2_id.eq.${target.id}),and(user1_id.eq.${target.id},user2_id.eq.${userId})`)
         .maybeSingle();
-      if (existing) { setActiveConvoId(existing.id); return; }
+      if (existing) { await loadConvos(); setActiveConvoId(existing.id); return; }
       const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
         supabase.from('follows').select('id').eq('follower_id', userId).eq('following_id', target.id).maybeSingle(),
         supabase.from('follows').select('id').eq('follower_id', target.id).eq('following_id', userId).maybeSingle(),
       ]);
       const mutual = !!iFollow && !!theyFollow;
-      const { data: newConvo } = await supabase.from('conversations').insert({
+      const { data: newConvo, error: insertErr } = await supabase.from('conversations').insert({
         user1_id: userId, user2_id: target.id, status: mutual ? 'accepted' : 'pending',
-      }).select().single();
-      if (newConvo) { setActiveConvoId(newConvo.id); loadConvos(); }
+      }).select('*, user1_profile:profiles!user1_id(id,handle,full_name,avatar_url,verified), user2_profile:profiles!user2_id(id,handle,full_name,avatar_url,verified)').single();
+      if (insertErr) { console.error('Failed to create conversation:', insertErr); return; }
+      if (newConvo) {
+        setConvos(prev => [{ ...newConvo, last_msg: null }, ...prev]);
+        setActiveConvoId(newConvo.id);
+      }
     })();
   }, [params?.handle, userId]);
 
@@ -184,8 +188,8 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       .from('conversations')
       .select(`
         *,
-        user1_profile:profiles!conversations_user1_id_fkey(id, handle, full_name, avatar_url, verified),
-        user2_profile:profiles!conversations_user2_id_fkey(id, handle, full_name, avatar_url, verified),
+        user1_profile:profiles!user1_id(id, handle, full_name, avatar_url, verified),
+        user2_profile:profiles!user2_id(id, handle, full_name, avatar_url, verified),
         last_msg:messages(content, created_at, sender_id)
       `)
       .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
