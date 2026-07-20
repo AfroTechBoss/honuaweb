@@ -391,7 +391,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
     setShowNewMsg(false); setNewMsgHandle('');
   };
 
-  const inboxConvos = convos.filter(c => c.status === 'accepted');
+  const inboxConvos = convos.filter(c => c.status === 'accepted' || (c.status === 'pending' && c.user1_id === userId));
   const requestConvos = convos.filter(c => c.status === 'pending' && c.user2_id === userId);
   const displayConvos = tab === 'inbox' ? inboxConvos : requestConvos;
   const filtered = searchQuery
