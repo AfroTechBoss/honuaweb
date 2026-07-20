@@ -136,12 +136,19 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   const [newMsgHandle, setNewMsgHandle] = React.useState('');
   const [showNewMsg, setShowNewMsg] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [tick, setTick] = React.useState(0);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const typingTimeoutRef = React.useRef<any>(null);
   const typingChannelRef = React.useRef<any>(null);
   const realtimeChannelRef = React.useRef<any>(null);
 
   const userId = app.user?.id;
+
+  // Tick every 30s to keep timestamps accurate
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Auto-open DM when navigated from a profile's Message button
   React.useEffect(() => {
@@ -340,7 +347,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       const { supabase } = await import('@/lib/supabase');
       const { data: inserted } = await supabase.from('messages').insert({ conversation_id: activeConvoId, sender_id: userId, content }).select().single();
       // Replace the optimistic message with the real one
-      if (inserted) setMessages(prev => prev.map(m => m.id === optimisticId ? inserted : m));
+      if (inserted) setMessages(prev => prev.map(m => m.id === optimisticId ? { ...inserted, created_at: m.created_at } : m));
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', activeConvoId);
     } finally {
       setSending(false);
