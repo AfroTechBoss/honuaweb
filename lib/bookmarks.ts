@@ -42,15 +42,25 @@ export async function getBookmarkedPostIds(userId: string): Promise<string[]> {
 }
 
 export async function getBookmarks(userId: string, collectionId?: string) {
+  // Fetch bookmark rows first, then join posts manually to avoid FK hint issues
   let q = supabase
     .from("bookmarks")
-    .select(`id, collection_id, created_at, post:posts!bookmarks_post_id_fkey(${POST_SELECT})`)
+    .select("id, collection_id, created_at, post_id")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (collectionId) q = q.eq("collection_id", collectionId);
-  const { data, error } = await q;
-  if (error) console.error('[bookmarks] getBookmarks failed:', error.message);
-  return data ?? [];
+  const { data: bmarks, error } = await q;
+  if (error) { console.error('[bookmarks] getBookmarks failed:', error.message); return []; }
+  if (!bmarks?.length) return [];
+
+  const postIds = [...new Set(bmarks.map((b: any) => b.post_id))];
+  const { data: posts } = await supabase
+    .from("posts")
+    .select(POST_SELECT)
+    .in("id", postIds);
+
+  const postMap = Object.fromEntries((posts ?? []).map((p: any) => [p.id, p]));
+  return bmarks.map((b: any) => ({ ...b, post: postMap[b.post_id] ?? null }));
 }
 
 export async function addBookmark(userId: string, postId: string, collectionId?: string) {
