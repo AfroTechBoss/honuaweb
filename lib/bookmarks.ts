@@ -44,7 +44,7 @@ export async function getBookmarkedPostIds(userId: string): Promise<string[]> {
 export async function getBookmarks(userId: string, collectionId?: string) {
   let q = supabase
     .from("bookmarks")
-    .select(`id, collection_id, created_at, post:posts(${POST_SELECT})`)
+    .select(`id, collection_id, created_at, post:posts!bookmarks_post_id_fkey(${POST_SELECT})`)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (collectionId) q = q.eq("collection_id", collectionId);
