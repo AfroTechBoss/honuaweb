@@ -200,18 +200,20 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
 
   React.useEffect(() => { loadConvos(); }, [loadConvos]);
 
-  // Realtime: listen for new/updated conversations
+  // Realtime: listen for new/updated conversations (two channels — one per filter)
   React.useEffect(() => {
     if (!userId) return;
-    let ch: any;
+    let ch1: any, ch2: any;
     (async () => {
       const { supabase } = await import('@/lib/supabase');
-      ch = supabase.channel('convos-realtime')
+      ch1 = supabase.channel(`convos-u1-${userId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user1_id=eq.${userId}` }, loadConvos)
+        .subscribe();
+      ch2 = supabase.channel(`convos-u2-${userId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `user2_id=eq.${userId}` }, loadConvos)
         .subscribe();
     })();
-    return () => { ch?.unsubscribe(); };
+    return () => { ch1?.unsubscribe(); ch2?.unsubscribe(); };
   }, [userId, loadConvos]);
 
   // Load messages for active conversation
