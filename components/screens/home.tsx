@@ -444,6 +444,10 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
   const [showReport, setShowReport] = React.useState(false);
   const [reportReason, setReportReason] = React.useState('');
   const [reportSubmitted, setReportSubmitted] = React.useState(false);
+  const [showEdit, setShowEdit] = React.useState(false);
+  const [editContent, setEditContent] = React.useState('');
+  const [editSaving, setEditSaving] = React.useState(false);
+  const canEdit = !!post.created_at && (Date.now() - new Date(post.created_at).getTime()) < 15 * 60 * 1000;
 
   const REPORT_OPTIONS = [
     'Spam or misleading',
@@ -501,6 +505,28 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
     onRefresh();
   };
 
+  const handleEditOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    setEditContent(post.content ?? '');
+    setShowEdit(true);
+  };
+
+  const handleEditSave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editContent.trim()) return;
+    setEditSaving(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      await supabase.from('posts').update({ content: editContent.trim() }).eq('id', post.id);
+      post.content = editContent.trim();
+      setShowEdit(false);
+      app.toast?.({ msg: 'Post updated', kind: 'success', icon: 'edit' });
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const timeAgo = (ts: string) => {
     const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
     if (s < 60) return `${s}s`;
@@ -542,11 +568,14 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
             <>
               <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowMenu(false)} />
               <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
-                {isOwnPost ? (
-                  <button onClick={handleDeletePost} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left' }}>
+                {isOwnPost ? (<>
+                  <button onClick={handleEditOpen} disabled={!canEdit} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'not-allowed', fontSize: 14, color: canEdit ? 'var(--ink-2)' : 'var(--ink-4)', textAlign: 'left' }}>
+                    <Icon name="edit" size={15} /> {canEdit ? 'Edit post' : 'Edit post (expired)'}
+                  </button>
+                  <button onClick={handleDeletePost} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
                     <Icon name="trash" size={15} /> Delete post
                   </button>
-                ) : (<>
+                </>) : (<>
                   <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
                     <Icon name="bell" size={15} /> Mute @{displayProfile?.handle}
                   </button>
@@ -593,6 +622,29 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {showEdit && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { e.stopPropagation(); setShowEdit(false); }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 28, width: 520, maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,.18)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>Edit post</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 16 }}>You have 15 minutes from when a post is published to edit it.</div>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              rows={5}
+              style={{ width: '100%', borderRadius: 12, border: '1.5px solid var(--line)', background: 'var(--bg)', color: 'var(--ink-2)', padding: '12px 14px', fontSize: 15, lineHeight: 1.6, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button onClick={e => { e.stopPropagation(); setShowEdit(false); }} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
+              <button onClick={handleEditSave} disabled={editSaving || !editContent.trim()} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--green)', cursor: editSaving || !editContent.trim() ? 'not-allowed' : 'pointer', fontSize: 14, color: '#fff', fontWeight: 600, opacity: editSaving || !editContent.trim() ? 0.6 : 1 }}>
+                {editSaving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
           </div>
         </div>
       )}

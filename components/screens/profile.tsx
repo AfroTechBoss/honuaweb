@@ -373,13 +373,17 @@ function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
 
 const REPORT_OPTIONS_LIST = ['Spam or misleading','Hate speech or harassment','Violence or dangerous content','False information','Nudity or sexual content','Intellectual property violation','Other'];
 
-function PostMoreMenu({ profile, postId, isOwn = false }: { profile: any; postId: string; isOwn?: boolean }) {
+function PostMoreMenu({ profile, postId, isOwn = false, postContent = '', postCreatedAt = '' }: { profile: any; postId: string; isOwn?: boolean; postContent?: string; postCreatedAt?: string }) {
   const app = useApp();
   const [open, setOpen] = React.useState(false);
   const [showReport, setShowReport] = React.useState(false);
   const [showDelete, setShowDelete] = React.useState(false);
+  const [showEdit, setShowEdit] = React.useState(false);
+  const [editContent, setEditContent] = React.useState('');
+  const [editSaving, setEditSaving] = React.useState(false);
   const [reason, setReason] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
+  const canEdit = !!postCreatedAt && (Date.now() - new Date(postCreatedAt).getTime()) < 15 * 60 * 1000;
 
   const handleMute = (e: React.MouseEvent) => {
     e.stopPropagation(); setOpen(false);
@@ -410,6 +414,25 @@ function PostMoreMenu({ profile, postId, isOwn = false }: { profile: any; postId
     app.toast?.({ msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
   };
 
+  const handleEditOpen = (e: React.MouseEvent) => {
+    e.stopPropagation(); setOpen(false);
+    setEditContent(postContent);
+    setShowEdit(true);
+  };
+
+  const handleEditSave = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!editContent.trim()) return;
+    setEditSaving(true);
+    try {
+      await supabase.from('posts').update({ content: editContent.trim() }).eq('id', postId);
+      app.toast?.({ msg: 'Post updated', kind: 'success', icon: 'edit' });
+      setShowEdit(false);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   return (
     <div style={{ position: 'relative', marginLeft: 'auto' }} onClick={e => e.stopPropagation()}>
       <button onClick={e => { e.stopPropagation(); setOpen(o => !o); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: '2px 4px', borderRadius: 6, display: 'grid', placeItems: 'center' }}>
@@ -419,11 +442,14 @@ function PostMoreMenu({ profile, postId, isOwn = false }: { profile: any; postId
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
           <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
-            {isOwn ? (
-              <button onClick={e => { e.stopPropagation(); setOpen(false); setShowDelete(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left' }}>
+            {isOwn ? (<>
+              <button onClick={handleEditOpen} disabled={!canEdit} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'not-allowed', fontSize: 14, color: canEdit ? 'var(--ink-2)' : 'var(--ink-4)', textAlign: 'left' }}>
+                <Icon name="edit" size={15} /> {canEdit ? 'Edit post' : 'Edit post (expired)'}
+              </button>
+              <button onClick={e => { e.stopPropagation(); setOpen(false); setShowDelete(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
                 <Icon name="trash" size={15} /> Delete post
               </button>
-            ) : (
+            </>) : (
               <>
                 <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
                   <Icon name="bell" size={15} /> Mute @{profile?.handle}
@@ -447,6 +473,27 @@ function PostMoreMenu({ profile, postId, isOwn = false }: { profile: any; postId
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={e => { e.stopPropagation(); setShowDelete(false); }} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
               <button onClick={handleDelete} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--clay)', cursor: 'pointer', fontSize: 14, color: '#fff', fontWeight: 600 }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showEdit && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { e.stopPropagation(); setShowEdit(false); }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 28, width: 520, maxWidth: '92vw', boxShadow: '0 16px 48px rgba(0,0,0,.18)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>Edit post</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 16 }}>You have 15 minutes from when a post is published to edit it.</div>
+            <textarea
+              value={editContent}
+              onChange={e => setEditContent(e.target.value)}
+              rows={5}
+              style={{ width: '100%', borderRadius: 12, border: '1.5px solid var(--line)', background: 'var(--bg)', color: 'var(--ink-2)', padding: '12px 14px', fontSize: 15, lineHeight: 1.6, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button onClick={e => { e.stopPropagation(); setShowEdit(false); }} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
+              <button onClick={handleEditSave} disabled={editSaving || !editContent.trim()} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--green)', cursor: editSaving || !editContent.trim() ? 'not-allowed' : 'pointer', fontSize: 14, color: '#fff', fontWeight: 600, opacity: editSaving || !editContent.trim() ? 0.6 : 1 }}>
+                {editSaving ? 'Saving…' : 'Save changes'}
+              </button>
             </div>
           </div>
         </div>
@@ -516,7 +563,7 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
-            <PostMoreMenu profile={profile} postId={post.id} isOwn={isOwnPost} />
+            <PostMoreMenu profile={profile} postId={post.id} isOwn={isOwnPost} postContent={post.content ?? ''} postCreatedAt={post.created_at ?? ''} />
           </div>
           {(isRepost && original ? original.content : post.content) && (
             <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }}>{isRepost && original ? original.content : post.content}</p>
@@ -650,9 +697,13 @@ export function DesktopPostDetail({ onNav, params }) {
               {app.user?.id !== (dbPost?.user_id) && displayProfile?.handle !== app.user?.handle && (
                 <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
               )}
-              {displayProfile?.handle !== app.user?.handle && (
-                <PostMoreMenu profile={displayProfile} postId={post.id} />
-              )}
+              <PostMoreMenu
+                profile={displayProfile}
+                postId={post.id}
+                isOwn={!isMock && (dbPost?.user_id === app.user?.id || displayProfile?.handle === app.user?.handle)}
+                postContent={isMock ? '' : (post.content ?? '')}
+                postCreatedAt={isMock ? '' : (dbPost?.created_at ?? post.created_at ?? '')}
+              />
             </header>
             <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>
               {(isMock ? (post as any).content : post.content)?.split(/(\s+)/).map((word: string, i: number) => {
