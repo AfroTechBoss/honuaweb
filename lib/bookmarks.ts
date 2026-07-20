@@ -49,22 +49,17 @@ export async function getBookmarks(userId: string, collectionId?: string) {
     .order("created_at", { ascending: false });
   if (collectionId) q = q.eq("collection_id", collectionId);
   const { data: bmarks, error } = await q;
-  console.log('[bookmarks] bmarks:', bmarks, 'error:', error, 'collectionId filter:', collectionId);
   if (error) { console.error('[bookmarks] getBookmarks failed:', error.message); return []; }
   if (!bmarks?.length) return [];
 
   const postIds = [...new Set(bmarks.map((b: any) => b.post_id))];
-  console.log('[bookmarks] postIds:', postIds);
-  const { data: posts, error: postsErr } = await supabase
+  const { data: posts } = await supabase
     .from("posts")
     .select("*, profile:profiles!user_id(id, handle, full_name, avatar_url, verified)")
     .in("id", postIds);
-  console.log('[bookmarks] posts:', posts, 'postsErr:', postsErr);
 
   const postMap = Object.fromEntries((posts ?? []).map((p: any) => [p.id, p]));
-  const result = bmarks.map((b: any) => ({ ...b, post: postMap[b.post_id] ?? null }));
-  console.log('[bookmarks] final result:', result);
-  return result;
+  return bmarks.map((b: any) => ({ ...b, post: postMap[b.post_id] ?? null }));
 }
 
 export async function addBookmark(userId: string, postId: string, collectionId?: string) {
