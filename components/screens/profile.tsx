@@ -565,9 +565,16 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
             <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
             <PostMoreMenu profile={profile} postId={post.id} isOwn={isOwnPost} postContent={post.content ?? ''} postCreatedAt={post.created_at ?? ''} />
           </div>
-          {(isRepost && original ? original.content : post.content) && (
-            <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }}>{isRepost && original ? original.content : post.content}</p>
-          )}
+          {(isRepost && original ? original.content : post.content) && (() => {
+            const text: string = (isRepost && original ? original.content : post.content) ?? '';
+            return (
+              <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {text.split('\n').map((line: string, li: number, arr: string[]) => (
+                  <React.Fragment key={li}>{line}{li < arr.length - 1 && <br />}</React.Fragment>
+                ))}
+              </p>
+            );
+          })()}
           {(isRepost ? original?.image_url : post.image_url) && (
             <img src={isRepost ? original.image_url : post.image_url} style={{ width: '100%', borderRadius: 12, marginBottom: 10, objectFit: 'cover', maxHeight: 320 }} />
           )}
@@ -705,12 +712,17 @@ export function DesktopPostDetail({ onNav, params }) {
                 postCreatedAt={isMock ? '' : (dbPost?.created_at ?? post.created_at ?? '')}
               />
             </header>
-            <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', textWrap: 'pretty' }}>
-              {(isMock ? (post as any).content : post.content)?.split(/(\s+)/).map((word: string, i: number) => {
-                const match = word.match(/^(#\w+)(.*)/);
-                if (match) return <React.Fragment key={i}><span onClick={() => onNav?.('explore', { tag: match[1].slice(1) })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
-                return word;
-              })}
+            <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {(isMock ? (post as any).content : post.content)?.split('\n').map((line: string, li: number, arr: string[]) => (
+                <React.Fragment key={li}>
+                  {line.split(/(\s+)/).map((word: string, i: number) => {
+                    const match = word.match(/^(#\w+)(.*)/);
+                    if (match) return <React.Fragment key={i}><span onClick={() => onNav?.('explore', { tag: match[1].slice(1) })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
+                    return word;
+                  })}
+                  {li < arr.length - 1 && <br />}
+                </React.Fragment>
+              ))}
             </p>
             {isMock && (post as any).image && <ImagePlaceholder label={(post as any).image} height={420} src={(post as any).imageUrl} />}
             {!isMock && post.image_url && (

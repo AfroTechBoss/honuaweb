@@ -690,12 +690,17 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
       )}
 
       {displayContent && (
-        <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)' }}>
-          {displayContent.split(/(\s+)/).map((word: string, i: number) => {
-            const match = word.match(/^(#\w+)(.*)/);
-            if (match) return <React.Fragment key={i}><span onClick={stop(() => onNav?.('explore', { tag: match[1].slice(1) }))} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
-            return word;
-          })}
+        <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {displayContent.split('\n').map((line: string, li: number, arr: string[]) => (
+            <React.Fragment key={li}>
+              {line.split(/(\s+)/).map((word: string, i: number) => {
+                const match = word.match(/^(#\w+)(.*)/);
+                if (match) return <React.Fragment key={i}><span onClick={stop(() => onNav?.('explore', { tag: match[1].slice(1) }))} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
+                return word;
+              })}
+              {li < arr.length - 1 && <br />}
+            </React.Fragment>
+          ))}
         </p>
       )}
 
