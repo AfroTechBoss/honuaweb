@@ -19,7 +19,7 @@ export function pathFor(key: string, params: any = {}): string {
     case "marketplace": return "/marketplace";
     case "bookmarks": return "/bookmarks";
     case "notifications": return "/notifications";
-    case "messages": return "/messages";
+    case "messages": return params?.handle ? `/messages?handle=${encodeURIComponent(params.handle)}` : "/messages";
     case "forum": return "/communities";
     case "tasks": return "/challenges";
     case "profile": return params?.handle ? `/profile/${params.handle}` : "/profile";
