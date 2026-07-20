@@ -1459,15 +1459,21 @@ export function MDeleteAccount2({ close }) {
     if (!ok) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/delete-account', { method: 'POST' });
+      const { supabase } = await import('@/lib/supabase');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not signed in');
+      const res = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
       if (!res.ok) {
         const { error } = await res.json();
         throw new Error(error || 'Deletion failed');
       }
       close();
+      app.toast({ kind: 'success', msg: 'Account deleted', sub: 'Your account and all data have been permanently removed.', icon: 'trash', duration: 6000 });
       await app.logout?.();
-      app.toast({ kind: 'error', msg: 'Account deleted', sub: 'Your account and all data have been permanently removed.', icon: 'trash', duration: 6000 });
-    } catch (err) {
+    } catch (err: any) {
       app.toast({ kind: 'error', msg: 'Could not delete account', sub: err.message, icon: 'bolt' });
     } finally {
       setLoading(false);
