@@ -151,19 +151,39 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       const { supabase } = await import('@/lib/supabase');
       const { data: target } = await supabase.from('profiles').select('id').eq('handle', handle).single();
       if (!target) return;
-      const { data: existing } = await supabase.from('conversations').select('id')
-        .or(`and(user1_id.eq.${userId},user2_id.eq.${target.id}),and(user1_id.eq.${target.id},user2_id.eq.${userId})`)
-        .maybeSingle();
+
+      // Check for existing conversation in either direction (two separate queries — nested AND in .or() is unsupported)
+      const [{ data: e1 }, { data: e2 }] = await Promise.all([
+        supabase.from('conversations').select('id').eq('user1_id', userId).eq('user2_id', target.id).maybeSingle(),
+        supabase.from('conversations').select('id').eq('user1_id', target.id).eq('user2_id', userId).maybeSingle(),
+      ]);
+      const existing = e1 ?? e2;
       if (existing) { await loadConvos(); setActiveConvoId(existing.id); return; }
+
+      // Check mutual follow — ignore errors (follows table 400 just means not following)
       const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
         supabase.from('follows').select('id').eq('follower_id', userId).eq('following_id', target.id).maybeSingle(),
         supabase.from('follows').select('id').eq('follower_id', target.id).eq('following_id', userId).maybeSingle(),
       ]);
       const mutual = !!iFollow && !!theyFollow;
+
       const { data: newConvo, error: insertErr } = await supabase.from('conversations').insert({
         user1_id: userId, user2_id: target.id, status: mutual ? 'accepted' : 'pending',
       }).select('*, user1_profile:profiles!user1_id(id,handle,full_name,avatar_url,verified), user2_profile:profiles!user2_id(id,handle,full_name,avatar_url,verified)').single();
-      if (insertErr) { console.error('Failed to create conversation:', insertErr); return; }
+      if (insertErr) {
+        // If duplicate (race condition), just find and open the existing one
+        if (insertErr.code === '23505') {
+          const [{ data: r1 }, { data: r2 }] = await Promise.all([
+            supabase.from('conversations').select('id').eq('user1_id', userId).eq('user2_id', target.id).maybeSingle(),
+            supabase.from('conversations').select('id').eq('user1_id', target.id).eq('user2_id', userId).maybeSingle(),
+          ]);
+          const found = r1 ?? r2;
+          if (found) { await loadConvos(); setActiveConvoId(found.id); }
+        } else {
+          console.error('Failed to create conversation:', insertErr);
+        }
+        return;
+      }
       if (newConvo) {
         setConvos(prev => [{ ...newConvo, last_msg: null }, ...prev]);
         setActiveConvoId(newConvo.id);
