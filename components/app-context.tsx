@@ -42,6 +42,7 @@ const STATE_DEFAULTS: any = {
   saved: [],
   mutedUsers: [],
   blockedUsers: [],
+  blockedByUsers: [],
   following: ["sarahgreen", "greentech"],
   joinedCommunities: ["Urban gardeners", "Solar DIY", "Ocean cleanup crew"],
   joinedChallenges: [1, 2],
@@ -292,10 +293,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabase.from('follows').select('profiles!follows_following_id_fkey(id, handle)').eq('follower_id', userId),
       supabase.from('muted_users').select('muted_id').eq('user_id', userId),
       supabase.from('blocked_users').select('blocked_id').eq('user_id', userId),
-    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }, { data: mutes }, { data: blocks }]) => {
+      supabase.from('blocked_users').select('user_id').eq('blocked_id', userId),
+    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }, { data: mutes }, { data: blocks }, { data: blockedBy }]) => {
       const followedHandles = (follows ?? []).map((f: any) => f.profiles?.handle).filter(Boolean);
       const mutedIds = (mutes ?? []).map((m: any) => m.muted_id);
       const blockedIds = (blocks ?? []).map((b: any) => b.blocked_id);
+      const blockedByIds = (blockedBy ?? []).map((b: any) => b.user_id);
       setSt((s: any) => ({
         ...s,
         liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
@@ -304,6 +307,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         following: followedHandles.length ? followedHandles : s.following,
         mutedUsers: mutedIds.length ? mutedIds : s.mutedUsers,
         blockedUsers: blockedIds.length ? blockedIds : s.blockedUsers,
+        blockedByUsers: blockedByIds.length ? blockedByIds : s.blockedByUsers,
       }));
     }).catch(() => {});
     refreshUnread(userId);
@@ -453,6 +457,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     mutedUsers: st.mutedUsers as string[],
     blockedUsers: st.blockedUsers as string[],
+    blockedByUsers: st.blockedByUsers as string[],
     muteUser: async (targetId: string) => {
       if (!targetId || !st.user?.id) return;
       setSt((s: any) => ({ ...s, mutedUsers: s.mutedUsers.includes(targetId) ? s.mutedUsers : [...s.mutedUsers, targetId] }));

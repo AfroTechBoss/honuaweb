@@ -321,12 +321,13 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
 
   React.useEffect(() => { fetchFeed(); }, [fetchFeed]);
 
-  // Filter out posts from muted and blocked users
+  // Filter out posts from muted users, users I blocked, and users who blocked me
   const muted: string[] = app.mutedUsers ?? [];
   const blocked: string[] = app.blockedUsers ?? [];
+  const blockedBy: string[] = app.blockedByUsers ?? [];
   const feed = (dbPosts.length > 0 ? dbPosts : MOCK.posts).filter((p: any) => {
     const authorId = p.profile?.id ?? p.user_id;
-    return !muted.includes(authorId) && !blocked.includes(authorId);
+    return !muted.includes(authorId) && !blocked.includes(authorId) && !blockedBy.includes(authorId);
   });
   const joinedChallenge = app.challenge?.has('week19');
   return (
