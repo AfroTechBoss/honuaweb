@@ -346,6 +346,7 @@ function PostMoreMenu({ profile, postId }: { profile: any; postId: string }) {
 
   const handleMute = (e: React.MouseEvent) => {
     e.stopPropagation(); setOpen(false);
+    if (profile?.id) app.muteUser?.(profile.id);
     app.toast?.({ msg: `@${profile?.handle} muted`, sub: "You won't see their posts in your feed.", icon: 'bell' });
   };
   const handleReport = (e: React.MouseEvent) => {

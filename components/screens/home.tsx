@@ -322,7 +322,12 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   React.useEffect(() => { fetchFeed(); }, [fetchFeed]);
 
   // Merge real DB posts with MOCK posts for a richer feed while DB is empty
-  const feed = dbPosts.length > 0 ? dbPosts : MOCK.posts;
+  // Filter out posts from muted users
+  const muted: string[] = app.mutedUsers ?? [];
+  const feed = (dbPosts.length > 0 ? dbPosts : MOCK.posts).filter((p: any) => {
+    const authorId = p.profile?.id ?? p.user_id;
+    return !muted.includes(authorId);
+  });
   const joinedChallenge = app.challenge?.has('week19');
   return (
     <>
@@ -462,6 +467,8 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
   const handleMute = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowMenu(false);
+    const userId = displayProfile?.id ?? post.user_id;
+    if (userId) app.muteUser?.(userId);
     app.toast?.({ msg: `@${displayProfile?.handle} muted`, sub: "You won't see their posts in your feed.", icon: 'bell' });
   };
 
