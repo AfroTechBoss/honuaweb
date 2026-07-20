@@ -364,7 +364,8 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           }
           setDbPosts(prev => {
             if (prev.some(p => p.id === data.id)) return prev;
-            return [data, ...prev];
+            // Use client time so timeAgo shows "now" regardless of server/client clock drift
+            return [{ ...data, created_at: new Date().toISOString() }, ...prev];
           });
         })
         .subscribe();
