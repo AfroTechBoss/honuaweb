@@ -1460,7 +1460,9 @@ export function MDeleteAccount2({ close }) {
     setLoading(true);
     try {
       const { supabase } = await import('@/lib/supabase');
-      const { data: { session } } = await supabase.auth.getSession();
+      // Refresh to ensure we have a non-expired token
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      const session = refreshData.session ?? (await supabase.auth.getSession()).data.session;
       if (!session?.access_token) throw new Error('Not signed in');
       const res = await fetch('/api/delete-account', {
         method: 'POST',
