@@ -341,6 +341,37 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
 
   React.useEffect(() => { fetchFeed(); }, [fetchFeed]);
 
+  // Realtime: prepend new posts as they arrive
+  React.useEffect(() => {
+    let channel: any;
+    (async () => {
+      const { supabase } = await import('@/lib/supabase');
+      channel = supabase
+        .channel('home-feed-inserts')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
+          const newPost = payload.new as any;
+          // Fetch the full post with joined profile so it renders correctly
+          const { data } = await supabase
+            .from('posts')
+            .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+            .eq('id', newPost.id)
+            .single();
+          if (!data) return;
+          // For the Following tab only include posts from followed users
+          if (tab === 'following') {
+            const followingIds = (await supabase.from('follows').select('following_id').eq('follower_id', app.user?.id ?? '')).data?.map((f: any) => f.following_id) ?? [];
+            if (!followingIds.includes(data.user_id)) return;
+          }
+          setDbPosts(prev => {
+            if (prev.some(p => p.id === data.id)) return prev;
+            return [data, ...prev];
+          });
+        })
+        .subscribe();
+    })();
+    return () => { channel?.unsubscribe(); };
+  }, [tab, app.user?.id]);
+
   // Filter out posts from muted users, users I blocked, and users who blocked me
   const muted: string[] = app.mutedUsers ?? [];
   const blocked: string[] = app.blockedUsers ?? [];
