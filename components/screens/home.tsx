@@ -478,6 +478,12 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
   const [showEdit, setShowEdit] = React.useState(false);
   const [editContent, setEditContent] = React.useState('');
   const [editSaving, setEditSaving] = React.useState(false);
+  const [, setTick] = React.useState(0);
+  // Re-render every 30s so relative timestamps stay current
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const canEdit = !!post.created_at && (Date.now() - new Date(post.created_at).getTime()) < 15 * 60 * 1000;
 
   const REPORT_OPTIONS = [
@@ -559,8 +565,10 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
   };
 
   const timeAgo = (ts: string) => {
-    const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
-    if (s < 60) return `${s}s`;
+    // Ensure the string is parsed as UTC (Supabase always stores UTC)
+    const normalized = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z';
+    const s = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
+    if (s < 60) return 'now';
     if (s < 3600) return `${Math.floor(s / 60)}m`;
     if (s < 86400) return `${Math.floor(s / 3600)}h`;
     return `${Math.floor(s / 86400)}d`;
