@@ -343,6 +343,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => {
         setUnreadNotifs(n => n + 1);
       })
+      // Someone blocked me — add them to blockedByUsers so their posts disappear
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'blocked_users', filter: `blocked_id=eq.${userId}` }, (p: any) => {
+        const blockerId = p.new?.user_id;
+        if (blockerId) setSt((s: any) => ({ ...s, blockedByUsers: s.blockedByUsers.includes(blockerId) ? s.blockedByUsers : [...s.blockedByUsers, blockerId] }));
+      })
+      // Someone unblocked me — remove them so their posts reappear immediately
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'blocked_users', filter: `blocked_id=eq.${userId}` }, (p: any) => {
+        const blockerId = p.old?.user_id;
+        if (blockerId) setSt((s: any) => ({ ...s, blockedByUsers: s.blockedByUsers.filter((id: string) => id !== blockerId) }));
+      })
       .subscribe();
 
     // Polling fallback: re-check unread count every 20s so notifications show
