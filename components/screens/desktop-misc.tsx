@@ -249,6 +249,9 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   }, [userId, loadConvos]);
 
   // Load messages for active conversation
+  const convosRef = React.useRef<any[]>([]);
+  convosRef.current = convos;
+
   const loadMessages = React.useCallback(async (convoId: string) => {
     const { supabase } = await import('@/lib/supabase');
     const { data } = await supabase
@@ -258,7 +261,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       .order('created_at', { ascending: true });
     setMessages(data ?? []);
     // Mark unseen messages as seen (only if convo is accepted)
-    const convo = convos.find(c => c.id === convoId);
+    const convo = convosRef.current.find(c => c.id === convoId);
     if (convo?.status === 'accepted') {
       const unseen = (data ?? []).filter((m: any) => !m.seen_at && m.sender_id !== userId);
       if (unseen.length) {
@@ -266,7 +269,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
           .in('id', unseen.map((m: any) => m.id));
       }
     }
-  }, [convos, userId]);
+  }, [userId]);
 
   React.useEffect(() => {
     if (!activeConvoId) return;
