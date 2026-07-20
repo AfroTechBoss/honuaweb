@@ -178,7 +178,7 @@ export function DesktopProfile({ onNav, params }) {
                 </>
               ) : (
                 <>
-                  <button className="btn btn-ghost" onClick={() => onNav?.('messages')}><Icon name="msg" size={14} /> Message</button>
+                  <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: profile?.handle })}><Icon name="msg" size={14} /> Message</button>
                   <button className="btn btn-ghost" onClick={() => app.openModal?.('tip', { user: profile })}><Icon name="gift" size={14} /> Tip</button>
                   <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={handleFollowToggle}>{following ? 'Following' : 'Follow'}</button>
                 </>
