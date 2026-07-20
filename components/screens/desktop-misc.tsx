@@ -257,7 +257,15 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
 
   React.useEffect(() => {
     if (!app.user?.id) { setLoading(false); return; }
-    getNotifications(app.user.id).then(data => { setItems(data); setLoading(false); });
+    getNotifications(app.user.id).then(async data => {
+      setItems(data.map((n: any) => ({ ...n, read: true })));
+      setLoading(false);
+      // Auto-mark all as read when the page is opened
+      if (data.some((n: any) => !n.read)) {
+        await markAllRead(app.user.id);
+        app.markAllNotifsRead?.();
+      }
+    });
   }, [app.user?.id, app.unreadNotifs]);
 
   const handleMarkAllRead = async () => {
