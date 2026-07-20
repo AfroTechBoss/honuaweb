@@ -282,7 +282,17 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       ch = supabase.channel(`msgs-${activeConvoId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${activeConvoId}` }, async (payload) => {
           const newMsg = payload.new as any;
-          setMessages(prev => prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            // Replace any optimistic message from the same sender with matching content
+            const optIdx = prev.findIndex(m => m.id.startsWith('opt-') && m.sender_id === newMsg.sender_id && m.content === newMsg.content);
+            if (optIdx !== -1) {
+              const updated = [...prev];
+              updated[optIdx] = { ...newMsg, created_at: prev[optIdx].created_at };
+              return updated;
+            }
+            return [...prev, newMsg];
+          });
           // Auto-mark as seen if from other party and convo is accepted
           if (newMsg.sender_id !== userId) {
             const { supabase: sb } = await import('@/lib/supabase');
