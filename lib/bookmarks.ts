@@ -2,7 +2,7 @@ import { supabase } from "./supabase";
 
 const POST_SELECT = `
   *,
-  profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)
+  profile:profiles!user_id(id, handle, full_name, avatar_url, verified)
 `;
 
 // ── Collections ───────────────────────────────────────────────
@@ -54,10 +54,11 @@ export async function getBookmarks(userId: string, collectionId?: string) {
   if (!bmarks?.length) return [];
 
   const postIds = [...new Set(bmarks.map((b: any) => b.post_id))];
-  const { data: posts } = await supabase
+  const { data: posts, error: postsErr } = await supabase
     .from("posts")
     .select(POST_SELECT)
     .in("id", postIds);
+  if (postsErr) console.error('[bookmarks] posts fetch failed:', postsErr.message);
 
   const postMap = Object.fromEntries((posts ?? []).map((p: any) => [p.id, p]));
   return bmarks.map((b: any) => ({ ...b, post: postMap[b.post_id] ?? null }));
