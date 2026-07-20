@@ -551,7 +551,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
             )}
 
             {/* Messages area */}
-            <div style={{ flex: 1, padding: '20px 24px', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
+            <div style={{ flex: 1, padding: '20px 24px', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }} className="no-scrollbar">
               {(() => {
                 const allMsgs = groupedMessages.flatMap(g => g.msgs);
                 const lastId = allMsgs[allMsgs.length - 1]?.id;
@@ -562,7 +562,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
                       const isMe = m.sender_id === userId;
                       const isLast = m.id === lastId;
                       return (
-                        <div key={m.id} className="msg-row" style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start' }}>
+                        <div key={m.id} className="msg-row" style={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: 2 }}>
                           <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
                             <div style={{
                               background: isMe ? 'var(--green)' : 'var(--surface)',
@@ -637,7 +637,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
 
 export function DayLabel({ l }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0', color: 'var(--ink-4)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0 12px', color: 'var(--ink-4)' }}>
       <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
       <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>{l.toUpperCase()}</span>
       <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
