@@ -79,10 +79,10 @@ export function DesktopSidebar({ active, onNav }: any) {
             >
               <Icon name={icon} size={18} stroke={isActive ? 2 : 1.75} />
               {!collapsed && <span style={{ flex: 1, textAlign: "left" }}>{label}</span>}
-              {!collapsed && badge && (
+              {!collapsed && !!badge && (
                 <span style={{ background: "var(--ink-solid)", color: "#fff", fontSize: 10, padding: "2px 6px", borderRadius: 10, fontFamily: "JetBrains Mono", fontWeight: 600 }}>{badge}</span>
               )}
-              {collapsed && badge && (
+              {collapsed && !!badge && (
                 <span style={{ position: "absolute", top: 6, right: 8, background: "var(--ink-solid)", color: "#fff", fontSize: 9, width: 16, height: 16, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: "JetBrains Mono", fontWeight: 600 }}>{badge}</span>
               )}
             </button>
