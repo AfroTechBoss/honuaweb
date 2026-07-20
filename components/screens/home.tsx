@@ -557,7 +557,7 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
     try {
       const { supabase } = await import('@/lib/supabase');
       await supabase.from('posts').update({ content: editContent.trim() }).eq('id', post.id);
-      post.content = editContent.trim();
+      setLiveContent(editContent.trim());
       setShowEdit(false);
       app.toast?.({ msg: 'Post updated', kind: 'success', icon: 'edit' });
     } finally {
@@ -575,7 +575,8 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
     return `${Math.floor(s / 86400)}d`;
   };
 
-  const displayContent = post.is_repost && original ? original.content : post.content;
+  const [liveContent, setLiveContent] = React.useState<string>(post.content ?? '');
+  const displayContent = post.is_repost && original ? original.content : liveContent;
   const displayImage = post.is_repost && original ? original.image_url : post.image_url;
   const displayProfile = profile;
   const tags: string[] = post.tags ?? [];
