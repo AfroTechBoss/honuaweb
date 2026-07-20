@@ -257,16 +257,18 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
 
   React.useEffect(() => {
     if (!app.user?.id) { setLoading(false); return; }
-    getNotifications(app.user.id).then(async data => {
-      setItems(data.map((n: any) => ({ ...n, read: true })));
-      setLoading(false);
-      // Auto-mark all as read when the page is opened
-      if (data.some((n: any) => !n.read)) {
-        await markAllRead(app.user.id);
-        app.markAllNotifsRead?.();
-      }
-    });
+    getNotifications(app.user.id).then(data => { setItems(data); setLoading(false); });
   }, [app.user?.id, app.unreadNotifs]);
+
+  // Mark all as read when leaving the page
+  React.useEffect(() => {
+    const userId = app.user?.id;
+    if (!userId) return;
+    return () => {
+      markAllRead(userId);
+      app.markAllNotifsRead?.();
+    };
+  }, [app.user?.id]);
 
   const handleMarkAllRead = async () => {
     if (!app.user?.id) return;
