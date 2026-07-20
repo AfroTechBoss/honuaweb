@@ -41,6 +41,7 @@ const STATE_DEFAULTS: any = {
   reposted: [],
   saved: [],
   mutedUsers: [],
+  blockedUsers: [],
   following: ["sarahgreen", "greentech"],
   joinedCommunities: ["Urban gardeners", "Solar DIY", "Ocean cleanup crew"],
   joinedChallenges: [1, 2],
@@ -290,9 +291,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getBookmarkedPostIds(userId),
       supabase.from('follows').select('profiles!follows_following_id_fkey(id, handle)').eq('follower_id', userId),
       supabase.from('muted_users').select('muted_id').eq('user_id', userId),
-    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }, { data: mutes }]) => {
+      supabase.from('blocked_users').select('blocked_id').eq('user_id', userId),
+    ]).then(([{ data: likes }, { data: reposts }, savedIds, { data: follows }, { data: mutes }, { data: blocks }]) => {
       const followedHandles = (follows ?? []).map((f: any) => f.profiles?.handle).filter(Boolean);
       const mutedIds = (mutes ?? []).map((m: any) => m.muted_id);
+      const blockedIds = (blocks ?? []).map((b: any) => b.blocked_id);
       setSt((s: any) => ({
         ...s,
         liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
@@ -300,6 +303,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         saved: savedIds.length ? savedIds : s.saved,
         following: followedHandles.length ? followedHandles : s.following,
         mutedUsers: mutedIds.length ? mutedIds : s.mutedUsers,
+        blockedUsers: blockedIds.length ? blockedIds : s.blockedUsers,
       }));
     }).catch(() => {});
     refreshUnread(userId);
@@ -448,10 +452,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     collections, createColl, refreshCollections,
     toggleDark: () => { setSt((s: any) => ({ ...s, dark: !s.dark })); toast({ msg: st.dark ? "Light mode" : "Dark mode", icon: "sparkles" }); },
     mutedUsers: st.mutedUsers as string[],
+    blockedUsers: st.blockedUsers as string[],
     muteUser: async (targetId: string) => {
       if (!targetId || !st.user?.id) return;
       setSt((s: any) => ({ ...s, mutedUsers: s.mutedUsers.includes(targetId) ? s.mutedUsers : [...s.mutedUsers, targetId] }));
       try { await supabase.from('muted_users').insert({ user_id: st.user.id, muted_id: targetId }); } catch {}
+    },
+    unmuteUser: async (targetId: string) => {
+      if (!targetId || !st.user?.id) return;
+      setSt((s: any) => ({ ...s, mutedUsers: s.mutedUsers.filter((x: string) => x !== targetId) }));
+      try { await supabase.from('muted_users').delete().match({ user_id: st.user.id, muted_id: targetId }); } catch {}
+    },
+    blockUser: async (targetId: string) => {
+      if (!targetId || !st.user?.id) return;
+      setSt((s: any) => ({ ...s, blockedUsers: s.blockedUsers.includes(targetId) ? s.blockedUsers : [...s.blockedUsers, targetId] }));
+      try { await supabase.from('blocked_users').insert({ user_id: st.user.id, blocked_id: targetId }); } catch {}
+    },
+    unblockUser: async (targetId: string) => {
+      if (!targetId || !st.user?.id) return;
+      setSt((s: any) => ({ ...s, blockedUsers: s.blockedUsers.filter((x: string) => x !== targetId) }));
+      try { await supabase.from('blocked_users').delete().match({ user_id: st.user.id, blocked_id: targetId }); } catch {}
     },
     like: dbLike, save: dbSave,
     follow: {

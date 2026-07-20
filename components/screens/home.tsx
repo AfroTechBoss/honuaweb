@@ -321,12 +321,12 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
 
   React.useEffect(() => { fetchFeed(); }, [fetchFeed]);
 
-  // Merge real DB posts with MOCK posts for a richer feed while DB is empty
-  // Filter out posts from muted users
+  // Filter out posts from muted and blocked users
   const muted: string[] = app.mutedUsers ?? [];
+  const blocked: string[] = app.blockedUsers ?? [];
   const feed = (dbPosts.length > 0 ? dbPosts : MOCK.posts).filter((p: any) => {
     const authorId = p.profile?.id ?? p.user_id;
-    return !muted.includes(authorId);
+    return !muted.includes(authorId) && !blocked.includes(authorId);
   });
   const joinedChallenge = app.challenge?.has('week19');
   return (
@@ -373,7 +373,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           ) : feed.length > 0 ? (
             <>
               {feed.map(p => dbPosts.length > 0
-                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} />
+                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
                 : <PostCard key={p.id} post={p} />
               )}
             </>
@@ -392,22 +392,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           width: 340, padding: 20, height: '100%', overflow: 'auto',
           flexShrink: 0,
         }} className="no-scrollbar right-panel">
-          {/* Search */}
-          <div style={{
-            background: 'var(--surface)', border: '1px solid var(--line)',
-            borderRadius: 999, padding: '10px 14px', marginBottom: 12,
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <Icon name="search" size={16} color="var(--ink-3)" />
-            <input placeholder="Search posts, people, projects" style={{
-              flex: 1, border: 'none', outline: 'none', background: 'transparent',
-              fontSize: 13, fontFamily: 'Satoshi',
-            }} />
-            <span style={{
-              padding: '2px 6px', border: '1px solid var(--line)',
-              borderRadius: 4, fontFamily: 'JetBrains Mono', fontSize: 10, color: 'var(--ink-3)',
-            }}>/</span>
-          </div>
+          <HomeSearch onNav={onNav} />
           <MyImpactCard />
           <TrendingPanel />
           <SuggestedFollows />
@@ -425,7 +410,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
 };
 
 // =============== Real feed card (DB posts) ===============
-function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRefresh: () => void }) {
+function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav: any; onRefresh: () => void; onHideUser?: (userId: string) => void }) {
   const app = useApp();
   const profile = post.profile;
   const original = post.original;
@@ -468,8 +453,21 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
     e.stopPropagation();
     setShowMenu(false);
     const userId = displayProfile?.id ?? post.user_id;
-    if (userId) app.muteUser?.(userId);
+    if (userId) {
+      app.muteUser?.(userId);
+      onHideUser?.(userId);
+    }
     app.toast?.({ msg: `@${displayProfile?.handle} muted`, sub: "You won't see their posts in your feed.", icon: 'bell' });
+  };
+  const handleBlock = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    const userId = displayProfile?.id ?? post.user_id;
+    if (userId) {
+      app.blockUser?.(userId);
+      onHideUser?.(userId);
+    }
+    app.toast?.({ msg: `@${displayProfile?.handle} blocked`, sub: "They can no longer see your profile or posts.", icon: 'lock' });
   };
 
   const timeAgo = (ts: string) => {
@@ -515,6 +513,9 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
               <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
                 <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
                   <Icon name="bell" size={15} /> Mute @{displayProfile?.handle}
+                </button>
+                <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                  <Icon name="lock" size={15} /> Block @{displayProfile?.handle}
                 </button>
                 <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
                   <Icon name="flag" size={15} /> Report post
@@ -600,6 +601,184 @@ function RealFeedCard({ post, onNav, onRefresh }: { post: any; onNav: any; onRef
         />
       )}
     </article>
+  );
+}
+
+// =============== Home Search (right-panel inline search with dropdown) ===============
+function HomeSearch({ onNav }: { onNav: any }) {
+  const [query, setQuery] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [results, setResults] = React.useState<{ users: any[]; posts: any[]; communities: any[] } | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const debounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // "/" keyboard shortcut
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setOpen(true);
+      }
+      if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const runSearch = React.useCallback(async (q: string) => {
+    if (!q.trim()) { setResults(null); setLoading(false); return; }
+    setLoading(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const term = q.trim();
+      const [{ data: users }, { data: posts }] = await Promise.all([
+        supabase.from('profiles').select('id, handle, full_name, avatar_url, verified').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(5),
+        supabase.from('posts').select('id, content, created_at, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url)').ilike('content', `%${term}%`).order('created_at', { ascending: false }).limit(5),
+      ]);
+      const communities = MOCK.communities?.filter((c: any) =>
+        c.name?.toLowerCase().includes(term.toLowerCase()) || c.cat?.toLowerCase().includes(term.toLowerCase())
+      ).slice(0, 5) ?? [];
+      setResults({ users: users ?? [], posts: posts ?? [], communities });
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  const onChange = (v: string) => {
+    setQuery(v);
+    setOpen(true);
+    if (debounce.current) clearTimeout(debounce.current);
+    if (!v.trim()) { setResults(null); setLoading(false); return; }
+    setLoading(true);
+    debounce.current = setTimeout(() => runSearch(v), 320);
+  };
+
+  const clear = () => { setQuery(''); setResults(null); setOpen(false); };
+  const goExplore = (extra = '') => { clear(); onNav?.('explore', extra ? { tag: extra } : {}); };
+  const hasResults = results && (results.users.length + results.posts.length + results.communities.length) > 0;
+
+  const timeAgo = (ts: string) => {
+    const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (s < 60) return `${s}s`; if (s < 3600) return `${Math.floor(s/60)}m`;
+    if (s < 86400) return `${Math.floor(s/3600)}h`; return `${Math.floor(s/86400)}d`;
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', marginBottom: 12 }}>
+      {/* Input */}
+      <div style={{ background: 'var(--surface)', border: `1.5px solid ${open ? 'var(--green)' : 'var(--line)'}`, borderRadius: open && results !== null ? '14px 14px 0 0' : 999, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, transition: 'border-color .15s, border-radius .1s' }}>
+        {loading
+          ? <div style={{ width: 15, height: 15, borderRadius: '50%', border: '2px solid var(--green)', borderTopColor: 'transparent', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+          : <Icon name="search" size={15} color={open ? 'var(--green)' : 'var(--ink-3)'} />
+        }
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => onChange(e.target.value)}
+          onFocus={() => { if (query.trim()) setOpen(true); }}
+          placeholder="Search posts, people, projects"
+          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, fontFamily: 'Satoshi', color: 'var(--ink)' }}
+        />
+        {query
+          ? <button onClick={clear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+          : <span style={{ padding: '2px 6px', border: '1px solid var(--line)', borderRadius: 4, fontFamily: 'JetBrains Mono', fontSize: 10, color: 'var(--ink-3)' }}>/</span>
+        }
+      </div>
+
+      {/* Dropdown */}
+      {open && query.trim() && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1.5px solid var(--green)', borderTop: '1px solid var(--line)', borderRadius: '0 0 14px 14px', boxShadow: '0 12px 32px rgba(0,0,0,.12)', zIndex: 200, maxHeight: 480, overflow: 'auto' }} className="no-scrollbar">
+          {loading && !results && (
+            <div style={{ padding: '16px', display: 'flex', gap: 10, flexDirection: 'column' }}>
+              {[1,2,3].map(i => <div key={i} style={{ height: 40, background: 'var(--line)', borderRadius: 8, opacity: 0.5 }} />)}
+            </div>
+          )}
+
+          {!loading && results && !hasResults && (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+              No results for <strong>"{query}"</strong>
+              <div style={{ marginTop: 8 }}>
+                <button onClick={() => goExplore()} style={{ fontSize: 12, color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Search in Explore →</button>
+              </div>
+            </div>
+          )}
+
+          {results && hasResults && (
+            <>
+              {/* People */}
+              {results.users.length > 0 && (
+                <div>
+                  <div style={{ padding: '10px 14px 6px', fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>PEOPLE</div>
+                  {results.users.map(u => (
+                    <div key={u.id} onClick={() => { clear(); onNav?.('profile', { handle: u.handle }); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer' }} className="row-hover">
+                      <Avatar src={u.avatar_url} name={u.full_name} size={32} verified={u.verified} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => goExplore()} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--green)', fontWeight: 500, borderTop: '1px solid var(--line)' }}>
+                    See all people results <Icon name="arrow" size={12} color="var(--green)" />
+                  </button>
+                </div>
+              )}
+
+              {/* Posts */}
+              {results.posts.length > 0 && (
+                <div style={{ borderTop: results.users.length > 0 ? '1px solid var(--line)' : undefined }}>
+                  <div style={{ padding: '10px 14px 6px', fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>POSTS</div>
+                  {results.posts.map(p => (
+                    <div key={p.id} onClick={() => { clear(); onNav?.('post', { id: p.id }); }} style={{ padding: '8px 14px', cursor: 'pointer' }} className="row-hover">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                        <Avatar src={p.profile?.avatar_url} name={p.profile?.full_name} size={20} />
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{p.profile?.handle} · {timeAgo(p.created_at)}</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--ink-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.content}</div>
+                    </div>
+                  ))}
+                  <button onClick={() => goExplore()} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--green)', fontWeight: 500, borderTop: '1px solid var(--line)' }}>
+                    See all post results <Icon name="arrow" size={12} color="var(--green)" />
+                  </button>
+                </div>
+              )}
+
+              {/* Communities */}
+              {results.communities.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--line)' }}>
+                  <div style={{ padding: '10px 14px 6px', fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>COMMUNITIES</div>
+                  {results.communities.map((c: any) => (
+                    <div key={c.name} onClick={() => { clear(); onNav?.('forum'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer' }} className="row-hover">
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                        <Icon name="users" size={14} color="var(--green)" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{c.members?.toLocaleString?.()} members · {c.cat}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => goExplore()} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--green)', fontWeight: 500, borderTop: '1px solid var(--line)' }}>
+                    See all community results <Icon name="arrow" size={12} color="var(--green)" />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

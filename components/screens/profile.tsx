@@ -58,6 +58,19 @@ export function DesktopProfile({ onNav, params }) {
   const { profile, posts, followerCount, followingCount, achievements, projects, following, setFollowing, loading } =
     useProfileData(lookupKey, app.user?.id);
 
+  // Check if this profile has blocked the current viewer
+  const [viewerIsBlocked, setViewerIsBlocked] = React.useState(false);
+  React.useEffect(() => {
+    if (!profile?.id || !app.user?.id || isOwn) return;
+    supabase
+      .from('blocked_users')
+      .select('user_id')
+      .eq('user_id', profile.id)
+      .eq('blocked_id', app.user.id)
+      .maybeSingle()
+      .then(({ data }) => setViewerIsBlocked(!!data));
+  }, [profile?.id, app.user?.id, isOwn]);
+
   const handleFollowToggle = async () => {
     if (!app.user?.id || !profile?.id) return;
     const nowFollowing = !following;
@@ -103,6 +116,24 @@ export function DesktopProfile({ onNav, params }) {
     );
   }
 
+  if (viewerIsBlocked) {
+    return (
+      <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+        <DesktopSidebar active="profile" onNav={onNav} />
+        <main style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+          <div style={{ textAlign: 'center', padding: 32, maxWidth: 360 }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--line)', display: 'grid', placeItems: 'center', margin: '0 auto 16px' }}>
+              <Icon name="lock" size={28} color="var(--ink-3)" />
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink)', marginBottom: 8 }}>You can't view this profile</div>
+            <div style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.6 }}>This user has blocked you. You can't see their posts, followers, or any other profile information.</div>
+            <button className="btn btn-ghost" style={{ marginTop: 20 }} onClick={() => onNav?.('home')}>Go to home feed</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="profile" onNav={onNav} />
@@ -131,7 +162,7 @@ export function DesktopProfile({ onNav, params }) {
         <div className="profile-content" style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
           {/* Avatar row — straddles cover */}
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -72, marginBottom: 0, position: 'relative', zIndex: 1 }}>
-            <div className="profile-avatar-wrap" style={{ border: '6px solid var(--bg)', borderRadius: 24, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+            <div className="profile-avatar-wrap" style={{ border: '6px solid var(--bg)', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, position: 'relative', width: 144, height: 144, boxSizing: 'border-box' }}>
               <Avatar src={profile.avatar_url} name={profile.full_name} size={132} verified={profile.verified} />
               {isOwn && (
                 <div onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Avatar change coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)', display: 'grid', placeItems: 'center', opacity: 0, cursor: 'pointer', transition: 'opacity .15s' }} className="avatar-edit-overlay">
@@ -142,8 +173,8 @@ export function DesktopProfile({ onNav, params }) {
             <div className="profile-actions" style={{ display: 'flex', gap: 8, paddingBottom: 8 }}>
               {isOwn ? (
                 <>
-                  <button className="btn btn-ghost" onClick={() => { navigator.clipboard?.writeText(window.location.href); app.toast?.({ msg: 'Link copied', icon: 'share' }); }}><Icon name="share" size={14} /> Share</button>
-                  <button className="btn btn-primary" onClick={() => app.openModal?.('editprofile')}><Icon name="edit" size={14} /> Edit profile</button>
+                  <button className="btn btn-ghost profile-action-btn" onClick={() => { navigator.clipboard?.writeText(window.location.href); app.toast?.({ msg: 'Link copied', icon: 'share' }); }}><Icon name="share" size={14} /> <span className="btn-label">Share</span></button>
+                  <button className="btn btn-primary profile-action-btn" onClick={() => app.openModal?.('editprofile')}><Icon name="edit" size={14} /> <span className="btn-label">Edit profile</span></button>
                 </>
               ) : (
                 <>
@@ -342,10 +373,11 @@ function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
 
 const REPORT_OPTIONS_LIST = ['Spam or misleading','Hate speech or harassment','Violence or dangerous content','False information','Nudity or sexual content','Intellectual property violation','Other'];
 
-function PostMoreMenu({ profile, postId }: { profile: any; postId: string }) {
+function PostMoreMenu({ profile, postId, isOwn = false }: { profile: any; postId: string; isOwn?: boolean }) {
   const app = useApp();
   const [open, setOpen] = React.useState(false);
   const [showReport, setShowReport] = React.useState(false);
+  const [showDelete, setShowDelete] = React.useState(false);
   const [reason, setReason] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
 
@@ -354,8 +386,22 @@ function PostMoreMenu({ profile, postId }: { profile: any; postId: string }) {
     if (profile?.id) app.muteUser?.(profile.id);
     app.toast?.({ msg: `@${profile?.handle} muted`, sub: "You won't see their posts in your feed.", icon: 'bell' });
   };
+  const handleBlock = (e: React.MouseEvent) => {
+    e.stopPropagation(); setOpen(false);
+    if (profile?.id) app.blockUser?.(profile.id);
+    app.toast?.({ msg: `@${profile?.handle} blocked`, sub: "They can no longer see your profile or posts.", icon: 'lock' });
+  };
   const handleReport = (e: React.MouseEvent) => {
     e.stopPropagation(); setOpen(false); setReason(''); setSubmitted(false); setShowReport(true);
+  };
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation(); setShowDelete(false);
+    try {
+      await supabase.from('posts').delete().eq('id', postId);
+      app.toast?.({ msg: 'Post deleted', icon: 'trash', kind: 'success' });
+    } catch {
+      app.toast?.({ msg: 'Failed to delete post', icon: 'close' });
+    }
   };
   const submit = (e: React.MouseEvent) => {
     e.stopPropagation(); if (!reason) return;
@@ -373,14 +419,37 @@ function PostMoreMenu({ profile, postId }: { profile: any; postId: string }) {
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
           <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
-            <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
-              <Icon name="bell" size={15} /> Mute @{profile?.handle}
-            </button>
-            <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
-              <Icon name="flag" size={15} /> Report post
-            </button>
+            {isOwn ? (
+              <button onClick={e => { e.stopPropagation(); setOpen(false); setShowDelete(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left' }}>
+                <Icon name="trash" size={15} /> Delete post
+              </button>
+            ) : (
+              <>
+                <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
+                  <Icon name="bell" size={15} /> Mute @{profile?.handle}
+                </button>
+                <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                  <Icon name="lock" size={15} /> Block @{profile?.handle}
+                </button>
+                <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                  <Icon name="flag" size={15} /> Report post
+                </button>
+              </>
+            )}
           </div>
         </>
+      )}
+      {showDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { e.stopPropagation(); setShowDelete(false); }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 28, width: 340, maxWidth: '90vw', boxShadow: '0 16px 48px rgba(0,0,0,.18)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Delete post?</div>
+            <div style={{ fontSize: 14, color: 'var(--ink-3)', marginBottom: 22 }}>This can't be undone. The post will be permanently removed.</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={e => { e.stopPropagation(); setShowDelete(false); }} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
+              <button onClick={handleDelete} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: 'var(--clay)', cursor: 'pointer', fontSize: 14, color: '#fff', fontWeight: 600 }}>Delete</button>
+            </div>
+          </div>
+        </div>
       )}
       {showReport && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={e => { e.stopPropagation(); setShowReport(false); }}>
@@ -421,6 +490,7 @@ function PostMoreMenu({ profile, postId }: { profile: any; postId: string }) {
 function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any; isRepost?: boolean }) {
   const app = useApp();
   const profile = post.profile;
+  const isOwnPost = !!app.user?.id && (post.user_id === app.user.id || profile?.handle === app.user.handle);
   const original = post.original;
   const liked = app.like?.has(post.id);
   const timeAgo = (ts: string) => {
@@ -446,7 +516,7 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
-            <PostMoreMenu profile={profile} postId={post.id} />
+            <PostMoreMenu profile={profile} postId={post.id} isOwn={isOwnPost} />
           </div>
           {(isRepost && original ? original.content : post.content) && (
             <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }}>{isRepost && original ? original.content : post.content}</p>

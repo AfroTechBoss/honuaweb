@@ -431,9 +431,9 @@ export function DesktopSettings({ onNav, params }: { onNav: any; params?: Record
   const app = useApp();
   const [sec, setSec] = React.useState('Account');
   const nav = [
-    ['Account', 'user'], ['Profile', 'user'], ['Privacy', 'lock'], ['Notifications', 'bell'],
-    ['Impact tracking', 'leaf'], ['Wallet & rewards', 'sparkles'], ['Appearance', 'sparkles'],
-    ['Connected apps', 'bolt'], ['Help & support', 'comment'],
+    ['Account', 'user'], ['Profile', 'user'], ['Privacy', 'lock'], ['Muted & Blocked', 'lock'],
+    ['Notifications', 'bell'], ['Impact tracking', 'leaf'], ['Wallet & rewards', 'sparkles'],
+    ['Appearance', 'sparkles'], ['Connected apps', 'bolt'], ['Help & support', 'comment'],
   ];
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -469,6 +469,7 @@ export function SettingsSection({ sec, app, onNav }) {
     'Account': 'Manage your sign-in, identity, and verified-impact wallet.',
     'Profile': 'Control how you appear to the community.',
     'Privacy': 'Decide who can see and reach you.',
+    'Muted & Blocked': 'Manage users you have muted or blocked.',
     'Notifications': 'Choose what reaches you, and how.',
     'Impact tracking': 'Connect data sources so your actions get verified automatically.',
     'Wallet & rewards': 'Your Green Points, Impact Tokens and on-chain rewards.',
@@ -522,6 +523,8 @@ export function SettingsSection({ sec, app, onNav }) {
           <ToggleC2 label="Who can message me — everyone" sub="Off limits it to people you follow." def />
         </Section>
       )}
+
+      {sec === 'Muted & Blocked' && <MutedBlockedSection app={app} />}
 
       {sec === 'Notifications' && (
         <Section title="Push & email">
@@ -727,6 +730,71 @@ export function HelpSupport({ app, onNav }: { app: any; onNav?: any }) {
 }
 
 // controlled toggle row for settings
+function MutedBlockedSection({ app }: { app: any }) {
+  const [mutedProfiles, setMutedProfiles] = React.useState<any[]>([]);
+  const [blockedProfiles, setBlockedProfiles] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const userId = app.user?.id;
+    if (!userId) return;
+    import('@/lib/supabase').then(({ supabase }) => {
+      supabase.from('muted_users').select('muted_id').eq('user_id', userId).then(({ data: mutes }: any) => {
+        const ids = (mutes ?? []).map((m: any) => m.muted_id);
+        if (!ids.length) { setMutedProfiles([]); return; }
+        supabase.from('profiles').select('id, handle, full_name, avatar_url').in('id', ids).then(({ data }: any) => setMutedProfiles(data ?? []));
+      });
+      supabase.from('blocked_users').select('blocked_id').eq('user_id', userId).then(({ data: blocks }: any) => {
+        const ids = (blocks ?? []).map((b: any) => b.blocked_id);
+        if (!ids.length) { setBlockedProfiles([]); return; }
+        supabase.from('profiles').select('id, handle, full_name, avatar_url').in('id', ids).then(({ data }: any) => setBlockedProfiles(data ?? []));
+      });
+    });
+  }, [app.user?.id]);
+
+  const handleUnmute = async (targetId: string) => {
+    await app.unmuteUser?.(targetId);
+    setMutedProfiles(p => p.filter(u => u.id !== targetId));
+  };
+  const handleUnblock = async (targetId: string) => {
+    await app.unblockUser?.(targetId);
+    setBlockedProfiles(p => p.filter(u => u.id !== targetId));
+  };
+
+  return (
+    <>
+      <Section title="Muted users" sub="Muted users' posts are hidden from your feed. They don't know they're muted.">
+        {mutedProfiles.length === 0
+          ? <div style={{ fontSize: 14, color: 'var(--ink-4)', padding: '12px 0' }}>No muted users.</div>
+          : mutedProfiles.map(u => (
+            <UserRow key={u.id} user={u} actionLabel="Unmute" onAction={() => handleUnmute(u.id)} />
+          ))
+        }
+      </Section>
+      <Section title="Blocked users" sub="Blocked users can't see your posts or profile.">
+        {blockedProfiles.length === 0
+          ? <div style={{ fontSize: 14, color: 'var(--ink-4)', padding: '12px 0' }}>No blocked users.</div>
+          : blockedProfiles.map(u => (
+            <UserRow key={u.id} user={u} actionLabel="Unblock" onAction={() => handleUnblock(u.id)} actionColor="var(--clay)" />
+          ))
+        }
+      </Section>
+    </>
+  );
+}
+
+function UserRow({ user, actionLabel, onAction, actionColor }: { user: any; actionLabel: string; onAction: () => void; actionColor?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+      <span style={{ width: 40, height: 40, borderRadius: '50%', background: user.avatar_url ? `url(${user.avatar_url}) center/cover` : 'var(--green-tint)', display: 'inline-block', flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.full_name}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{user.handle}</div>
+      </div>
+      <button className="btn btn-ghost" style={{ fontSize: 13, padding: '6px 14px', color: actionColor, borderColor: actionColor }} onClick={onAction}>{actionLabel}</button>
+    </div>
+  );
+}
+
 export function ToggleC2({ label, sub, def }: { label: string; sub?: string; def?: boolean }) {
   const [on, setOn] = React.useState(!!def);
   return (

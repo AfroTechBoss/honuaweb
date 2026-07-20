@@ -549,7 +549,7 @@ input, textarea, select { font-family: inherit; }
   }
   .profile-avatar-wrap {
     border-width: 4px !important;
-    border-radius: 16px !important;
+    border-radius: 50% !important;
   }
   /* Avatar size override via nested span */
   .profile-avatar-wrap > span > span {
@@ -572,10 +572,11 @@ input, textarea, select { font-family: inherit; }
   }
   .profile-actions .btn {
     flex: 1 !important;
-    min-width: 80px !important;
+    min-width: 0 !important;
     justify-content: center !important;
-    font-size: 13px !important;
-    padding: 8px 10px !important;
+    font-size: 12px !important;
+    padding: 7px 8px !important;
+    gap: 4px !important;
   }
 
   /* Tabs: scrollable, no wrap */
