@@ -305,9 +305,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
         saved: savedIds.length ? savedIds : s.saved,
         following: followedHandles.length ? followedHandles : s.following,
-        mutedUsers: mutedIds.length ? mutedIds : s.mutedUsers,
-        blockedUsers: blockedIds.length ? blockedIds : s.blockedUsers,
-        blockedByUsers: blockedByIds.length ? blockedByIds : s.blockedByUsers,
+        // Always apply the fresh DB value — empty array means "no one" and is correct
+        mutedUsers: mutedIds,
+        blockedUsers: blockedIds,
+        blockedByUsers: blockedByIds,
       }));
     }).catch(() => {});
     refreshUnread(userId);
