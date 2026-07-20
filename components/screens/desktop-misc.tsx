@@ -334,9 +334,13 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
     setSending(true);
     const content = draft.trim();
     setDraft('');
+    const optimisticId = `opt-${Date.now()}`;
+    setMessages(prev => [...prev, { id: optimisticId, conversation_id: activeConvoId, sender_id: userId, content, seen_at: null, created_at: new Date().toISOString() }]);
     try {
       const { supabase } = await import('@/lib/supabase');
-      await supabase.from('messages').insert({ conversation_id: activeConvoId, sender_id: userId, content });
+      const { data: inserted } = await supabase.from('messages').insert({ conversation_id: activeConvoId, sender_id: userId, content }).select().single();
+      // Replace the optimistic message with the real one
+      if (inserted) setMessages(prev => prev.map(m => m.id === optimisticId ? inserted : m));
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', activeConvoId);
     } finally {
       setSending(false);
