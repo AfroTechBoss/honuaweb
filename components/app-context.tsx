@@ -304,8 +304,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         liked: likes ? likes.map((r: any) => r.post_id) : s.liked,
         reposted: reposts ? reposts.map((r: any) => r.post_id) : (s.reposted || []),
         saved: savedIds.length ? savedIds : s.saved,
-        following: followedHandles.length ? followedHandles : s.following,
         // Always apply the fresh DB value — empty array means "no one" and is correct
+        following: followedHandles,
         mutedUsers: mutedIds,
         blockedUsers: blockedIds,
         blockedByUsers: blockedByIds,

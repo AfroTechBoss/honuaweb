@@ -436,6 +436,7 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
   const profile = post.profile;
   const original = post.original;
   const liked = app.like?.has(post.id);
+  const isOwnPost = !!app.user?.id && (post.user_id === app.user.id || post.profile?.handle === app.user.handle);
   const [showShare, setShowShare] = React.useState(false);
   const [showBookmark, setShowBookmark] = React.useState(false);
   const [lightbox, setLightbox] = React.useState<string | null>(null);
@@ -491,6 +492,15 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
     app.toast?.({ msg: `@${displayProfile?.handle} blocked`, sub: "They can no longer see your profile or posts.", icon: 'lock' });
   };
 
+  const handleDeletePost = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    if (!confirm('Delete this post? This cannot be undone.')) return;
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('posts').delete().eq('id', post.id);
+    onRefresh();
+  };
+
   const timeAgo = (ts: string) => {
     const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
     if (s < 60) return `${s}s`;
@@ -532,15 +542,21 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
             <>
               <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setShowMenu(false)} />
               <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 180, overflow: 'hidden' }}>
-                <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
-                  <Icon name="bell" size={15} /> Mute @{displayProfile?.handle}
-                </button>
-                <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
-                  <Icon name="lock" size={15} /> Block @{displayProfile?.handle}
-                </button>
-                <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
-                  <Icon name="flag" size={15} /> Report post
-                </button>
+                {isOwnPost ? (
+                  <button onClick={handleDeletePost} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left' }}>
+                    <Icon name="trash" size={15} /> Delete post
+                  </button>
+                ) : (<>
+                  <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
+                    <Icon name="bell" size={15} /> Mute @{displayProfile?.handle}
+                  </button>
+                  <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                    <Icon name="lock" size={15} /> Block @{displayProfile?.handle}
+                  </button>
+                  <button onClick={handleReport} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                    <Icon name="flag" size={15} /> Report post
+                  </button>
+                </>)}
               </div>
             </>
           )}
