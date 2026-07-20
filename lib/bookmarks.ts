@@ -45,7 +45,7 @@ export async function getBookmarks(userId: string, collectionId?: string) {
   // Fetch bookmark rows first, then join posts manually to avoid FK hint issues
   let q = supabase
     .from("bookmarks")
-    .select("id, collection_id, created_at, post_id")
+    .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (collectionId) q = q.eq("collection_id", collectionId);
