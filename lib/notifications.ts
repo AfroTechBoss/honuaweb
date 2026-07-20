@@ -29,12 +29,13 @@ export async function createNotification({
 }
 
 export async function getNotifications(userId: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("notifications")
-    .select("*, actor:profiles!notifications_actor_id_fkey(id, handle, full_name, avatar_url)")
+    .select("*, actor:profiles(id, handle, full_name, avatar_url)")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(60);
+  if (error) console.error('[notifications] getNotifications failed:', error.message);
   return data ?? [];
 }
 
