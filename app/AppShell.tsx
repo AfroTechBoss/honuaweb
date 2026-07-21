@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useEffect, useLayoutEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AppProvider, useApp } from "@/components/app-context";
 import { ToastHost } from "@/components/primitives";
@@ -24,12 +24,10 @@ function AppSkeleton() {
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
       <style>{`@keyframes skelPulse { 0%,100%{opacity:.45} 50%{opacity:.9} }`}</style>
-      {/* Sidebar */}
       <div style={{ width: 72, borderRight: '1px solid var(--line)', padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 24, flexShrink: 0 }}>
         <Bone w={40} h={40} r={12} />
         {[1,2,3,4,5,6].map(i => <Bone key={i} w={40} h={40} r={10} />)}
       </div>
-      {/* Main feed */}
       <div style={{ flex: 1, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
         <Bone w="40%" h={28} r={6} />
         {[1,2,3].map(i => (
@@ -46,7 +44,6 @@ function AppSkeleton() {
           </div>
         ))}
       </div>
-      {/* Right panel */}
       <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--line)', padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Bone w="50%" h={18} r={6} />
         {[1,2,3].map(i => (
@@ -67,6 +64,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const { authed, authReady, needsOnboarding } = useApp();
   const pathname = usePathname();
   const router = useRouter();
+  // Stays false during SSR; flips to true synchronously before first browser paint
+  const [clientReady, setClientReady] = React.useState(false);
+  useLayoutEffect(() => { setClientReady(true); }, []);
 
   useEffect(() => {
     if (!authReady) return;
@@ -75,6 +75,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (authed && pathname === "/login") router.replace("/");
   }, [authReady, authed, pathname, router]);
 
+  // Server renders nothing — skeleton never reaches the browser as HTML
+  if (!clientReady) return null;
+  // Client: show skeleton only while auth check is still in-flight
   if (!authReady) return <AppSkeleton />;
 
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
