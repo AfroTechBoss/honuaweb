@@ -57,7 +57,15 @@ const STATE_DEFAULTS: any = {
   sellerStatus: "none",
   sellerShop: null,
   authed: false,
-  authReady: false,
+  // authReady: true if session already found in localStorage (instant), finalized after getSession()
+  authReady: (() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      // Supabase stores session under a key like "sb-<ref>-auth-token"
+      const key = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      return !!key && !!localStorage.getItem(key);
+    } catch { return false; }
+  })(),
   user: null,
   // supabase session — not persisted to localStorage
   session: null,
