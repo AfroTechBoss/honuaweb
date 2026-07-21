@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { uploadFile } from "@/lib/storage";
@@ -57,15 +57,7 @@ const STATE_DEFAULTS: any = {
   sellerStatus: "none",
   sellerShop: null,
   authed: false,
-  // authReady: true if session already found in localStorage (instant), finalized after getSession()
-  authReady: (() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      // Supabase stores session under a key like "sb-<ref>-auth-token"
-      const key = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-      return !!key && !!localStorage.getItem(key);
-    } catch { return false; }
-  })(),
+  authReady: false,
   user: null,
   // supabase session — not persisted to localStorage
   session: null,
@@ -95,6 +87,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [st, setSt] = useState<any>(STATE_DEFAULTS);
   // hydrate from localStorage after mount (avoids SSR mismatch)
   useEffect(() => { setSt(loadState()); }, []);
+
+  // Synchronously before first paint: check localStorage for an existing Supabase session.
+  // If found, optimistically mark authed+ready so returning users see the app with zero delay.
+  // getSession() will still run to validate/refresh the token in the background.
+  useLayoutEffect(() => {
+    try {
+      const key = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const hasSession = !!key && !!localStorage.getItem(key);
+      setSt((s: any) => ({ ...s, authReady: true, authed: hasSession ? true : s.authed }));
+    } catch {
+      setSt((s: any) => ({ ...s, authReady: true }));
+    }
+  }, []);
   useEffect(() => {
     // Don't persist session/authed/user — Supabase manages those
     const { session: _s, authed: _a, user: _u, ...persistable } = st;
