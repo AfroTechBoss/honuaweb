@@ -57,6 +57,7 @@ const STATE_DEFAULTS: any = {
   sellerStatus: "none",
   sellerShop: null,
   authed: false,
+  authReady: false,
   user: null,
   // supabase session — not persisted to localStorage
   session: null,
@@ -109,7 +110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         avatar: u.user_metadata?.avatar_url || null,
         provider,
       };
-      setSt((s: any) => ({ ...s, authed: true, session, user: base }));
+      setSt((s: any) => ({ ...s, authed: true, authReady: true, session, user: base }));
       // Fetch the profiles row to get the real avatar_url / handle / name
       try {
         const { data: profile } = await supabase
@@ -134,9 +135,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     };
 
-    // Set initial session on mount
+    // Set initial session on mount — mark authReady once resolved
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) hydrateUser(session);
+      else setSt((s: any) => ({ ...s, authReady: true }));
     });
 
     // Keep in sync with any auth changes (login, logout, token refresh)

@@ -10,23 +10,19 @@ import { OAuthOnboardingFlow } from "@/components/screens/desktop-misc";
 const PUBLIC_PATHS = ["/login", "/terms", "/seller-policy", "/proposition"];
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { authed, needsOnboarding } = useApp();
+  const { authed, authReady, needsOnboarding } = useApp();
   const pathname = usePathname();
   const router = useRouter();
-  const [ready, setReady] = React.useState(false);
 
   useEffect(() => {
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
+    if (!authReady) return;
     const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
     if (!authed && !isPublic) router.replace("/login");
     if (authed && pathname === "/login") router.replace("/");
-  }, [ready, authed, pathname, router]);
+  }, [authReady, authed, pathname, router]);
 
-  if (!ready) return null;
+  // Wait silently until Supabase resolves the session — no flash
+  if (!authReady) return null;
 
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
   if (!authed && !isPublic) return null;
