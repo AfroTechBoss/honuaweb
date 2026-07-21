@@ -140,7 +140,7 @@ export function DesktopProfile({ onNav, params }) {
       <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
         {/* Cover */}
         <div className="profile-cover" style={{
-          height: 180,
+          height: 200,
           background: profile.cover_url
             ? `url(${profile.cover_url}) center/cover`
             : 'linear-gradient(135deg, #1f6f3f 0%, #2e9a5b 50%, #c8e6cf 100%)',
@@ -153,24 +153,19 @@ export function DesktopProfile({ onNav, params }) {
             </svg>
           )}
           {isOwn && (
-            <button onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Cover photo upload coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', bottom: 12, right: 12, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: 8, color: '#fff', padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Cover photo upload coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', bottom: 12, right: 16, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: 8, color: '#fff', padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <Icon name="edit" size={13} /> Edit cover
             </button>
           )}
         </div>
 
-        <div className="profile-content" style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
-          {/* Avatar row — straddles cover */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -72, marginBottom: 0, position: 'relative', zIndex: 1 }}>
-            <div className="profile-avatar-wrap" style={{ border: '6px solid var(--bg)', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, position: 'relative', width: 144, height: 144, boxSizing: 'border-box' }}>
-              <Avatar src={profile.avatar_url} name={profile.full_name} size={132} verified={profile.verified} />
-              {isOwn && (
-                <div onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Avatar change coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.35)', display: 'grid', placeItems: 'center', opacity: 0, cursor: 'pointer', transition: 'opacity .15s' }} className="avatar-edit-overlay">
-                  <Icon name="edit" size={20} />
-                </div>
-              )}
+        <div className="profile-content" style={{ padding: '0 28px', maxWidth: 1100, margin: '0 auto' }}>
+          {/* Avatar + actions row */}
+          <div className="profile-avatar-row" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -52, marginBottom: 14, position: 'relative', zIndex: 1 }}>
+            <div className="profile-avatar-wrap" style={{ borderRadius: '50%', overflow: 'hidden', width: 104, height: 104, flexShrink: 0, boxShadow: '0 2px 16px rgba(0,0,0,.2)' }}>
+              <Avatar src={profile.avatar_url} name={profile.full_name} size={104} verified={profile.verified} noBorder />
             </div>
-            <div className="profile-actions" style={{ display: 'flex', gap: 8, paddingBottom: 8 }}>
+            <div className="profile-actions" style={{ display: 'flex', gap: 8, paddingBottom: 4 }}>
               {isOwn ? (
                 <>
                   <button className="btn btn-ghost profile-action-btn" onClick={() => { navigator.clipboard?.writeText(window.location.href); app.toast?.({ msg: 'Link copied', icon: 'share' }); }}><Icon name="share" size={14} /> <span className="btn-label">Share</span></button>
@@ -186,8 +181,8 @@ export function DesktopProfile({ onNav, params }) {
             </div>
           </div>
 
-          {/* Identity: name + handle — always below cover */}
-          <div className="profile-identity-row" style={{ marginBottom: 18, paddingTop: 40 }}>
+          {/* Identity: name + handle */}
+          <div className="profile-identity-row" style={{ marginBottom: 18, paddingTop: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <h1 className="font-display profile-name" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
               {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
@@ -647,25 +642,90 @@ export function DesktopPostDetail({ onNav, params }) {
   const liked = app.like?.has(post.id);
   const saved = app.save?.has(post.id);
   const following = isMock ? app.follow?.has(user?.handle) : app.follow?.has(displayProfile?.handle);
-  const [tree, setTree] = React.useState(makeCommentSeed);
+  const [tree, setTree] = React.useState<any[]>(isMock ? makeCommentSeed() : []);
   const [reply, setReply] = React.useState('');
   const [showBookmark, setShowBookmark] = React.useState(false);
+
+  // Build a nested tree from flat DB rows
+  const buildTree = (rows: any[]) => {
+    const map: Record<string, any> = {};
+    rows.forEach(r => { map[r.id] = { ...r, replies: [] }; });
+    const roots: any[] = [];
+    rows.forEach(r => {
+      if (r.parent_id && map[r.parent_id]) map[r.parent_id].replies.push(map[r.id]);
+      else roots.push(map[r.id]);
+    });
+    return roots;
+  };
+
+  const [liveCommentCount, setLiveCommentCount] = React.useState<number | null>(null);
+
+  // Load real comments from DB
+  const loadComments = React.useCallback(async (postId: string) => {
+    const { data } = await supabase
+      .from('comments')
+      .select('*, profile:profiles!comments_user_id_fkey(full_name, handle, avatar_url, verified)')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
+    if (data) {
+      setTree(buildTree(data));
+      setLiveCommentCount(data.length);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (isMock || !post?.id) return;
+    loadComments(post.id);
+    const ch = supabase.channel(`comments-${post.id}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: `post_id=eq.${post.id}` },
+        () => loadComments(post.id))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [isMock, post?.id, loadComments]);
+
   const postReply = async () => {
     if (!reply.trim()) return;
     const text = reply.trim();
-    setTree(c => [{ id: Date.now(), user: app.user?.handle || 'you', text, time: 'now', likes: 0, replies: [] }, ...c]);
     setReply('');
-    app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' });
-    if (!isMock && app.user?.id) {
-      try {
-        await supabase.from('comments').insert({ post_id: post.id, user_id: app.user.id, content: text });
-        const postOwnerId = post.user_id ?? dbPost?.user_id;
-        if (postOwnerId) {
-          const { createNotification } = await import('@/lib/notifications');
-          await createNotification({ userId: postOwnerId, actorId: app.user.id, type: 'comment', postId: post.id, body: `commented: "${text.slice(0, 80)}"` });
-        }
-      } catch {}
+    if (isMock) {
+      setTree(c => [{ id: Date.now(), user: app.user?.handle || 'you', text, time: 'now', likes: 0, replies: [] }, ...c]);
+      setDbPost((p: any) => p ? { ...p, comments_count: (p.comments_count ?? 0) + 1 } : p);
+      app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' });
+      return;
     }
+    if (!app.user?.id) return;
+    // Optimistic insert — shows 'now' immediately; realtime will replace with DB row
+    const optimisticId = `opt-${Date.now()}`;
+    setTree(c => [{ id: optimisticId, content: text, time: 'now', likes: 0, replies: [], profile: { full_name: app.user?.name, handle: app.user?.handle, avatar_url: app.user?.avatar, verified: false }, user_id: app.user.id }, ...c]);
+    setLiveCommentCount(n => (n ?? 0) + 1);
+    setDbPost((p: any) => p ? { ...p, comments_count: (p.comments_count ?? 0) + 1 } : p);
+    app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' });
+    try {
+      await supabase.from('comments').insert({ post_id: post.id, user_id: app.user.id, content: text });
+      const postOwnerId = dbPost?.user_id;
+      if (postOwnerId && postOwnerId !== app.user.id) {
+        const { createNotification } = await import('@/lib/notifications');
+        await createNotification({ userId: postOwnerId, actorId: app.user.id, type: 'comment', postId: post.id, body: `commented: "${text.slice(0, 80)}"` });
+      }
+    } catch (e) { console.error('[postReply]', e); }
+  };
+
+  const postReplyToComment = async (parentId: string | number, text: string) => {
+    if (isMock) return;
+    if (!app.user?.id) return;
+    // Optimistic count bump; tree is already updated locally by CommentThread
+    setLiveCommentCount(n => (n ?? 0) + 1);
+    setDbPost((p: any) => p ? { ...p, comments_count: (p.comments_count ?? 0) + 1 } : p);
+    try {
+      await supabase.from('comments').insert({ post_id: post.id, user_id: app.user.id, content: text, parent_id: parentId });
+      const { createNotification } = await import('@/lib/notifications');
+      // notify parent comment author if different user
+      const parent = tree.find((n: any) => n.id === parentId);
+      const parentUserId = parent?.user_id;
+      if (parentUserId && parentUserId !== app.user.id) {
+        await createNotification({ userId: parentUserId, actorId: app.user.id, type: 'reply', postId: post.id, body: `replied: "${text.slice(0, 80)}"` });
+      }
+    } catch (e) { console.error('[postReplyToComment]', e); }
   };
   if (loading) return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -755,7 +815,7 @@ export function DesktopPostDetail({ onNav, params }) {
             </div>
             <footer style={{ display: 'flex', gap: 28, marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
               <ActionBtn icon="heart" count={(isMock ? (post as any).likes : (post.likes_count ?? 0)) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
-              <ActionBtn icon="comment" count={isMock ? (post as any).comments : (post.comments_count ?? 0)} onClick={() => document.getElementById('pd-reply')?.focus()} />
+              <ActionBtn icon="comment" count={isMock ? (post as any).comments : (liveCommentCount ?? post.comments_count ?? 0)} onClick={() => document.getElementById('pd-reply')?.focus()} />
               <ActionBtn icon="repost" count={(isMock ? (post as any).reposts : (post.reposts_count ?? 0)) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
                 <ActionBtn icon="bookmark" active={saved} onClick={() => setShowBookmark(true)} />
@@ -790,7 +850,7 @@ export function DesktopPostDetail({ onNav, params }) {
           </div>
 
           {/* Comments */}
-          <CommentThread tree={tree} setTree={setTree} />
+          <CommentThread tree={tree} setTree={setTree} onNav={onNav} onDbReply={isMock ? undefined : postReplyToComment} />
         </div>
 
         {/* Right rail */}

@@ -355,9 +355,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (p.old.user_id === userId) return;
         bumpDelta(p.old.post_id, 'reposts', -1);
       })
-      // Incoming notification for this user (Realtime — requires migration to be run)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => {
+      // Incoming notification for this user — bump badge + show in-app popup
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, async (p: any) => {
         setUnreadNotifs(n => n + 1);
+        // Fetch actor profile for rich popup
+        try {
+          const actorId = p.new?.actor_id;
+          const type = p.new?.type ?? '';
+          const body = p.new?.body ?? '';
+          if (!actorId) return;
+          const { data: actor } = await supabase
+            .from('profiles')
+            .select('full_name, handle, avatar_url')
+            .eq('id', actorId)
+            .single();
+          if (!actor) return;
+          const actionLabel: Record<string, string> = {
+            like: 'liked your post',
+            comment: 'commented on your post',
+            reply: 'replied to your comment',
+            follow: 'started following you',
+            message: 'sent you a message',
+            repost: 'reposted your post',
+          };
+          const label = actionLabel[type] ?? body;
+          toast({
+            kind: 'notif',
+            actor,
+            msg: actor.full_name,
+            sub: label,
+            icon: type === 'like' ? 'heart' : type === 'comment' || type === 'reply' ? 'comment' : type === 'follow' ? 'user' : type === 'message' ? 'msg' : 'bell',
+            notifType: type,
+            postId: p.new?.post_id ?? null,
+            actorHandle: actor.handle,
+            duration: 5000,
+          });
+        } catch {}
       })
       // Someone blocked me — add them to blockedByUsers so their posts disappear
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'blocked_users', filter: `blocked_id=eq.${userId}` }, (p: any) => {

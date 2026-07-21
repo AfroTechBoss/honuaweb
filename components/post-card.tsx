@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React from "react";
 import { Icon } from "./icons";
 import { Avatar, ImagePlaceholder, ScorePill, VerifiedImpact } from "./primitives";
@@ -561,7 +561,15 @@ export function SuggestedFollows() {
   );
 };
 
-// =============== Threaded comments (nested, expandable) ===============
+// =============== Threaded comments ===============
+function _timeAgo(ts: string) {
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+const timeAgo = _timeAgo;
 let __cid = 9000;
 export function makeCommentSeed() {
   return [
@@ -570,7 +578,7 @@ export function makeCommentSeed() {
         { id: ++__cid, user: 'marcus', text: 'That would be amazing, thank you!', time: '20m', likes: 2, replies: [] },
       ] },
     ] },
-    { id: ++__cid, user: 'maya', text: 'Following — we’re trying the same in our building. Any vendor recs?', time: '1h', likes: 8, replies: [
+    { id: ++__cid, user: 'maya', text: "Following — we're trying the same in our building. Any vendor recs?", time: '1h', likes: 8, replies: [
       { id: ++__cid, user: 'greentech', text: 'We can intro you to our installer — DM us.', time: '52m', likes: 4, replies: [] },
     ] },
     { id: ++__cid, user: 'okafor', text: 'Inspiring work. What permitting hurdles did you hit?', time: '2h', likes: 15, replies: [] },
@@ -586,34 +594,148 @@ function __addReply(list, parentId, node) {
     ? { ...n, replies: [...(n.replies || []), node] }
     : { ...n, replies: __addReply(n.replies || [], parentId, node) });
 }
+function __removeNode(list, id) {
+  return list.filter(n => n.id !== id).map(n => ({ ...n, replies: __removeNode(n.replies || [], id) }));
+}
 
-export function CommentThread({ tree, setTree, dense = false }) {
+const COMMENT_REPORT_OPTIONS = ['Spam or misleading', 'Hate speech or harassment', 'Violence or dangerous content', 'False information', 'Off-topic', 'Other'];
+
+function CommentMoreMenu({ usr, isOwn, onDelete, onNav }: { usr: any; isOwn: boolean; onDelete: () => void; onNav?: (screen: string, params?: any) => void }) {
+  const app = useApp();
+  const [open, setOpen] = React.useState(false);
+  const [showReport, setShowReport] = React.useState(false);
+  const [reportReason, setReportReason] = React.useState('');
+  const [reportDone, setReportDone] = React.useState(false);
+
+  const close = () => setOpen(false);
+
+  const handleMute = () => {
+    close();
+    app.toast?.({ msg: `Muted @${usr.handle}`, sub: "You won't see their content anymore.", icon: 'bell' });
+  };
+  const handleBlock = () => {
+    close();
+    app.toast?.({ msg: `Blocked @${usr.handle}`, sub: 'They can no longer interact with you.', icon: 'lock' });
+  };
+  const submitReport = () => {
+    setReportDone(true);
+    setTimeout(() => { setShowReport(false); setReportDone(false); setReportReason(''); }, 1800);
+  };
+
+  return (
+    <div style={{ position: 'relative', marginLeft: 'auto' }} onClick={e => e.stopPropagation()}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(m => !m); }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', padding: '2px 4px', borderRadius: 6, display: 'grid', placeItems: 'center', opacity: 0, transition: 'opacity .1s' }}
+        className="comment-more-btn"
+      >
+        <Icon name="more" size={14} />
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={close} />
+          <div style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 100, minWidth: 200, overflow: 'hidden' }}>
+            {isOwn ? (
+              <button onClick={() => { close(); onDelete(); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--clay)', textAlign: 'left' }}>
+                <Icon name="trash" size={14} /> Delete comment
+              </button>
+            ) : (<>
+              <button onClick={() => { close(); onNav?.('profile', { handle: usr.handle }); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left' }}>
+                <Icon name="user" size={14} /> View profile
+              </button>
+              <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                <Icon name="bell" size={14} /> Mute @{usr.handle}
+              </button>
+              <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                <Icon name="lock" size={14} /> Block @{usr.handle}
+              </button>
+              <button onClick={() => { close(); setShowReport(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+                <Icon name="flag" size={14} /> Report comment
+              </button>
+            </>)}
+          </div>
+        </>
+      )}
+
+      {showReport && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowReport(false)}>
+          <div style={{ background: 'var(--surface)', borderRadius: 20, padding: 28, width: 380, maxWidth: '90vw', boxShadow: '0 16px 48px rgba(0,0,0,.18)' }} onClick={e => e.stopPropagation()}>
+            {reportDone ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Report submitted</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>Thanks for keeping Honua safe.</div>
+              </div>
+            ) : (<>
+              <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>Report comment</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 18 }}>Why are you reporting this comment?</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+                {COMMENT_REPORT_OPTIONS.map(opt => (
+                  <button key={opt} onClick={() => setReportReason(opt)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: `1.5px solid ${reportReason === opt ? 'var(--green)' : 'var(--line)'}`, background: reportReason === opt ? 'var(--green-tint)' : 'var(--bg)', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', fontWeight: reportReason === opt ? 600 : 400 }}>
+                    <span style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${reportReason === opt ? 'var(--green)' : 'var(--line-2)'}`, background: reportReason === opt ? 'var(--green)' : 'transparent', flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+                      {reportReason === opt && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                    </span>
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setShowReport(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
+                <button onClick={submitReport} disabled={!reportReason} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reportReason ? 'var(--clay)' : 'var(--line)', cursor: reportReason ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>Submit</button>
+              </div>
+            </>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CommentThread({ tree, setTree, dense = false, onNav, onDbReply }: { tree: any[]; setTree: any; dense?: boolean; onNav?: (screen: string, params?: any) => void; onDbReply?: (parentId: string, text: string) => void }) {
   const like = (id) => setTree(t => __mapNode(t, id, n => ({ ...n, _liked: !n._liked, likes: n.likes + (n._liked ? -1 : 1) })));
-  const reply = (parentId, text) => setTree(t => __addReply(t, parentId, { id: ++__cid, user: 'you', text, time: 'now', likes: 0, replies: [] }));
+  const reply = (parentId, text) => {
+    // local optimistic update always
+    setTree(t => __addReply(t, parentId, { id: ++__cid, user: 'you', text, time: 'now', likes: 0, replies: [] }));
+    // persist to DB if callback provided (realtime will refresh the full tree)
+    onDbReply?.(parentId, text);
+  };
+  const remove = (id) => setTree(t => __removeNode(t, id));
   return (
     <div>
-      {tree.map(n => <CommentNode key={n.id} node={n} depth={0} like={like} reply={reply} dense={dense} defaultOpen />)}
+      {tree.map(n => <CommentNode key={n.id} node={n} depth={0} like={like} reply={reply} remove={remove} dense={dense} defaultOpen onNav={onNav} />)}
     </div>
   );
 };
 
-export function CommentNode({ node, depth, like, reply, dense, defaultOpen }: { node: any; depth: number; like: (id: number) => void; reply: (parentId: number, text: string) => void; dense?: boolean; defaultOpen?: boolean }) {
-  const usr = MOCK.users[node.user] || { name: 'You', handle: 'you' };
+export function CommentNode({ node, depth, like, reply, remove, dense, defaultOpen, onNav }: { node: any; depth: number; like: (id: number) => void; reply: (parentId: any, text: string) => void; remove?: (id: any) => void; dense?: boolean; defaultOpen?: boolean; onNav?: (screen: string, params?: any) => void }) {
+  const app = useApp();
+  // Support both mock shape (node.user key, node.text, node.time) and DB shape (node.profile, node.content, node.created_at)
+  const usr = node.profile
+    ? { name: node.profile.full_name, handle: node.profile.handle, avatar: node.profile.avatar_url, verified: node.profile.verified }
+    : MOCK.users[node.user] || { name: node.user === 'you' ? (app.user?.name || 'You') : node.user, handle: node.user === 'you' ? (app.user?.handle || 'you') : node.user, avatar: app.user?.avatar };
+  const displayText = node.content ?? node.text ?? '';
+  const displayTime = node.created_at ? timeAgo(node.created_at) : (node.time ?? '');
+  const isOwn = node.user_id === app.user?.id || node.user === 'you' || node.user === app.user?.handle;
   const kids = node.replies || [];
   const [open, setOpen] = React.useState(!!defaultOpen && depth < 1);
   const [replying, setReplying] = React.useState(false);
   const [draft, setDraft] = React.useState('');
   const send = () => { if (!draft.trim()) return; reply(node.id, draft.trim()); setDraft(''); setReplying(false); setOpen(true); };
   const av = dense ? 32 : 36;
+  const goProfile = (e) => { e.stopPropagation(); if (usr.handle && usr.handle !== 'you') onNav?.('profile', { handle: usr.handle }); };
   return (
-    <div style={{ display: 'flex', gap: 10, paddingTop: 14 }}>
-      <Avatar src={usr.avatar} name={usr.name} size={av} verified={usr.verified} />
+    <div className="comment-row" style={{ display: 'flex', gap: 10, paddingTop: 14 }}>
+      <style>{`.comment-row:hover .comment-more-btn { opacity: 1 !important; }`}</style>
+      <span onClick={goProfile} style={{ cursor: usr.handle && usr.handle !== 'you' ? 'pointer' : 'default', flexShrink: 0 }}>
+        <Avatar src={usr.avatar} name={usr.name} size={av} verified={usr.verified} />
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: dense ? 13 : 13.5, fontWeight: 600 }}>{usr.name}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {node.time}</span>
+          <span onClick={goProfile} style={{ fontSize: dense ? 13 : 13.5, fontWeight: 600, cursor: usr.handle && usr.handle !== 'you' ? 'pointer' : 'default' }}>{usr.name}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {displayTime}</span>
+          <CommentMoreMenu usr={usr} isOwn={isOwn} onDelete={() => remove?.(node.id)} onNav={onNav} />
         </div>
-        <p style={{ margin: '3px 0 6px', fontSize: dense ? 13.5 : 14, lineHeight: 1.5, color: 'var(--ink-2)', textWrap: 'pretty' }}>{node.text}</p>
+        <p style={{ margin: '3px 0 6px', fontSize: dense ? 13.5 : 14, lineHeight: 1.5, color: 'var(--ink-2)', textWrap: 'pretty' }}>{displayText}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, color: 'var(--ink-3)' }}>
           <ActionBtn icon="heart" count={node.likes} active={node._liked} activeColor="var(--clay)" onClick={() => like(node.id)} />
           <button onClick={() => setReplying(r => !r)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 12.5, fontWeight: 600, fontFamily: 'JetBrains Mono', padding: 0 }}>Reply</button>
@@ -637,7 +759,7 @@ export function CommentNode({ node, depth, like, reply, dense, defaultOpen }: { 
 
         {open && kids.length > 0 && (
           <div style={{ borderLeft: '2px solid var(--line)', paddingLeft: depth < 2 ? 12 : 6, marginLeft: 2, marginTop: 2 }}>
-            {kids.map(k => <CommentNode key={k.id} node={k} depth={depth + 1} like={like} reply={reply} dense={dense} />)}
+            {kids.map(k => <CommentNode key={k.id} node={k} depth={depth + 1} like={like} reply={reply} remove={remove} dense={dense} onNav={onNav} />)}
           </div>
         )}
       </div>

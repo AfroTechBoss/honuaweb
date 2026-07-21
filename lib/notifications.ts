@@ -62,10 +62,14 @@ export async function markAllRead(userId: string) {
 }
 
 export async function getUnreadCount(userId: string) {
-  const { count } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("read", false);
-  return count ?? 0;
+  try {
+    const { count } = await supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("read", false);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
 }

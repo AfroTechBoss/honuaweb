@@ -11,6 +11,13 @@ do $$ begin
 
   if not exists (
     select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'comments'
+  ) then
+    alter publication supabase_realtime add table public.comments;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
     where pubname = 'supabase_realtime' and tablename = 'post_likes'
   ) then
     alter publication supabase_realtime add table public.post_likes;

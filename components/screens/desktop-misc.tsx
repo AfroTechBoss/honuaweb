@@ -362,6 +362,12 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       // Replace the optimistic message with the real one
       if (inserted) setMessages(prev => prev.map(m => m.id === optimisticId ? { ...inserted, created_at: m.created_at } : m));
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', activeConvoId);
+      // Notify the recipient
+      const recipientId = activeConvo?.user1_id === userId ? activeConvo?.user2_id : activeConvo?.user1_id;
+      if (recipientId && recipientId !== userId) {
+        const { createNotification } = await import('@/lib/notifications');
+        await createNotification({ userId: recipientId, actorId: userId, type: 'message' as any, body: 'sent you a message' });
+      }
     } finally {
       setSending(false);
     }

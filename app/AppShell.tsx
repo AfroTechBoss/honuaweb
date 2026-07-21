@@ -64,9 +64,18 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const { authed, authReady, needsOnboarding } = useApp();
   const pathname = usePathname();
   const router = useRouter();
-  // Stays false during SSR; flips to true synchronously before first browser paint
-  const [clientReady, setClientReady] = React.useState(false);
-  useLayoutEffect(() => { setClientReady(true); }, []);
+  const [ready, setReady] = React.useState(false);
+  const [hasStoredSession, setHasStoredSession] = React.useState(false);
+
+  // Runs synchronously before first paint — check localStorage directly here
+  // so we don't depend on AppProvider's effect (which fires after children)
+  useLayoutEffect(() => {
+    try {
+      const key = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      setHasStoredSession(!!key && !!localStorage.getItem(key));
+    } catch {}
+    setReady(true);
+  }, []);
 
   useEffect(() => {
     if (!authReady) return;
@@ -75,13 +84,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (authed && pathname === "/login") router.replace("/");
   }, [authReady, authed, pathname, router]);
 
-  // Server renders nothing — skeleton never reaches the browser as HTML
-  if (!clientReady) return null;
-  // Client: show skeleton only while auth check is still in-flight
-  if (!authReady) return <AppSkeleton />;
+  // Server renders nothing
+  if (!ready) return null;
 
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
-  if (!authed && !isPublic) return null;
+  const isAuthed = authed || hasStoredSession;
+
+  // Not authed and no stored session — show skeleton until confirmed, then redirect
+  if (!isAuthed && !isPublic) return <AppSkeleton />;
 
   return (
     <>

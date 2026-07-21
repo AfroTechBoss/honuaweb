@@ -125,11 +125,11 @@ export function Logo({ size = 28 }: any) {
   );
 }
 
-export function Avatar({ src, name = "U", size = 36, verified = false, score }: any) {
+export function Avatar({ src, name = "U", size = 36, verified = false, score, noBorder = false }: any) {
   const initial = (name || "U").charAt(0).toUpperCase();
   return (
     <span style={{ position: "relative", width: size, height: size, display: "inline-block", flexShrink: 0 }}>
-      <span style={{ width: size, height: size, borderRadius: "50%", background: src ? `url(${src}) center/cover` : "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 600, fontSize: size * 0.4, fontFamily: "Satoshi", border: "2px solid var(--surface)" }}>{!src && initial}</span>
+      <span style={{ width: size, height: size, borderRadius: "50%", background: src ? `url(${src}) center/cover` : "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 600, fontSize: size * 0.4, fontFamily: "Satoshi", border: noBorder ? "none" : "2px solid var(--surface)" }}>{!src && initial}</span>
       {verified && (
         <span style={{ position: "absolute", bottom: -2, right: -2, width: size * 0.36, height: size * 0.36, borderRadius: "50%", background: "var(--sky)", display: "grid", placeItems: "center", color: "#fff", fontSize: size * 0.18, border: "2px solid var(--surface)" }}>✓</span>
       )}
@@ -240,26 +240,80 @@ export function NotifPrefs() {
 }
 
 export function ToastHost() {
-  const { toasts = [], dismissToast } = useApp();
+  const { toasts = [], dismissToast, nav } = useApp() as any;
+  const notifs = toasts.filter((t: any) => t.kind === 'notif');
+  const standard = toasts.filter((t: any) => t.kind !== 'notif');
+
+  function handleNotifClick(t: any) {
+    if (t.notifType === 'message') {
+      nav?.('messages', { handle: t.actorHandle });
+    } else if (t.postId) {
+      nav?.('post', { id: t.postId });
+    }
+    dismissToast(t.id);
+  }
+
   return (
-    <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 9000, display: "flex", flexDirection: "column", gap: 10, alignItems: "center", pointerEvents: "none" }}>
-      {toasts.map((t: any) => (
-        <div key={t.id} className="toast-in" style={{ pointerEvents: "auto", background: t.kind === "error" ? "var(--surface)" : "var(--ink-solid)", color: t.kind === "error" ? "var(--ink)" : "#fff", border: t.kind === "error" ? "1px solid var(--line)" : "none", borderRadius: 14, padding: "12px 14px", minWidth: 300, maxWidth: 440, boxShadow: "0 18px 50px -12px rgba(0,0,0,.4)", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, display: "grid", placeItems: "center", background: t.kind === "error" ? "var(--clay)" : t.kind === "success" ? "var(--green)" : "rgba(255,255,255,.16)", color: "#fff" }}>
-            <Icon name={t.icon || (t.kind === "error" ? "wifiOff" : "check")} size={16} stroke={2.2} />
+    <>
+      {/* Notification toasts — top right, compact card */}
+      <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9000, display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-end", pointerEvents: "none" }}>
+        {notifs.map((t: any) => (
+          <div
+            key={t.id}
+            className="toast-in"
+            onClick={() => handleNotifClick(t)}
+            style={{
+              pointerEvents: "auto",
+              background: "var(--green-tint)",
+              border: "2.5px solid var(--green)",
+              borderRadius: 16,
+              padding: "11px 14px 11px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              maxWidth: 340,
+              minWidth: 240,
+              boxShadow: "0 8px 32px -4px rgba(0,0,0,.18)",
+              cursor: (t.notifType === 'message' || t.postId) ? "pointer" : "default",
+            }}
+          >
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <Avatar src={t.actor?.avatar_url} name={t.actor?.full_name || "?"} size={34} />
+              <span style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: t.icon === "heart" ? "var(--clay)" : "var(--green)", display: "grid", placeItems: "center", border: "2px solid var(--green-tint)" }}>
+                <Icon name={t.icon || "bell"} size={8} color="#fff" stroke={2.5} />
+              </span>
+            </div>
+            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--green)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.msg}</div>
+              <div style={{ fontSize: 12, color: "var(--green)", opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.sub}</div>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); dismissToast(t.id); }} style={{ background: "transparent", border: "none", color: "var(--green)", opacity: 0.55, cursor: "pointer", padding: 4, flexShrink: 0 }}>
+              <Icon name="close" size={13} />
+            </button>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t.msg}</div>
-            {t.sub && <div style={{ fontSize: 12, opacity: t.kind === "error" ? 0.65 : 0.78, marginTop: 1 }}>{t.sub}</div>}
+        ))}
+      </div>
+
+      {/* Standard toasts — bottom center */}
+      <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 9000, display: "flex", flexDirection: "column", gap: 10, alignItems: "center", pointerEvents: "none" }}>
+        {standard.map((t: any) => (
+          <div key={t.id} className="toast-in" style={{ pointerEvents: "auto", background: t.kind === "error" ? "var(--surface)" : "var(--ink-solid)", color: t.kind === "error" ? "var(--ink)" : "#fff", border: t.kind === "error" ? "1px solid var(--line)" : "none", borderRadius: 14, padding: "12px 14px", minWidth: 300, maxWidth: 440, boxShadow: "0 18px 50px -12px rgba(0,0,0,.4)", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, display: "grid", placeItems: "center", background: t.kind === "error" ? "var(--clay)" : t.kind === "success" ? "var(--green)" : "rgba(255,255,255,.16)", color: "#fff" }}>
+              <Icon name={t.icon || (t.kind === "error" ? "wifiOff" : "check")} size={16} stroke={2.2} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t.msg}</div>
+              {t.sub && <div style={{ fontSize: 12, opacity: t.kind === "error" ? 0.65 : 0.78, marginTop: 1 }}>{t.sub}</div>}
+            </div>
+            {t.action && (
+              <button onClick={() => { t.action.onClick?.(); dismissToast(t.id); }} style={{ background: "transparent", border: "none", color: t.kind === "error" ? "var(--green)" : "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>{t.action.label}</button>
+            )}
+            <button onClick={() => dismissToast(t.id)} style={{ background: "transparent", border: "none", color: "inherit", opacity: 0.45, cursor: "pointer", padding: 2 }}>
+              <Icon name="close" size={14} />
+            </button>
           </div>
-          {t.action && (
-            <button onClick={() => { t.action.onClick?.(); dismissToast(t.id); }} style={{ background: "transparent", border: "none", color: t.kind === "error" ? "var(--green)" : "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>{t.action.label}</button>
-          )}
-          <button onClick={() => dismissToast(t.id)} style={{ background: "transparent", border: "none", color: "inherit", opacity: 0.45, cursor: "pointer", padding: 2 }}>
-            <Icon name="close" size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
