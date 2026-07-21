@@ -26,6 +26,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://cdn.fontshare.com" />
+        {/* Set background immediately before any CSS/JS loads to prevent white flash */}
+        <style>{`
+          html, body { background: #fafaf7; }
+          @media (prefers-color-scheme: dark) { html, body { background: #0d100e; } }
+        `}</style>
       </head>
       <body suppressHydrationWarning>
         <AppShell>{children}</AppShell>
