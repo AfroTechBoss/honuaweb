@@ -30,15 +30,15 @@ function AppSkeleton() {
         {[1,2,3,4,5,6].map(i => <Bone key={i} w={40} h={40} r={10} />)}
       </div>
       {/* Main feed */}
-      <div style={{ flex: 1, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
-        <Bone w="60%" h={28} r={6} />
+      <div style={{ flex: 1, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
+        <Bone w="40%" h={28} r={6} />
         {[1,2,3].map(i => (
           <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <Bone w={40} h={40} r={20} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <Bone w={120} h={14} r={4} />
-                <Bone w={80} h={11} r={4} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                <Bone w="35%" h={14} r={4} />
+                <Bone w="22%" h={11} r={4} />
               </div>
             </div>
             <Bone w="90%" h={14} r={4} />
@@ -47,14 +47,14 @@ function AppSkeleton() {
         ))}
       </div>
       {/* Right panel */}
-      <div style={{ width: 300, borderLeft: '1px solid var(--line)', padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--line)', padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Bone w="50%" h={18} r={6} />
         {[1,2,3].map(i => (
           <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Bone w={36} h={36} r={18} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <Bone w={100} h={13} r={4} />
-              <Bone w={70} h={11} r={4} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+              <Bone w="60%" h={13} r={4} />
+              <Bone w="40%" h={11} r={4} />
             </div>
           </div>
         ))}
