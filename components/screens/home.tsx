@@ -3,82 +3,115 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, ShareSheet, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { ImageLightbox } from "@/components/post-card";
 
-// =============== Story data ===============
-const STORY_KEYS = ["sarah", "marcus", "maya", "okafor", "greentech", "can", "tara"];
-const STORY_CONTENT: Record<string, { caption: string; bg: [string, string] }> = {
-  sarah:    { caption: "First sun on the 20 new panels — co-op is officially off coal.", bg: ["#1f6f3f", "#2e9a5b"] },
-  marcus:   { caption: "Week 3, zero-waste. The compost is finally cooking.", bg: ["#6b4f2a", "#9c7a3c"] },
-  maya:     { caption: "Two more pollinators today. Tiny balcony, big week.", bg: ["#2e7d32", "#7cb342"] },
-  okafor:   { caption: "New blade design hit 40% efficiency in testing. Paper Monday.", bg: ["#13315c", "#2a6fae"] },
-  greentech:{ caption: "Prototype #7 is on the truck. Field trial starts Thursday.", bg: ["#0d3b66", "#1d6dc4"] },
-  can:      { caption: "47 cities confirmed for Friday. Find yours on the map.", bg: ["#3a1c71", "#6d3bbf"] },
-  tara:     { caption: "Repaired instead of replaced. 5th item this month.", bg: ["#7a3b2e", "#c4623a"] },
-};
-const DURATION = 4500;
+// =============== Story viewer (real DB stories) ===============
+import type { StoryGroup, Story } from '@/lib/stories';
 
-// =============== Story viewer ===============
-function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: number; onClose: () => void; onNav: any }) {
+const TEXT_STORY_DURATION = 5000;
+const IMAGE_STORY_DURATION = 5000;
+
+function StoryViewer({ groups, startGroup, onClose, onNav }: {
+  groups: StoryGroup[];
+  startGroup: number;
+  onClose: () => void;
+  onNav: any;
+}) {
   const app = useApp();
-  const [idx, setIdx] = React.useState(start);
+  const [groupIdx, setGroupIdx] = React.useState(startGroup);
+  const [storyIdx, setStoryIdx] = React.useState(0);
   const [prog, setProg] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
   const [liked, setLiked] = React.useState(false);
   const [reply, setReply] = React.useState('');
-  const shouldClose = React.useRef(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
 
+  const group = groups[groupIdx];
+  const story: Story | undefined = group?.stories[storyIdx];
+  const isVideo = story?.type === 'video';
+
+  const goNext = React.useCallback(() => {
+    const g = groups[groupIdx];
+    if (storyIdx < g.stories.length - 1) {
+      setStoryIdx(i => i + 1); setProg(0); setLiked(false);
+    } else if (groupIdx < groups.length - 1) {
+      setGroupIdx(i => i + 1); setStoryIdx(0); setProg(0); setLiked(false);
+    } else {
+      onClose();
+    }
+  }, [groupIdx, storyIdx, groups, onClose]);
+
+  const goPrev = React.useCallback(() => {
+    if (storyIdx > 0) { setStoryIdx(i => i - 1); setProg(0); setLiked(false); }
+    else if (groupIdx > 0) { setGroupIdx(i => i - 1); setStoryIdx(0); setProg(0); setLiked(false); }
+  }, [groupIdx, storyIdx]);
+
+  // RAF-based progress for non-video stories
   React.useEffect(() => {
-    if (shouldClose.current) { shouldClose.current = false; onClose(); }
-  });
-
-  const next = React.useCallback(() => {
-    setIdx(i => {
-      if (i >= keys.length - 1) { shouldClose.current = true; return i; }
-      setProg(0); setLiked(false); return i + 1;
-    });
-  }, [keys.length]);
-  const prev = () => setIdx(i => { setProg(0); setLiked(false); return Math.max(0, i - 1); });
-
-  React.useEffect(() => {
+    if (isVideo) return;
+    const duration = IMAGE_STORY_DURATION;
     setProg(0);
     let raf: number;
     const t0 = Date.now();
     const tick = () => {
       if (paused) { raf = requestAnimationFrame(tick); return; }
-      const p = (Date.now() - t0) / DURATION;
-      if (p >= 1) next();
+      const p = (Date.now() - t0) / duration;
+      if (p >= 1) { goNext(); }
       else { setProg(p); raf = requestAnimationFrame(tick); }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [idx, paused, next]);
+  }, [groupIdx, storyIdx, paused, goNext, onClose, isVideo]);
+
+  // Video progress tracking
+  React.useEffect(() => {
+    if (!isVideo || !videoRef.current) return;
+    const vid = videoRef.current;
+    const onTimeUpdate = () => {
+      if (vid.duration) setProg(vid.currentTime / vid.duration);
+    };
+    const onEnded = () => goNext();
+    vid.addEventListener('timeupdate', onTimeUpdate);
+    vid.addEventListener('ended', onEnded);
+    return () => { vid.removeEventListener('timeupdate', onTimeUpdate); vid.removeEventListener('ended', onEnded); };
+  }, [groupIdx, storyIdx, goNext, isVideo]);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') next();
-      if (e.key === 'ArrowLeft') prev();
+      if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'ArrowLeft') goPrev();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [next, onClose]);
+  }, [goNext, goPrev, onClose]);
 
-  const key = keys[idx];
-  const u = MOCK.users[key] || { name: key, handle: key, verified: false };
-  const content = STORY_CONTENT[key] || { caption: '', bg: ['#1f6f3f', '#2e9a5b'] as [string, string] };
+  if (!group || !story) return null;
+  const u = group.profile!;
+  const timeAgo = (ts: string) => {
+    if (!ts) return '';
+    const ms = new Date(ts).getTime();
+    if (isNaN(ms)) return '';
+    const s = Math.floor((Date.now() - ms) / 1000);
+    if (s < 60) return 'now'; if (s < 3600) return `${Math.floor(s / 60)}m`; return `${Math.floor(s / 3600)}h`;
+  };
 
   const sendReply = () => {
     if (!reply.trim()) return;
-    app.toast?.({ msg: `Reply sent to ${u.name.split(' ')[0]}`, icon: 'msg' });
+    app.toast?.({ msg: `Reply sent to ${u.full_name.split(' ')[0]}`, icon: 'msg' });
     setReply('');
   };
 
+  // Background for the media area
+  const bg = story.type === 'text' && story.bg_colors
+    ? `linear-gradient(135deg, ${story.bg_colors[0]}, ${story.bg_colors[1]})`
+    : '#0a0d0b';
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#0a0d0b', display: 'flex', flexDirection: 'column' }}>
-      {/* Progress bars */}
+      {/* Progress bars — one per story in this group */}
       <div style={{ display: 'flex', gap: 4, padding: '20px 20px 8px' }}>
-        {keys.map((_, i) => (
+        {group.stories.map((_, i) => (
           <div key={i} style={{ flex: 1, height: 3, borderRadius: 999, background: 'rgba(255,255,255,.25)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', borderRadius: 999, background: '#fff', width: `${(i < idx ? 1 : i === idx ? prog : 0) * 100}%`, transition: i === idx ? 'none' : undefined }} />
+            <div style={{ height: '100%', borderRadius: 999, background: '#fff', width: `${(i < storyIdx ? 1 : i === storyIdx ? prog : 0) * 100}%`, transition: i === storyIdx ? 'none' : undefined }} />
           </div>
         ))}
       </div>
@@ -86,53 +119,107 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px' }}>
         <span onClick={() => { onClose(); onNav?.('profile', { handle: u.handle }); }} style={{ cursor: 'pointer' }}>
-          <Avatar src={u.avatar} name={u.name} size={36} verified={u.verified} />
+          <Avatar src={u.avatar_url} name={u.full_name} size={36} verified={u.verified} />
         </span>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{u.name}</div>
-          <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'JetBrains Mono' }}>@{u.handle} · {2 + idx}h</div>
+          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{u.full_name}</div>
+          <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'JetBrains Mono' }}>@{u.handle} · {timeAgo(story.created_at)}</div>
         </div>
+        {/* Group navigation dots */}
+        {groups.length > 1 && (
+          <div style={{ display: 'flex', gap: 4, marginRight: 8 }}>
+            {groups.map((_, gi) => (
+              <div key={gi} onClick={() => { setGroupIdx(gi); setStoryIdx(0); setProg(0); }}
+                style={{ width: gi === groupIdx ? 18 : 6, height: 6, borderRadius: 999, background: gi === groupIdx ? '#fff' : 'rgba(255,255,255,.4)', cursor: 'pointer', transition: 'all .2s' }} />
+            ))}
+          </div>
+        )}
         <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#fff', padding: 6 }}>
           <Icon name="close" size={20} />
         </button>
       </div>
 
       {/* Media area */}
-      <div style={{
-        flex: 1, position: 'relative', overflow: 'hidden',
-        background: `linear-gradient(135deg, ${content.bg[0]}, ${content.bg[1]})`,
-      }}>
-        {/* Placeholder image label */}
-        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-          <span style={{ color: 'rgba(255,255,255,.4)', fontFamily: 'JetBrains Mono', fontSize: 13 }}>{key} · story image</span>
-        </div>
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: bg }}
+        onMouseDown={() => setPaused(true)} onMouseUp={() => setPaused(false)}
+        onTouchStart={() => setPaused(true)} onTouchEnd={() => setPaused(false)}
+      >
+        {/* Image */}
+        {story.type === 'image' && story.media_url && (
+          <img src={story.media_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+        )}
 
-        {/* Tap zones */}
-        <div onClick={prev} onMouseDown={() => setPaused(true)} onMouseUp={() => setPaused(false)}
-          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '32%', cursor: 'pointer' }} />
-        <div onClick={next} onMouseDown={() => setPaused(true)} onMouseUp={() => setPaused(false)}
-          style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '68%', cursor: 'pointer' }} />
+        {/* Video */}
+        {story.type === 'video' && story.media_url && (
+          <video
+            ref={videoRef}
+            src={story.media_url}
+            autoPlay
+            playsInline
+            muted={false}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+        )}
+
+        {/* Text story */}
+        {story.type === 'text' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 32 }}>
+            <p style={{ margin: 0, color: '#fff', fontSize: (story.text_content?.length ?? 0) > 80 ? 22 : 28, fontWeight: 700, textAlign: 'center', lineHeight: 1.4, textShadow: '0 1px 8px rgba(0,0,0,.3)' }}>
+              {story.text_content}
+            </p>
+          </div>
+        )}
+
+        {/* Post story */}
+        {story.type === 'post' && story.post && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ background: 'rgba(255,255,255,.08)', backdropFilter: 'blur(12px)', borderRadius: 20, padding: 20, maxWidth: 400, width: '100%', border: '1px solid rgba(255,255,255,.15)' }}>
+              {story.post.image_url && (
+                <img src={story.post.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 14, objectFit: 'cover', maxHeight: 220 }} />
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <Avatar src={story.post.profile?.avatar_url} name={story.post.profile?.full_name || 'User'} size={32} verified={story.post.profile?.verified} />
+                <div>
+                  <div style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{story.post.profile?.full_name}</div>
+                  <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 11, fontFamily: 'JetBrains Mono' }}>@{story.post.profile?.handle}</div>
+                </div>
+              </div>
+              {story.post.content && (
+                <p style={{ margin: '0 0 14px', color: 'rgba(255,255,255,.9)', fontSize: 14, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {story.post.content}
+                </p>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(); onNav?.('post', { id: story.post!.id }); }}
+                style={{ width: '100%', padding: '10px 0', background: 'var(--green)', border: 'none', borderRadius: 12, color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+              >
+                View post →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tap zones (left/right nav) */}
+        <div onClick={(e) => { e.stopPropagation(); goPrev(); }}
+          style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '32%', cursor: 'pointer', zIndex: 2 }} />
+        <div onClick={(e) => { e.stopPropagation(); goNext(); }}
+          style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '68%', cursor: 'pointer', zIndex: story.type === 'post' ? 0 : 2 }} />
 
         {/* Caption + reply */}
-        <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
-          background: 'linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 100%)',
-          padding: '48px 20px 28px',
-        }}>
-          <p style={{ color: '#fff', fontSize: 17, lineHeight: 1.5, margin: '0 0 14px', fontWeight: 500 }}>{content.caption}</p>
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 100%)', padding: '56px 20px 28px', zIndex: 3 }}>
+          {story.caption && (
+            <p style={{ color: '#fff', fontSize: 16, lineHeight: 1.5, margin: '0 0 14px', fontWeight: 500 }}>{story.caption}</p>
+          )}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input
               value={reply} onChange={e => setReply(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
               onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
-              placeholder={`Reply to ${u.name.split(' ')[0]}…`}
-              style={{
-                flex: 1, border: '1px solid rgba(255,255,255,.45)', background: 'transparent',
-                color: '#fff', borderRadius: 999, padding: '10px 16px', fontSize: 14,
-                outline: 'none', fontFamily: 'Satoshi',
-              }}
+              onClick={e => e.stopPropagation()}
+              placeholder={`Reply to ${u.full_name.split(' ')[0]}…`}
+              style={{ flex: 1, border: '1px solid rgba(255,255,255,.45)', background: 'transparent', color: '#fff', borderRadius: 999, padding: '10px 16px', fontSize: 14, outline: 'none', fontFamily: 'Satoshi' }}
             />
-            <button onClick={() => setLiked(v => !v)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+            <button onClick={(e) => { e.stopPropagation(); setLiked(v => !v); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
               <Icon name="heart" size={26} color={liked ? 'var(--clay)' : '#fff'} stroke={liked ? 2.4 : 1.8} />
             </button>
           </div>
@@ -142,30 +229,78 @@ function StoryViewer({ keys, start, onClose, onNav }: { keys: string[]; start: n
   );
 }
 
-// =============== Status compose picker (desktop) ===============
+// =============== Status compose picker (real DB) ===============
 const BG_PRESETS: [string, string][] = [
   ["#1f6f3f", "#2e9a5b"], ["#13315c", "#2a6fae"], ["#6b4f2a", "#9c7a3c"],
   ["#3a1c71", "#6d3bbf"], ["#7a3b2e", "#c4623a"], ["#0d3b66", "#1d6dc4"],
 ];
 
-function StatusComposePicker({ onClose }: { onClose: () => void }) {
+function StatusComposePicker({ onClose, onPublished }: { onClose: () => void; onPublished?: () => void }) {
+  const app = useApp();
   const [mode, setMode] = React.useState<'pick' | 'media' | 'text'>('pick');
   const [caption, setCaption] = React.useState('');
   const [mediaType, setMediaType] = React.useState<'photo' | 'video'>('photo');
-  const [picked, setPicked] = React.useState(false);
+  const [file, setFile] = React.useState<File | null>(null);
+  const [preview, setPreview] = React.useState<string | null>(null);
+  const [durationError, setDurationError] = React.useState('');
   const [text, setText] = React.useState('');
   const [bgIdx, setBgIdx] = React.useState(0);
+  const [publishing, setPublishing] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const publish = () => {
-    onClose();
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setDurationError('');
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+    if (mediaType === 'video') {
+      const vid = document.createElement('video');
+      vid.src = URL.createObjectURL(f);
+      vid.onloadedmetadata = () => {
+        if (vid.duration > 60) {
+          setDurationError('Video must be 1 minute or less.');
+          setFile(null);
+          setPreview(null);
+        }
+      };
+    }
+  };
+
+  const publishMedia = async () => {
+    if (!file || !app.user?.id) return;
+    setPublishing(true);
+    try {
+      const { uploadStoryMedia, createStory } = await import('@/lib/stories');
+      const url = await uploadStoryMedia(file, app.user.id);
+      await createStory({ userId: app.user.id, type: mediaType === 'photo' ? 'image' : 'video', mediaUrl: url, caption: caption.trim() || undefined });
+      app.toast?.({ msg: 'Story posted!', icon: 'sparkles', kind: 'success' });
+      onPublished?.();
+      onClose();
+    } catch (e: any) {
+      app.toast?.({ msg: 'Failed to post story', sub: e?.message, icon: 'wifiOff', kind: 'error' });
+    } finally { setPublishing(false); }
+  };
+
+  const publishText = async () => {
+    if (!text.trim() || !app.user?.id) return;
+    setPublishing(true);
+    try {
+      const { createStory } = await import('@/lib/stories');
+      await createStory({ userId: app.user.id, type: 'text', textContent: text.trim(), bgColors: BG_PRESETS[bgIdx] });
+      app.toast?.({ msg: 'Story posted!', icon: 'sparkles', kind: 'success' });
+      onPublished?.();
+      onClose();
+    } catch (e: any) {
+      app.toast?.({ msg: 'Failed to post story', sub: e?.message, icon: 'wifiOff', kind: 'error' });
+    } finally { setPublishing(false); }
   };
 
   if (mode === 'pick') return (
     <Modal onClose={onClose}>
-      <ModalHead title="New status" onClose={onClose} />
+      <ModalHead title="New story" onClose={onClose} />
       <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.5 }}>What kind of status do you want to share?</p>
-        {/* Media card */}
+        <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.5 }}>What kind of story do you want to share?</p>
         <button onClick={() => setMode('media')} className="btn btn-ghost" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 20, borderRadius: 16, textAlign: 'left', background: 'linear-gradient(135deg, #1f6f3f22, var(--surface))' }}>
           <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--green-tint)', display: 'grid', placeItems: 'center' }}><Icon name="image" size={24} color="var(--green)" /></div>
           <div>
@@ -177,7 +312,6 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
             <span style={{ background: 'var(--bg-2)', borderRadius: 999, padding: '4px 10px', fontSize: 12, color: 'var(--ink-3)', display: 'inline-flex', gap: 5, alignItems: 'center' }}><Icon name="bolt" size={11} /> Video · max 1 min</span>
           </div>
         </button>
-        {/* Text card */}
         <button onClick={() => setMode('text')} className="btn btn-ghost" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 20, borderRadius: 16, textAlign: 'left', background: 'linear-gradient(135deg, var(--sky)22, var(--surface))' }}>
           <div style={{ width: 48, height: 48, borderRadius: 14, background: 'color-mix(in srgb, var(--sky) 15%, transparent)', display: 'grid', placeItems: 'center' }}><Icon name="pencil" size={24} color="var(--sky)" /></div>
           <div>
@@ -195,38 +329,37 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
 
   if (mode === 'media') return (
     <Modal onClose={onClose}>
-      <ModalHead title="Media status" onClose={() => setMode('pick')} />
+      <ModalHead title="Media story" onClose={() => setMode('pick')} />
       <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Toggle */}
         <div style={{ display: 'flex', background: 'var(--bg-2)', borderRadius: 12, padding: 4 }}>
           {(['photo', 'video'] as const).map(t => (
-            <button key={t} onClick={() => setMediaType(t)} style={{ flex: 1, padding: '8px 0', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14, textTransform: 'capitalize', background: mediaType === t ? 'var(--surface)' : 'transparent', color: mediaType === t ? 'var(--ink)' : 'var(--ink-3)' }}>{t}</button>
+            <button key={t} onClick={() => { setMediaType(t); setFile(null); setPreview(null); setDurationError(''); }} style={{ flex: 1, padding: '8px 0', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 600, fontSize: 14, textTransform: 'capitalize', background: mediaType === t ? 'var(--surface)' : 'transparent', color: mediaType === t ? 'var(--ink)' : 'var(--ink-3)' }}>{t}</button>
           ))}
         </div>
-        {/* Upload area */}
-        <div onClick={() => setPicked(true)} style={{ height: 220, borderRadius: 16, border: `2px dashed ${picked ? 'var(--green)' : 'var(--line-2)'}`, display: 'grid', placeItems: 'center', cursor: 'pointer', background: picked ? 'var(--green-tint)' : 'var(--bg-2)', transition: 'all .2s' }}>
-          {picked ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-              <Icon name="check" size={36} color="var(--green)" stroke={2} />
-              <span style={{ fontWeight: 600, color: 'var(--green)' }}>{mediaType === 'photo' ? 'Photo' : 'Video'} ready</span>
-              {mediaType === 'video' && <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>max 1:00</span>}
-            </div>
-          ) : (
+        <input ref={fileInputRef} type="file" accept={mediaType === 'photo' ? 'image/*' : 'video/*'} style={{ display: 'none' }} onChange={handleFileChange} />
+        <div onClick={() => fileInputRef.current?.click()} style={{ height: 220, borderRadius: 16, border: `2px dashed ${file ? 'var(--green)' : 'var(--line-2)'}`, display: 'grid', placeItems: 'center', cursor: 'pointer', background: file ? 'var(--green-tint)' : 'var(--bg-2)', transition: 'all .2s', overflow: 'hidden', position: 'relative' }}>
+          {preview && mediaType === 'photo' && <img src={preview} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+          {preview && mediaType === 'video' && <video src={preview} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} muted />}
+          {!file && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <Icon name={mediaType === 'photo' ? 'image' : 'bolt'} size={32} color="var(--ink-4)" stroke={1.5} />
               <span style={{ color: 'var(--ink-3)', fontWeight: 600 }}>Click to {mediaType === 'photo' ? 'choose a photo' : 'pick a video'}</span>
               {mediaType === 'video' && <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>Maximum 1 minute</span>}
             </div>
           )}
+          {file && <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: 8, padding: '4px 10px', fontSize: 12 }}>✓ {file.name}</div>}
         </div>
+        {durationError && <div style={{ color: 'var(--clay)', fontSize: 13, fontWeight: 500 }}>{durationError}</div>}
         <div>
           <label style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', display: 'block', marginBottom: 6 }}>CAPTION (OPTIONAL)</label>
-          <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 150))} placeholder="Add a caption…" rows={3} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: 'var(--ink)', resize: 'none', fontFamily: 'Satoshi', boxSizing: 'border-box' }} />
+          <textarea value={caption} onChange={e => setCaption(e.target.value.slice(0, 150))} placeholder="Add a caption…" rows={2} style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 14, color: 'var(--ink)', resize: 'none', fontFamily: 'Satoshi', boxSizing: 'border-box' }} />
           <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{caption.length}/150</div>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost" onClick={() => setMode('pick')}>Back</button>
-          <button className="btn btn-primary" onClick={publish}>Post status</button>
+          <button className="btn btn-primary" onClick={publishMedia} disabled={!file || !!durationError || publishing}>
+            {publishing ? 'Posting…' : 'Post story'}
+          </button>
         </div>
       </div>
     </Modal>
@@ -235,9 +368,8 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
   const bg = BG_PRESETS[bgIdx];
   return (
     <Modal onClose={onClose}>
-      <ModalHead title="Text status" onClose={() => setMode('pick')} />
+      <ModalHead title="Text story" onClose={() => setMode('pick')} />
       <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Live preview */}
         <div style={{ height: 200, borderRadius: 16, background: `linear-gradient(135deg, ${bg[0]}, ${bg[1]})`, display: 'grid', placeItems: 'center', padding: 24 }}>
           <p style={{ margin: 0, color: text ? '#fff' : 'rgba(255,255,255,.4)', fontSize: text.length > 80 ? 18 : 22, fontWeight: 600, textAlign: 'center', lineHeight: 1.4 }}>
             {text || 'Your text will appear here…'}
@@ -255,37 +387,43 @@ function StatusComposePicker({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost" onClick={() => setMode('pick')}>Back</button>
-          <button className="btn btn-primary" onClick={publish} disabled={!text.trim()}>Post status</button>
+          <button className="btn btn-primary" onClick={publishText} disabled={!text.trim() || publishing}>
+            {publishing ? 'Posting…' : 'Post story'}
+          </button>
         </div>
       </div>
     </Modal>
   );
 }
 
-// =============== Story rail ===============
-function StoryRail({ onOpen, onNav, onAddStatus }: { onOpen: (i: number) => void; onNav: any; onAddStatus: () => void }) {
+// =============== Story rail (real DB) ===============
+function StoryRail({ groups, onOpen, onNav, onAddStatus }: { groups: StoryGroup[]; onOpen: (i: number) => void; onNav: any; onAddStatus: () => void }) {
   const app = useApp();
   return (
     <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 12, marginBottom: 4 }} className="no-scrollbar">
-      {/* Your story bubble */}
+      {/* Add story bubble */}
       <div onClick={onAddStatus} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
-        <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--green-tint)', border: '2px dashed var(--green)', display: 'grid', placeItems: 'center', color: 'var(--green)' }}>
-          <Icon name="plus" size={20} stroke={2} />
+        <div style={{ position: 'relative', width: 52, height: 52 }}>
+          <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={52} noBorder />
+          <div style={{ position: 'absolute', bottom: 0, right: 0, width: 18, height: 18, borderRadius: '50%', background: 'var(--green)', border: '2px solid var(--bg)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="plus" size={10} color="#fff" stroke={2.5} />
+          </div>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Add</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Your story</span>
       </div>
 
-      {STORY_KEYS.map((k, i) => {
-        const u = MOCK.users[k];
-        const bg = STORY_CONTENT[k]?.bg[0] ?? 'var(--green)';
+      {groups.map((g, i) => {
+        const u = g.profile!;
+        const ringColor = g.stories[0]?.bg_colors?.[0] ?? 'var(--green)';
+        const ringEnd = g.stories[0]?.bg_colors?.[1] ?? '#2e9a5b';
         return (
-          <div key={k} onClick={() => onOpen(i)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
-            <div style={{ padding: 2, borderRadius: '50%', background: `linear-gradient(135deg, ${bg}, ${STORY_CONTENT[k]?.bg[1] ?? bg})`, display: 'flex' }}>
+          <div key={g.userId} onClick={() => onOpen(i)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
+            <div style={{ padding: 2, borderRadius: '50%', background: `linear-gradient(135deg, ${ringColor}, ${ringEnd})`, display: 'flex' }}>
               <div style={{ padding: 2, borderRadius: '50%', background: 'var(--bg)', display: 'flex' }}>
-                <Avatar src={u.avatar} name={u.name} size={44} />
+                <Avatar src={u.avatar_url} name={u.full_name} size={44} noBorder />
               </div>
             </div>
-            <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name.split(' ')[0]}</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', maxWidth: 56, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name.split(' ')[0]}</span>
           </div>
         );
       })}
@@ -296,11 +434,22 @@ function StoryRail({ onOpen, onNav, onAddStatus }: { onOpen: (i: number) => void
 // =============== Desktop Home ===============
 export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const [tab, setTab] = React.useState('foryou');
-  const [story, setStory] = React.useState<number | null>(null);
+  const [storyGroupIdx, setStoryGroupIdx] = React.useState<number | null>(null);
   const [statusCompose, setStatusCompose] = React.useState(false);
+  const [storyGroups, setStoryGroups] = React.useState<StoryGroup[]>([]);
   const [dbPosts, setDbPosts] = React.useState<any[]>([]);
   const [loadingFeed, setLoadingFeed] = React.useState(true);
   const app = useApp();
+
+  const loadStories = React.useCallback(async () => {
+    try {
+      const { getActiveStories } = await import('@/lib/stories');
+      const groups = await getActiveStories();
+      setStoryGroups(groups);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => { loadStories(); }, [loadStories]);
 
   // Fetch real posts from Supabase
   const fetchFeed = React.useCallback(async () => {
@@ -405,7 +554,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           </div>
 
           {/* Story rail */}
-          <StoryRail onOpen={setStory} onNav={onNav} onAddStatus={() => setStatusCompose(true)} />
+          <StoryRail groups={storyGroups} onOpen={setStoryGroupIdx} onNav={onNav} onAddStatus={() => setStatusCompose(true)} />
 
           {/* Composer prompt */}
           <div onClick={() => { app.openModal?.('compose'); }} style={{
@@ -456,8 +605,10 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
         </div>
       </main>
     </div>
-    {story !== null && <StoryViewer keys={STORY_KEYS} start={story} onClose={() => setStory(null)} onNav={onNav} />}
-    {statusCompose && <StatusComposePicker onClose={() => setStatusCompose(false)} />}
+    {storyGroupIdx !== null && storyGroups.length > 0 && (
+      <StoryViewer groups={storyGroups} startGroup={storyGroupIdx} onClose={() => setStoryGroupIdx(null)} onNav={onNav} />
+    )}
+    {statusCompose && <StatusComposePicker onClose={() => setStatusCompose(false)} onPublished={loadStories} />}
     </>
   );
 };
@@ -617,7 +768,10 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
                     <Icon name="trash" size={15} /> Delete post
                   </button>
                 </>) : (<>
-                  <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
+                  <button onClick={async (e) => { e.stopPropagation(); setShowMenu(false); if (!app.user?.id) return; try { const { createStory } = await import('@/lib/stories'); await createStory({ userId: app.user.id, type: 'post', postId: post.id }); app.toast?.({ msg: 'Added to your story', icon: 'sparkles', kind: 'success' }); } catch { app.toast?.({ msg: 'Failed to share story', icon: 'wifiOff', kind: 'error' }); } }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left' }}>
+                    <Icon name="sparkles" size={15} /> Share to story
+                  </button>
+                  <button onClick={handleMute} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
                     <Icon name="bell" size={15} /> Mute @{displayProfile?.handle}
                   </button>
                   <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
