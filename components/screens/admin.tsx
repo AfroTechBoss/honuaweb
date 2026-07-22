@@ -8,18 +8,38 @@ import { AdminProducts, AdminUsers, AdminSellers, AdminActivity } from "./admin-
 // Own shell (left rail + topbar), six sections.
 // =====================================================================
 
-const ADMIN_NAV = [
-  ['overview', 'Overview', 'home'],
-  ['moderation', 'Moderation', 'flame'],
-  ['products', 'Products', 'bag'],
-  ['users', 'Users', 'users'],
-  ['sellers', 'Sellers', 'leaf'],
-  ['activity', 'Activity', 'clock'],
+const ADMIN_NAV_GROUPS = [
+  {
+    label: 'Main',
+    items: [
+      ['overview', 'Overview', 'home'],
+      ['analytics', 'Analytics', 'bolt'],
+    ],
+  },
+  {
+    label: 'Management',
+    items: [
+      ['moderation', 'Moderation', 'flame'],
+      ['products', 'Products', 'bag'],
+      ['users', 'Users', 'users'],
+      ['sellers', 'Sellers', 'leaf'],
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      ['activity', 'Activity', 'clock'],
+      ['settings', 'Settings', 'settings'],
+    ],
+  },
 ];
+
+const ADMIN_NAV = ADMIN_NAV_GROUPS.flatMap(g => g.items);
 
 export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [section, setSection] = React.useState('overview');
+  const [collapsed, setCollapsed] = React.useState(false);
 
   // ----- live, mutable platform data (session only) -----
   const [reports, setReports] = React.useState(MOCK_ADMIN.reports);
@@ -80,36 +100,150 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const pendingSellers = (app.state?.sellerStatus === 'pending' ? 1 : 0) + MOCK_APPLICATIONS.length;
   const badges = { moderation: openCount, products: flaggedCount, sellers: pendingSellers };
 
+  const W = collapsed ? 68 : 232;
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       {/* ---- Admin left rail ---- */}
-      <aside style={{ width: 232, flexShrink: 0, background: 'var(--ink-solid)', color: '#fff', display: 'flex', flexDirection: 'column', padding: '20px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px 18px' }}>
-          <span style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Logo size={18} /></span>
-          <div style={{ lineHeight: 1.1 }}>
-            <div className="font-display" style={{ fontSize: 15, fontWeight: 600 }}>Honua</div>
-            <div style={{ fontSize: 10.5, opacity: .55, fontFamily: 'JetBrains Mono', letterSpacing: '.08em' }}>ADMIN CONSOLE</div>
-          </div>
+      <aside style={{
+        width: W, flexShrink: 0,
+        background: 'var(--ink-solid)', color: '#fff',
+        display: 'flex', flexDirection: 'column',
+        padding: collapsed ? '16px 10px' : '16px 12px',
+        transition: 'width .2s ease, padding .2s ease',
+        overflow: 'hidden',
+      }}>
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', marginBottom: 20, minHeight: 36 }}>
+          {!collapsed && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Logo size={16} /></span>
+              <div style={{ lineHeight: 1.1 }}>
+                <div className="font-display" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>Honua</div>
+                <div style={{ fontSize: 9.5, opacity: .45, fontFamily: 'JetBrains Mono', letterSpacing: '.1em', whiteSpace: 'nowrap' }}>ADMIN CONSOLE</div>
+              </div>
+            </div>
+          )}
+          {collapsed && (
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--green)', display: 'grid', placeItems: 'center' }}><Logo size={16} /></span>
+          )}
+          {!collapsed && (
+            <button onClick={() => setCollapsed(true)} title="Collapse sidebar" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,.4)', padding: 4, borderRadius: 7, display: 'flex', flexShrink: 0 }}>
+              <Icon name="chevron" size={15} />
+            </button>
+          )}
         </div>
-        <nav style={{ display: 'grid', gap: 2, flex: 1 }}>
-          {ADMIN_NAV.map(([k, label, icon]) => {
-            const on = section === k;
-            return (
-              <button key={k} onClick={() => setSection(k)} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 11, cursor: 'pointer',
-                border: 'none', textAlign: 'left', fontFamily: 'Satoshi', fontSize: 14, fontWeight: on ? 600 : 500,
-                background: on ? 'rgba(255,255,255,.12)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.62)',
-              }}>
-                <Icon name={icon} size={18} stroke={on ? 2.1 : 1.8} />
-                <span style={{ flex: 1 }}>{label}</span>
-                {badges[k] > 0 && <span style={{ minWidth: 19, height: 19, padding: '0 5px', borderRadius: 10, background: k === 'sellers' ? 'var(--sun)' : 'var(--clay)', color: '#fff', fontSize: 11, fontWeight: 600, fontFamily: 'JetBrains Mono', display: 'grid', placeItems: 'center' }}>{badges[k]}</span>}
-              </button>
-            );
-          })}
+
+        {/* Expand button when collapsed */}
+        {collapsed && (
+          <button onClick={() => setCollapsed(false)} title="Expand sidebar" style={{ background: 'rgba(255,255,255,.08)', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,.5)', padding: '6px', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        )}
+
+        {/* Nav groups */}
+        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: collapsed ? 4 : 0, overflowY: 'auto', overflowX: 'hidden' }} className="no-scrollbar">
+          {ADMIN_NAV_GROUPS.map(group => (
+            <div key={group.label} style={{ marginBottom: collapsed ? 0 : 18 }}>
+              {!collapsed && (
+                <div style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono', letterSpacing: '.12em', color: 'rgba(255,255,255,.3)', padding: '0 10px', marginBottom: 4 }}>
+                  {group.label.toUpperCase()}
+                </div>
+              )}
+              <div style={{ display: 'grid', gap: 2 }}>
+                {group.items.map(([k, label, icon]) => {
+                  const on = section === k;
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => setSection(k as string)}
+                      title={collapsed ? label as string : undefined}
+                      style={{
+                        display: 'flex', alignItems: 'center',
+                        gap: collapsed ? 0 : 11,
+                        padding: collapsed ? '10px 0' : '9px 10px',
+                        justifyContent: collapsed ? 'center' : 'flex-start',
+                        borderRadius: 10, cursor: 'pointer',
+                        border: 'none', textAlign: 'left',
+                        fontFamily: 'Satoshi', fontSize: 13.5, fontWeight: on ? 600 : 500,
+                        background: on ? 'rgba(255,255,255,.13)' : 'transparent',
+                        color: on ? '#fff' : 'rgba(255,255,255,.55)',
+                        position: 'relative',
+                        transition: 'background .12s, color .12s',
+                      }}
+                    >
+                      {/* Active accent bar */}
+                      {on && (
+                        <span style={{ position: 'absolute', left: 0, top: '20%', height: '60%', width: 3, borderRadius: '0 3px 3px 0', background: 'var(--green)' }} />
+                      )}
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, flexShrink: 0 }}>
+                        <Icon name={icon as string} size={17} stroke={on ? 2.2 : 1.7} />
+                      </span>
+                      {!collapsed && <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{label as string}</span>}
+                      {!collapsed && (badges as any)[k] > 0 && (
+                        <span style={{
+                          minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+                          background: k === 'sellers' ? 'var(--sun)' : 'var(--clay)',
+                          color: '#fff', fontSize: 10.5, fontWeight: 700,
+                          fontFamily: 'JetBrains Mono', display: 'grid', placeItems: 'center',
+                        }}>{(badges as any)[k]}</span>
+                      )}
+                      {collapsed && (badges as any)[k] > 0 && (
+                        <span style={{
+                          position: 'absolute', top: 4, right: 4,
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: k === 'sellers' ? 'var(--sun)' : 'var(--clay)',
+                        }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
-        <button onClick={() => onNav?.('home')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', borderRadius: 11, cursor: 'pointer', border: '1px solid rgba(255,255,255,.14)', background: 'transparent', color: 'rgba(255,255,255,.75)', fontSize: 13.5, fontWeight: 500 }}>
-          <span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Icon name="arrow" size={15} /></span> Back to app
-        </button>
+
+        {/* Bottom: profile + back */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, borderTop: '1px solid rgba(255,255,255,.08)', paddingTop: 12 }}>
+          {/* Admin profile */}
+          <div style={{
+            display: 'flex', alignItems: 'center',
+            gap: collapsed ? 0 : 10,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '8px 0' : '8px 10px',
+            borderRadius: 10,
+            background: 'rgba(255,255,255,.06)',
+          }}>
+            <Avatar src={app.user?.avatar} name={app.user?.name || 'Admin'} size={30} noBorder />
+            {!collapsed && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{app.user?.name || 'Admin'}</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)', fontFamily: 'JetBrains Mono', whiteSpace: 'nowrap' }}>Owner</div>
+              </div>
+            )}
+          </div>
+
+          {/* Back to app */}
+          <button
+            onClick={() => onNav?.('home')}
+            title={collapsed ? 'Back to app' : undefined}
+            style={{
+              display: 'flex', alignItems: 'center',
+              gap: collapsed ? 0 : 9,
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              padding: collapsed ? '9px 0' : '9px 10px',
+              borderRadius: 10, cursor: 'pointer',
+              border: '1px solid rgba(255,255,255,.1)',
+              background: 'transparent',
+              color: 'rgba(255,255,255,.55)',
+              fontSize: 13, fontWeight: 500,
+              transition: 'background .12s, color .12s',
+            }}
+          >
+            <span style={{ transform: 'rotate(180deg)', display: 'inline-flex', flexShrink: 0 }}><Icon name="arrow" size={14} /></span>
+            {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>Back to app</span>}
+          </button>
+        </div>
       </aside>
 
       {/* ---- Main panel ---- */}
@@ -143,6 +277,8 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
           {section === 'users' && <AdminUsers users={users} onStatus={setUserStatus} onRole={setUserRole} />}
           {section === 'sellers' && <AdminSellers onNav={onNav} />}
           {section === 'activity' && <AdminActivity audit={audit} />}
+          {section === 'analytics' && <AdminAnalytics />}
+          {section === 'settings' && <AdminSettings />}
         </div>
       </main>
     </div>
@@ -322,6 +458,97 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
             </div>
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// ANALYTICS (stub)
+// =====================================================================
+function AdminAnalytics() {
+  const s = MOCK_ADMIN.stats;
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <SStat label="Page views · 7d" value="84.2K" icon="bolt" trend={12} accent="var(--sky)" />
+        <SStat label="Avg. session" value="4m 38s" icon="clock" trend={5} />
+        <SStat label="Retention · 30d" value="61%" icon="users" trend={3} accent="var(--green)" />
+        <SStat label="Conversion" value="3.4%" icon="leaf" trend={-1} accent="var(--sun)" />
+      </div>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Traffic · 30 days</div>
+        <SSpark data={MOCK_ADMIN.memberSeries} color="var(--sky)" w={900} h={120} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Top pages</div>
+          {[['Home feed', '32%'], ['Explore', '21%'], ['Marketplace', '18%'], ['Profile', '15%'], ['Communities', '14%']].map(([page, pct]) => (
+            <div key={page} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span style={{ flex: 1, fontSize: 13.5 }}>{page}</span>
+              <div style={{ width: 120, height: 6, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
+                <div style={{ width: pct, height: '100%', borderRadius: 999, background: 'var(--green)' }} />
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', width: 36, textAlign: 'right' }}>{pct}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Acquisition sources</div>
+          {[['Direct', '41%', 'var(--green)'], ['Search', '28%', 'var(--sky)'], ['Social', '19%', 'var(--sun)'], ['Referral', '12%', 'var(--clay)']].map(([src, pct, color]) => (
+            <div key={src} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 13.5 }}>{src}</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{pct}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// SETTINGS (stub)
+// =====================================================================
+function AdminSettings() {
+  const [emailNotifs, setEmailNotifs] = React.useState(true);
+  const [maintenanceMode, setMaintenanceMode] = React.useState(false);
+  const [registrationOpen, setRegistrationOpen] = React.useState(true);
+  const [reviewRequired, setReviewRequired] = React.useState(false);
+
+  const Row = ({ label, sub, checked, onChange }: any) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid var(--line)' }}>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 500 }}>{label}</div>
+        {sub && <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div>}
+      </div>
+      <ToggleC checked={checked} onChange={onChange} />
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'grid', gap: 20, maxWidth: 720 }}>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '6px 22px 6px' }}>
+        <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.07em', padding: '14px 0 10px' }}>PLATFORM</div>
+        <Row label="Open registration" sub="Allow new users to sign up" checked={registrationOpen} onChange={() => setRegistrationOpen(v => !v)} />
+        <Row label="Maintenance mode" sub="Show a maintenance page to non-admin visitors" checked={maintenanceMode} onChange={() => setMaintenanceMode(v => !v)} />
+        <Row label="Seller review required" sub="New seller applications need manual approval" checked={reviewRequired} onChange={() => setReviewRequired(v => !v)} />
+      </div>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '6px 22px 6px' }}>
+        <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.07em', padding: '14px 0 10px' }}>NOTIFICATIONS</div>
+        <Row label="Admin email alerts" sub="Get emailed when reports or seller applications arrive" checked={emailNotifs} onChange={() => setEmailNotifs(v => !v)} />
+      </div>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+        <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.07em', marginBottom: 14 }}>DANGER ZONE</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost" style={{ color: 'var(--clay)', borderColor: sTint('var(--clay)', 30) }}>
+            <Icon name="trash" size={14} /> Clear all reports
+          </button>
+          <button className="btn btn-ghost" style={{ color: 'var(--clay)', borderColor: sTint('var(--clay)', 30) }}>
+            <Icon name="lock" size={14} /> Lock platform
+          </button>
+        </div>
       </div>
     </div>
   );
