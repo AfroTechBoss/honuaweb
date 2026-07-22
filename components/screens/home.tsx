@@ -454,25 +454,27 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   // Fetch real posts from Supabase
   const fetchFeed = React.useCallback(async () => {
     setLoadingFeed(true);
+    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
     try {
       const { supabase } = await import('@/lib/supabase');
 
       if (tab === 'following') {
         const userId = app.user?.id;
         if (!userId) { setDbPosts([]); setLoadingFeed(false); return; }
-        // Get IDs of users this person follows
-        const { data: follows } = await supabase
-          .from('follows')
-          .select('following_id')
-          .eq('follower_id', userId);
+        const { data: follows } = await Promise.race([
+          supabase.from('follows').select('following_id').eq('follower_id', userId),
+          timeout,
+        ]);
         const followingIds = (follows ?? []).map((f: any) => f.following_id).filter(Boolean);
         if (!followingIds.length) { setDbPosts([]); setLoadingFeed(false); return; }
-        const { data } = await supabase
-          .from('posts')
-          .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
-          .in('user_id', followingIds)
-          .order('created_at', { ascending: false })
-          .limit(50);
+        const { data } = await Promise.race([
+          supabase.from('posts')
+            .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+            .in('user_id', followingIds)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          timeout,
+        ]);
         setDbPosts(data ?? []);
       } else {
         let query = supabase
@@ -481,7 +483,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           .order('created_at', { ascending: false })
           .limit(50);
         if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
-        const { data } = await query;
+        const { data } = await Promise.race([query, timeout]);
         setDbPosts(data ?? []);
       }
     } catch {}
