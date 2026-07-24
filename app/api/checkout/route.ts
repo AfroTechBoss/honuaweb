@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   }
 
   // Dynamic import so the server bundle only includes Stripe when the key is set
-  const Stripe = (await import('stripe')).default;
+  const Stripe = (await import(/* webpackIgnore: true */ 'stripe')).default;
   const stripe = new Stripe(secretKey, { apiVersion: '2025-06-30.basil' });
 
   const amount = (items as any[]).reduce((sum, item) => {

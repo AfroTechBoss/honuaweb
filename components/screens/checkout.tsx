@@ -82,7 +82,7 @@ function AddressSuggestions({ suggestions, onSelect }: {
 let stripePromise: any = null;
 function getStripe(publishableKey: string) {
   if (!stripePromise) {
-    stripePromise = import('@stripe/stripe-js').then(m => m.loadStripe(publishableKey));
+    stripePromise = import(/* webpackIgnore: true */ '@stripe/stripe-js').then(m => m.loadStripe(publishableKey));
   }
   return stripePromise;
 }
@@ -117,7 +117,7 @@ function PaymentForm({ total, onSuccess }: { total: number; onSuccess: () => voi
   // We pull stripe/elements from the hook via dynamic require
   React.useEffect(() => {
     const loadHooks = async () => {
-      const { useStripe, useElements } = await import('@stripe/react-stripe-js');
+      const { useStripe, useElements } = await import(/* webpackIgnore: true */ '@stripe/react-stripe-js');
       // Can't use hooks outside component — handled in StripePaymentForm below
     };
   }, []);
@@ -152,7 +152,7 @@ function StripeCheckout({ clientSecret, publishableKey, total, onSuccess }: { cl
   const [error, setError] = React.useState('');
 
   React.useEffect(() => {
-    import('@stripe/react-stripe-js').then(m => {
+    import(/* webpackIgnore: true */ '@stripe/react-stripe-js').then(m => {
       setElements(() => m.Elements);
       setPaymentElement(() => m.PaymentElement);
       setUseStripe(() => m.useStripe);
