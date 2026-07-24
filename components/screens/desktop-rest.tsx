@@ -88,34 +88,62 @@ const COMMUNITY_META: Record<string, { desc: string; tags: string[]; resources: 
   },
 };
 
-function CommunityFeed({ community, onNav, onToggleJoin }: { community: any; onNav?: any; onToggleJoin?: (c: any) => void }) {
+function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { community: any; onNav?: any; onToggleJoin?: (c: any) => void }) {
   const app = useApp();
+  const [community, setCommunity] = React.useState(communityProp);
+  React.useEffect(() => { setCommunity(communityProp); }, [communityProp]);
   const [feedTab, setFeedTab] = React.useState('Recent');
+  const [realPosts, setRealPosts] = React.useState<any[]>([]);
   const joined = app.community?.has(community.name);
   const meta = COMMUNITY_META[community.name] || { desc: '', tags: [], resources: [] };
-  const posts = COMMUNITY_POSTS[community.name] || [];
   const going = app.community?.has(community.name + '-event');
+
+  React.useEffect(() => {
+    if (!community.id) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase
+        .from('posts')
+        .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles(full_name, handle, avatar_url)')
+        .eq('community_id', community.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setRealPosts(data ?? []);
+    });
+  }, [community.id]);
   const kindColor = (k: string) => ({ discussion: 'var(--sky)', tip: 'var(--green)', meetup: 'var(--sun)', question: 'var(--ink-2)', win: 'var(--green)' }[k] || 'var(--ink-3)');
 
-  const sorted = [...posts].sort((a, b) => feedTab === 'Top' ? b.votes - a.votes : 0);
-  const filtered = feedTab === 'Q&A' ? sorted.filter(p => p.kind === 'question') : feedTab === 'Resources' ? [] : sorted;
+  const sorted = feedTab === 'Top' ? [...realPosts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0)) : realPosts;
+  const filtered = feedTab === 'Resources' ? [] : sorted;
 
   return (
     <div style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
-      {/* Cover */}
-      <div style={{ height: 160, background: `url(${community.coverUrl}) center/cover`, position: 'relative', flexShrink: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.5))' }} />
+      {/* Cover + avatar overlap */}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div style={{ height: 180, background: community.coverUrl ? `url(${community.coverUrl}) center/cover` : 'var(--green-tint)' }} />
+        {/* Avatar sits half-out of the cover at the bottom-left */}
+        <div style={{ position: 'absolute', bottom: -40, left: 28, width: 80, height: 80, borderRadius: 18, background: community.avatarUrl ? `url(${community.avatarUrl}) center/cover` : 'var(--green)', border: '4px solid var(--bg)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 34, fontFamily: 'Lora', fontWeight: 600, zIndex: 2 }}>
+          {!community.avatarUrl && community.name.charAt(0)}
+        </div>
       </div>
+
       <div style={{ padding: '0 28px', maxWidth: 900 }}>
-        <div className="community-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: -36, position: 'relative', zIndex: 1, flexWrap: 'wrap' }}>
-          <div style={{ width: 80, height: 80, borderRadius: 18, background: 'var(--green)', border: '6px solid var(--bg)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 34, fontFamily: 'Lora', fontWeight: 600, flexShrink: 0 }}>{community.name.charAt(0)}</div>
-          <div style={{ flex: 1, paddingBottom: 4, minWidth: 0 }}>
+        {/* Header row: name + action button — pushed down to clear the avatar */}
+        <div className="community-header" style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginTop: 52, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <h1 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{community.name}</h1>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>{community.members} members · {community.cat}</div>
+            {community.description && <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55, maxWidth: 560 }}>{community.description}</p>}
           </div>
-          <button className={joined ? 'btn btn-primary' : 'btn btn-green'} style={{ marginBottom: 4, flexShrink: 0 }} onClick={() => onToggleJoin ? onToggleJoin(community) : (app.community.toggle(community.name), app.toast(joined ? { msg: `Left ${community.name}`, icon: 'users' } : { msg: `Joined ${community.name}!`, kind: 'success', icon: 'users' }))}>
-            {joined ? 'Joined ✓' : 'Join'}
-          </button>
+          {community.createdBy === app.user?.id ? (
+            <button className="btn btn-ghost" style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              onClick={() => app.openModal?.('editcommunity', { community, onSaved: (updated: any) => setCommunity(updated) })}>
+              <Icon name="edit" size={14} /> Edit
+            </button>
+          ) : (
+            <button className={joined ? 'btn btn-primary' : 'btn btn-green'} style={{ flexShrink: 0 }} onClick={() => onToggleJoin ? onToggleJoin(community) : (app.community.toggle(community.name), app.toast(joined ? { msg: `Left ${community.name}`, icon: 'users' } : { msg: `Joined ${community.name}!`, kind: 'success', icon: 'users' }))}>
+              {joined ? 'Joined ✓' : 'Join'}
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 6, margin: '18px 0', flexWrap: 'wrap' }}>
@@ -130,43 +158,33 @@ function CommunityFeed({ community, onNav, onToggleJoin }: { community: any; onN
                   <button key={t} className={feedTab === t ? 'active' : ''} onClick={() => setFeedTab(t)}>{t}</button>
                 ))}
               </div>
-              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '7px 12px', flexShrink: 0 }} onClick={() => app.toast?.({ msg: 'New post', sub: 'Post creation would open here.', icon: 'edit' })}>
+              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '7px 12px', flexShrink: 0 }} onClick={() => app.openModal?.('compose', { community: community.name, communityId: community.id })}>
                 <Icon name="plus" size={13} /> Post
               </button>
             </div>
 
-            {feedTab === 'Resources' ? (
-              <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16 }}>
-                <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
-                {meta.resources.map((r, i) => (
-                  <a key={i} onClick={() => app.toast?.({ msg: r, sub: 'Resource would open here.', icon: 'bookmark' })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
-                    <Icon name="bookmark" size={14} color="var(--green)" /> {r}
-                  </a>
-                ))}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No posts in this filter yet.</div>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No posts yet. Be the first to post!</div>
             ) : (
-              filtered.map((p, i) => {
-                const u = MOCK.users[p.user as keyof typeof MOCK.users];
-                const kc = kindColor(p.kind);
+              filtered.map((p) => {
+                const profile = p.profiles as any;
+                const kind = p.post_kind || p.post_type || 'post';
+                const kindColors: Record<string, string> = { tip: 'var(--green)', question: 'var(--sky)', win: '#f59e0b', discussion: 'var(--ink-2)', post: 'var(--ink-3)' };
+                const kc = kindColors[kind] || 'var(--ink-3)';
+                const ago = (() => { const s = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m` : s < 86400 ? `${Math.floor(s/3600)}h` : `${Math.floor(s/86400)}d`; })();
                 return (
-                  <div key={i} className="row-hover" onClick={() => app.openModal?.('discussion', p)} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, display: 'flex', gap: 14, cursor: 'pointer' }}>
-                    <div style={{ width: 30, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <Icon name="arrow" size={14} color="var(--ink-4)" />
-                      <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono', fontWeight: 600, margin: '4px 0' }}>{p.votes}</span>
+                  <div key={p.id} className="row-hover" style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {kind !== 'post' && <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase' }}>{kind}</span>}
+                      <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
+                        {profile ? `@${profile.handle}` : 'unknown'} · {ago}
+                      </span>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 600, textTransform: 'uppercase', flexShrink: 0 }}>{p.kind}</span>
-                        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>by @{u?.handle || p.user} · {p.time}</span>
-                      </div>
-                      <h3 style={{ margin: '8px 0 4px', fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>{p.title}</h3>
-                      <div style={{ display: 'flex', gap: 18, marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>
-                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="comment" size={13} /> {p.replies}</span>
-                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="heart" size={13} /> {p.replies * 3 + 12}</span>
-                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="bookmark" size={13} /></span>
-                      </div>
+                    <p style={{ margin: '0 0 10px', fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>{p.content}</p>
+                    {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', borderRadius: 10, marginBottom: 10, maxHeight: 300, objectFit: 'cover' }} />}
+                    <div style={{ display: 'flex', gap: 18, fontSize: 12, color: 'var(--ink-3)' }}>
+                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="heart" size={13} /> {p.likes_count ?? 0}</span>
+                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="comment" size={13} /> {p.comments_count ?? 0}</span>
                     </div>
                   </div>
                 );
@@ -252,13 +270,13 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
     if (!app.user?.id) return;
     import('@/lib/supabase').then(async ({ supabase }) => {
       const [{ data: comms, error }, { data: joined }] = await Promise.all([
-        supabase.from('communities').select('id, name, slug, description, cover_url, category, member_count').order('member_count', { ascending: false }),
+        supabase.from('communities').select('id, name, slug, description, cover_url, avatar_url, category, member_count, created_by').order('member_count', { ascending: false }),
         supabase.from('community_members').select('community_id').eq('user_id', app.user.id),
       ]);
       if (!error && comms && comms.length > 0) {
         setCommunities(comms.map((c: any) => ({
           id: c.id, name: c.name, members: c.member_count ?? 0,
-          cat: c.category ?? 'Community', coverUrl: c.cover_url ?? '',
+          cat: c.category ?? 'Community', coverUrl: c.cover_url ?? '', avatarUrl: c.avatar_url ?? '', createdBy: c.created_by,
           description: c.description,
         })));
         if (joined) {
@@ -286,8 +304,21 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
     }
   };
 
-  const joinedCommunities = communities.filter(c => app.community?.has(c.name));
-  const discoverCommunities = communities.filter(c => !app.community?.has(c.name));
+  function communityInitials(name: string) {
+    const words = name.trim().split(/\s+/);
+    return words.length === 1 ? words[0].slice(0, 2).toUpperCase() : (words[0][0] + words[1][0]).toUpperCase();
+  }
+
+  function CommunityIcon({ c, fallbackBg = 'var(--green)' }: { c: any; fallbackBg?: string }) {
+    const img = c.avatarUrl || c.coverUrl;
+    return img
+      ? <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${img}) center/cover`, flexShrink: 0 }} />
+      : <div style={{ width: 22, height: 22, borderRadius: 6, background: fallbackBg, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', letterSpacing: '-.3px' }}>{communityInitials(c.name)}</div>;
+  }
+
+  const myCommunities = communities.filter(c => c.createdBy === app.user?.id);
+  const joinedCommunities = communities.filter(c => app.community?.has(c.name) && c.createdBy !== app.user?.id);
+  const discoverCommunities = communities.filter(c => !app.community?.has(c.name) && c.createdBy !== app.user?.id);
 
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -301,12 +332,22 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           <button onClick={() => setActiveCommunity(null)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none', background: !activeCommunity ? 'var(--green-tint)' : 'transparent', color: !activeCommunity ? 'var(--green)' : 'var(--ink-3)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
             <Icon name="users" size={15} /> Discover all
           </button>
+          {myCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '14px 0 6px', letterSpacing: '.05em' }}>MY COMMUNITIES</div>}
+          {myCommunities.map(c => {
+            const isActive = activeCommunity?.name === c.name;
+            return (
+              <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
+                <CommunityIcon c={c} />
+                <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+              </button>
+            );
+          })}
           {joinedCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '14px 0 6px', letterSpacing: '.05em' }}>JOINED</div>}
           {joinedCommunities.map(c => {
             const isActive = activeCommunity?.name === c.name;
             return (
               <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${c.coverUrl}) center/cover, var(--green)`, flexShrink: 0 }} />
+                <CommunityIcon c={c} />
                 <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
               </button>
             );
@@ -314,11 +355,11 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           {discoverCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>DISCOVER</div>}
           {discoverCommunities.map(c => (
             <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: activeCommunity?.name === c.name ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeCommunity?.name === c.name ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${c.coverUrl}) center/cover, var(--bg-2)`, flexShrink: 0 }} />
+              <CommunityIcon c={c} fallbackBg="var(--bg-2)" />
               <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
             </button>
           ))}
-          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 14, fontSize: 13 }} onClick={() => app.toast?.({ msg: 'New community', sub: 'Community creation coming soon.', icon: 'users' })}>
+          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 14, fontSize: 13 }} onClick={() => app.openModal?.('createcommunity', { onCreated: (c: any) => setCommunities(prev => [c, ...prev]) })}>
             <Icon name="plus" size={14} /> New community
           </button>
         </div>
@@ -1119,10 +1160,11 @@ const HASHTAG_POOL = [
 ];
 
 // --- Compose post ---
-export function MCompose({ close }) {
+export function MCompose({ close, data }: { close: () => void; data?: { community?: string; communityId?: string } }) {
   const app = useApp();
   const [text, setText] = React.useState('');
   const [cat, setCat] = React.useState('Energy');
+  const [postKind, setPostKind] = React.useState<string | null>(null);
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [publishing, setPublishing] = React.useState(false);
@@ -1280,6 +1322,8 @@ export function MCompose({ close }) {
         content,
         image_url,
         post_type: cat.toLowerCase(),
+        ...(postKind ? { post_kind: postKind } : {}),
+        ...(data?.communityId ? { community_id: data.communityId } : {}),
       };
       let result = await supabase.from('posts').insert({ ...payload, tags }).select('id').single();
       if ((result as any).error?.code === '42703') {
@@ -1362,6 +1406,23 @@ export function MCompose({ close }) {
             <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff', fontSize: 14 }}>✕</button>
           </div>
         )}
+        <div style={{ marginTop: 14 }}>
+          <span className="fld-label">Post type <span style={{ fontWeight: 400, color: 'var(--ink-3)' }}>(optional)</span></span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[
+              { kind: 'tip', label: '💡 Tip', color: 'var(--green)' },
+              { kind: 'question', label: '❓ Question', color: 'var(--sky)' },
+              { kind: 'win', label: '🏆 Win', color: '#f59e0b' },
+              { kind: 'discussion', label: '💬 Discussion', color: 'var(--ink-2)' },
+            ].map(({ kind, label, color }) => (
+              <button key={kind} onClick={() => setPostKind(postKind === kind ? null : kind)}
+                className="chip"
+                style={{ cursor: 'pointer', background: postKind === kind ? color + '20' : undefined, color: postKind === kind ? color : undefined, border: postKind === kind ? `1px solid ${color}40` : undefined, fontWeight: postKind === kind ? 700 : undefined }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ marginTop: 14 }}>
           <span className="fld-label">Category</span>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1549,6 +1610,212 @@ export function MCreateChallenge({ close }) {
     </Modal>
   );
 };
+
+// --- Edit community ---
+export function MEditCommunity({ close, data }: { close: () => void; data?: { community: any; onSaved?: (c: any) => void } }) {
+  const community = data?.community;
+  const app = useApp();
+  const [name, setName] = React.useState(community?.name ?? '');
+  const [desc, setDesc] = React.useState(community?.description ?? '');
+  const [cat, setCat] = React.useState(community?.cat ?? 'Environment');
+  const [coverFile, setCoverFile] = React.useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = React.useState(community?.coverUrl ?? '');
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = React.useState(community?.avatarUrl ?? '');
+  const [loading, setLoading] = React.useState(false);
+  const coverRef = React.useRef<HTMLInputElement>(null);
+  const avatarRef = React.useRef<HTMLInputElement>(null);
+
+  function pickCover(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setCoverFile(file); setCoverPreview(URL.createObjectURL(file));
+  }
+  function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setAvatarFile(file); setAvatarPreview(URL.createObjectURL(file));
+  }
+
+  const handleSave = async () => {
+    if (!name.trim() || !app.user?.id || !community?.id) return;
+    setLoading(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { uploadFile } = await import('@/lib/storage');
+      const [cover_url, avatar_url] = await Promise.all([
+        coverFile ? uploadFile('covers', app.user.id, coverFile) : Promise.resolve(community.coverUrl || null),
+        avatarFile ? uploadFile('avatars', app.user.id, avatarFile) : Promise.resolve(community.avatarUrl || null),
+      ]);
+      const { data: row, error } = await supabase.from('communities')
+        .update({ name: name.trim(), description: desc.trim() || null, category: cat, cover_url, avatar_url })
+        .eq('id', community.id)
+        .select('id, name, slug, description, category, member_count, cover_url, avatar_url, created_by')
+        .single();
+      if (error) throw error;
+      close();
+      app.toast({ kind: 'success', msg: 'Community updated', icon: 'users' });
+      data?.onSaved?.({ ...row, cat: row.category, coverUrl: row.cover_url ?? '', avatarUrl: row.avatar_url ?? '', createdBy: row.created_by });
+    } catch {
+      app.toast({ msg: 'Could not save changes', kind: 'error', icon: 'close' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={close} width={500}>
+      <ModalHead icon="edit" title="Edit community" sub="Changes are visible to all members immediately." onClose={close} />
+      <div style={{ padding: '18px 24px 0' }}>
+        <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickCover} />
+        <input ref={avatarRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickAvatar} />
+        <div style={{ position: 'relative', marginBottom: 32 }}>
+          <div onClick={() => coverRef.current?.click()} style={{ width: '100%', height: 110, borderRadius: 12, cursor: 'pointer', background: coverPreview ? `url(${coverPreview}) center/cover` : 'var(--bg-2)', border: '1.5px dashed var(--line)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, color: 'var(--ink-3)', fontSize: 13, fontWeight: 500 }}>
+            {!coverPreview && <><Icon name="image" size={20} />Cover photo</>}
+          </div>
+          <div onClick={() => avatarRef.current?.click()} style={{ position: 'absolute', bottom: -28, left: 16, width: 56, height: 56, borderRadius: '50%', border: '3px solid var(--surface)', cursor: 'pointer', background: avatarPreview ? `url(${avatarPreview}) center/cover` : 'var(--bg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,.12)' }}>
+            {!avatarPreview && <Icon name="image" size={16} color="var(--ink-3)" />}
+          </div>
+        </div>
+        <span className="fld-label">Community name</span>
+        <input className="fld" autoFocus value={name} onChange={e => setName(e.target.value)} style={{ marginBottom: 14 }} />
+        <span className="fld-label">Focus area</span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          {COMMUNITY_CATEGORIES.map(c => (
+            <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>
+          ))}
+        </div>
+        <span className="fld-label">Description</span>
+        <textarea className="fld" value={desc} onChange={e => setDesc(e.target.value)} rows={3} style={{ resize: 'none' }} />
+      </div>
+      <ModalFoot>
+        <button className="btn btn-ghost" onClick={close}>Cancel</button>
+        <button className="btn btn-green" onClick={handleSave} disabled={!name.trim() || loading} style={{ opacity: !name.trim() || loading ? .5 : 1 }}>
+          {loading ? 'Saving…' : 'Save changes'}
+        </button>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
+// --- Create community ---
+const COMMUNITY_CATEGORIES = ['Environment', 'Energy', 'Food', 'Transport', 'Waste', 'Nature', 'Policy', 'Education', 'Other'];
+
+export function MCreateCommunity({ close, data }: { close: () => void; data?: { onCreated?: (c: any) => void } }) {
+  const onCreated = data?.onCreated;
+  const app = useApp();
+  const [name, setName] = React.useState('');
+  const [desc, setDesc] = React.useState('');
+  const [cat, setCat] = React.useState('Environment');
+  const [coverFile, setCoverFile] = React.useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = React.useState('');
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const coverRef = React.useRef<HTMLInputElement>(null);
+  const avatarRef = React.useRef<HTMLInputElement>(null);
+
+  function pickCover(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  }
+
+  function pickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  }
+
+  const handleCreate = async () => {
+    if (!name.trim() || !app.user?.id) return;
+    setLoading(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { uploadFile } = await import('@/lib/storage');
+      const [cover_url, avatar_url] = await Promise.all([
+        coverFile ? uploadFile('covers', app.user.id, coverFile) : Promise.resolve(null),
+        avatarFile ? uploadFile('avatars', app.user.id, avatarFile) : Promise.resolve(null),
+      ]);
+      const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const { data: row, error } = await supabase.from('communities').insert({
+        name: name.trim(), slug,
+        description: desc.trim() || null,
+        category: cat, cover_url, avatar_url,
+        created_by: app.user.id,
+      }).select('id, name, slug, description, category, member_count, cover_url, avatar_url, created_by').single();
+      if (error) throw error;
+      await supabase.from('community_members').insert({ community_id: row.id, user_id: app.user.id });
+      // Mark as joined in app context immediately
+      app.community?.add(row.name);
+      close();
+      app.toast({ kind: 'success', msg: `${name.trim()} created!`, sub: 'Your community is live.', icon: 'users' });
+      onCreated?.({ ...row, members: 1, cat: row.category, coverUrl: row.cover_url ?? '', avatarUrl: row.avatar_url ?? '', createdBy: row.created_by });
+    } catch {
+      app.toast({ msg: 'Could not create community', kind: 'error', icon: 'close' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={close} width={500}>
+      <ModalHead icon="users" title="Create a community" sub="Bring people together around a shared goal." onClose={close} />
+      <div style={{ padding: '18px 24px 0' }}>
+
+        {/* Cover + avatar pickers */}
+        <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickCover} />
+        <input ref={avatarRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={pickAvatar} />
+        <div style={{ position: 'relative', marginBottom: 32 }}>
+          {/* Cover banner */}
+          <div
+            onClick={() => coverRef.current?.click()}
+            style={{
+              width: '100%', height: 110, borderRadius: 12, cursor: 'pointer',
+              background: coverPreview ? `url(${coverPreview}) center/cover` : 'var(--bg-2)',
+              border: '1.5px dashed var(--line)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 5, color: 'var(--ink-3)', fontSize: 13, fontWeight: 500,
+            }}
+          >
+            {!coverPreview && <><Icon name="image" size={20} />Cover photo</>}
+          </div>
+          {/* Avatar circle overlapping bottom of cover */}
+          <div
+            onClick={() => avatarRef.current?.click()}
+            style={{
+              position: 'absolute', bottom: -28, left: 16,
+              width: 56, height: 56, borderRadius: '50%',
+              border: '3px solid var(--surface)', cursor: 'pointer',
+              background: avatarPreview ? `url(${avatarPreview}) center/cover` : 'var(--bg-2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,.12)',
+            }}
+          >
+            {!avatarPreview && <Icon name="image" size={16} color="var(--ink-3)" />}
+          </div>
+        </div>
+
+        <span className="fld-label">Community name</span>
+        <input className="fld" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Solar Street Team" style={{ marginBottom: 14 }} />
+        <span className="fld-label">Focus area</span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          {COMMUNITY_CATEGORIES.map(c => (
+            <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>
+          ))}
+        </div>
+        <span className="fld-label">Description <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(optional)</span></span>
+        <textarea className="fld" value={desc} onChange={e => setDesc(e.target.value)} placeholder="What's this community about?" rows={3} style={{ resize: 'none' }} />
+      </div>
+      <ModalFoot>
+        <button className="btn btn-ghost" onClick={close}>Cancel</button>
+        <button className="btn btn-green" onClick={handleCreate} disabled={!name.trim() || loading} style={{ opacity: !name.trim() || loading ? .5 : 1 }}>
+          {loading ? 'Creating…' : 'Create community'}
+        </button>
+      </ModalFoot>
+    </Modal>
+  );
+}
 
 // --- New collection ---
 const COLLECTION_EMOJIS = ['🔖','📚','💡','🌱','⚡','🌍','🔬','🎯','🛠️','🌿','📋','🏗️'];
@@ -1896,7 +2163,7 @@ export function MDeleteAccount2({ close }) {
 export function ModalContent({ type, data, close }) {
   const map = {
     compose: MCompose, logaction: MLogAction, export: MExport, startproject: MStartProject,
-    createchallenge: MCreateChallenge, newcollection: MNewCollection, editprofile: MEditProfile,
+    createchallenge: MCreateChallenge, createcommunity: MCreateCommunity, editcommunity: MEditCommunity, newcollection: MNewCollection, editprofile: MEditProfile,
     tip: MTip, autooffset: MAutoOffset, offsetyear: MOffsetYear,
     deleteaccount: MDeleteAccount, deleteaccount2: MDeleteAccount2,
     project: MProject, article: MArticle, product: MProduct, credit: MCredit,
