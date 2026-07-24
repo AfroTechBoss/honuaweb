@@ -140,9 +140,8 @@ export default function SellerPolicyPage() {
     <div ref={scrollRef} style={{ position: "fixed", inset: 0, overflowY: "auto", background: "var(--bg)", color: "var(--ink)", fontFamily: "Satoshi, sans-serif", zIndex: 10 }}>
       {/* Header */}
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--bg)", borderBottom: "1px solid var(--line)", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--green)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 17, fontFamily: "Lora, sans-serif", letterSpacing: "-0.05em" }}>h</span>
-          <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink)", fontFamily: "Lora, sans-serif" }}>honua</span>
+        <Link href="/" style={{ textDecoration: "none" }}>
+          <span style={{ fontWeight: 700, fontSize: 20, color: "var(--ink)", fontFamily: "Lora, sans-serif", letterSpacing: "-0.02em" }}>Honua</span>
         </Link>
         <Link href="/seller" style={{ fontSize: 13, color: "var(--green)", fontWeight: 600, textDecoration: "none" }}>← Back to Seller Hub</Link>
       </header>

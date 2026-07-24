@@ -5,151 +5,287 @@ import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, M
 import { KpiCard } from "./impact";
 
 // =============== Desktop Forum / Communities ===============
+const COMMUNITY_POSTS: Record<string, any[]> = {
+  'Urban gardeners': [
+    { title: 'Sharing my balcony irrigation schematic — feedback welcome', user: 'maya', time: '2h', replies: 24, votes: 42, kind: 'discussion' },
+    { title: 'PSA: Aphids love nasturtiums — use them as a trap crop', user: 'sarah', time: '5h', replies: 41, votes: 68, kind: 'tip' },
+    { title: 'Anyone in Brooklyn want to swap seedlings this weekend?', user: 'marcus', time: '8h', replies: 12, votes: 29, kind: 'meetup' },
+    { title: 'Soil test results came back — silty loam, what should I plant?', user: 'tara', time: '1d', replies: 18, votes: 35, kind: 'question' },
+    { title: 'Cherry tomato yield: 4.2 kg from 2 sq meters this season', user: 'okafor', time: '2d', replies: 78, votes: 91, kind: 'win' },
+  ],
+  'Solar DIY': [
+    { title: 'My 400W off-grid van build — full wiring diagram', user: 'marcus', time: '3h', replies: 52, votes: 118, kind: 'discussion' },
+    { title: 'Which MPPT controller for a 2-panel + LiFePO4 setup?', user: 'tara', time: '6h', replies: 33, votes: 47, kind: 'question' },
+    { title: 'Battery degradation after 2 years — real data, not marketing', user: 'greentech', time: '1d', replies: 28, votes: 84, kind: 'tip' },
+    { title: 'Weekend workshop in Portland — learn to wire your own panels', user: 'sarah', time: '2d', replies: 14, votes: 31, kind: 'meetup' },
+    { title: 'Finally grid-independent — cost breakdown and lessons', user: 'can', time: '3d', replies: 97, votes: 203, kind: 'win' },
+  ],
+  'Ocean cleanup crew': [
+    { title: 'Last weekend: 340 kg removed from Coogee beach', user: 'can', time: '1h', replies: 86, votes: 142, kind: 'win' },
+    { title: 'How do we handle microplastics — current tech vs gaps', user: 'okafor', time: '4h', replies: 39, votes: 67, kind: 'discussion' },
+    { title: 'Joining a cleanup — what to bring, what to expect', user: 'sarah', time: '9h', replies: 22, votes: 55, kind: 'tip' },
+    { title: 'Data: which beach zones collect the most debris per hour?', user: 'marcus', time: '2d', replies: 18, votes: 43, kind: 'question' },
+    { title: 'Monthly volunteer meet — Cape Town, August 3rd', user: 'maya', time: '3d', replies: 11, votes: 28, kind: 'meetup' },
+  ],
+  'Climate policy nerds': [
+    { title: 'Analysis: the new EU carbon border tax — who wins?', user: 'okafor', time: '2h', replies: 44, votes: 89, kind: 'discussion' },
+    { title: 'Submitting a public comment to EPA — step by step', user: 'can', time: '5h', replies: 31, votes: 76, kind: 'tip' },
+    { title: 'What did COP30 actually deliver?', user: 'greentech', time: '1d', replies: 67, votes: 134, kind: 'discussion' },
+    { title: 'Best primer on Article 6 carbon markets?', user: 'tara', time: '2d', replies: 19, votes: 38, kind: 'question' },
+    { title: 'My city adopted a climate action plan — here\'s what I pushed for', user: 'sarah', time: '4d', replies: 28, votes: 62, kind: 'win' },
+  ],
+  'Zero-waste households': [
+    { title: 'Grocery zero-waste: what I could and couldn\'t swap', user: 'sarah', time: '1h', replies: 33, votes: 78, kind: 'tip' },
+    { title: 'Worm bin started smelling — what am I doing wrong?', user: 'marcus', time: '6h', replies: 41, votes: 29, kind: 'question' },
+    { title: 'Monthly waste audit: down to a single sandwich bag', user: 'maya', time: '2d', replies: 54, votes: 116, kind: 'win' },
+    { title: 'Bulk store map — crowd-sourcing stores by city', user: 'can', time: '3d', replies: 22, votes: 88, kind: 'discussion' },
+    { title: 'Plastic-free bathroom: a 6-month review', user: 'tara', time: '5d', replies: 37, votes: 95, kind: 'tip' },
+  ],
+  'EV owners': [
+    { title: 'Home charging setup cost in 2026 — real numbers', user: 'marcus', time: '2h', replies: 28, votes: 74, kind: 'discussion' },
+    { title: 'Road trip: London → Edinburgh on one charge?', user: 'greentech', time: '5h', replies: 49, votes: 61, kind: 'question' },
+    { title: 'Software update bricked my range — manufacturer response', user: 'tara', time: '1d', replies: 88, votes: 113, kind: 'discussion' },
+    { title: 'Battery swap at 3 years — here\'s what I learned', user: 'sarah', time: '2d', replies: 33, votes: 86, kind: 'tip' },
+    { title: 'My annual emissions vs ICE equivalent: 2.1t saved', user: 'okafor', time: '4d', replies: 14, votes: 59, kind: 'win' },
+  ],
+};
+
+const COMMUNITY_META: Record<string, { desc: string; tags: string[]; resources: string[]; event?: { title: string; sub: string } }> = {
+  'Urban gardeners': {
+    desc: 'For anyone growing food, herbs, or pollinator habitat in cities. Beginners welcome. Be kind.',
+    tags: ['#balcony', '#vertical-farm', '#pollinators', '#compost', '#tools'],
+    resources: ['Starter guide for balcony growing', 'Tool library — borrow & lend', 'Soil testing — DIY', 'Pollinator-friendly plant list'],
+    event: { title: 'Seedling swap · Saturday', sub: '14 members already going. Bring 5+ to share.' },
+  },
+  'Solar DIY': {
+    desc: 'Practical solar for homes, vans, and off-grid builds. Share schematics, ask questions, celebrate wins.',
+    tags: ['#offgrid', '#van-life', '#lifepo4', '#mppt', '#wiring'],
+    resources: ['Beginner wiring guide', 'Panel sizing calculator', 'Battery chemistry explained', 'Inverter comparison 2026'],
+    event: { title: 'Panel sizing workshop · Sunday', sub: 'Bring your consumption data and get sized right.' },
+  },
+  'Ocean cleanup crew': {
+    desc: 'Volunteers, researchers, and policy advocates working to reduce ocean plastic. Data-driven. Action-first.',
+    tags: ['#microplastics', '#beach-cleanup', '#marine-debris', '#citizen-science'],
+    resources: ['Cleanup protocol guide', 'Debris tracking app', 'Grant finder for crews', 'Partner organisations'],
+    event: { title: 'Global Beach Day · August 10', sub: '3,200 beaches, 60 countries. Register your site.' },
+  },
+  'Climate policy nerds': {
+    desc: 'Deep dives into legislation, carbon markets, and advocacy. We read the fine print so you don\'t have to.',
+    tags: ['#carbon-markets', '#legislation', '#cop', '#advocacy', '#un'],
+    resources: ['Article 6 explainer', 'Public comment templates', 'Policy tracker dashboard', 'Reading list — 2026'],
+  },
+  'Zero-waste households': {
+    desc: 'Practical tips for reducing household waste — from swaps to systems. No purity culture here.',
+    tags: ['#bulk', '#compost', '#reusable', '#packaging', '#worm-bin'],
+    resources: ['Zero-waste starter pack', 'Bulk store directory', 'Waste audit template', 'What actually gets recycled'],
+    event: { title: 'Swap meetup · Aug 9', sub: 'Bring unwanted items, take what you need. Zero money changes hands.' },
+  },
+  'EV owners': {
+    desc: 'Real talk about EV ownership: range, charging, costs, and the software that runs your car.',
+    tags: ['#charging', '#range', '#battery', '#v2g', '#insurance'],
+    resources: ['Home charger buying guide', 'Charging network map', 'Battery care tips', 'Software update tracker'],
+  },
+};
+
+function CommunityFeed({ community, onNav }: { community: any; onNav?: any }) {
+  const app = useApp();
+  const [feedTab, setFeedTab] = React.useState('Recent');
+  const joined = app.community?.has(community.name);
+  const meta = COMMUNITY_META[community.name] || { desc: '', tags: [], resources: [] };
+  const posts = COMMUNITY_POSTS[community.name] || [];
+  const going = app.community?.has(community.name + '-event');
+  const kindColor = (k: string) => ({ discussion: 'var(--sky)', tip: 'var(--green)', meetup: 'var(--sun)', question: 'var(--ink-2)', win: 'var(--green)' }[k] || 'var(--ink-3)');
+
+  const sorted = [...posts].sort((a, b) => feedTab === 'Top' ? b.votes - a.votes : 0);
+  const filtered = feedTab === 'Q&A' ? sorted.filter(p => p.kind === 'question') : feedTab === 'Resources' ? [] : sorted;
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
+      {/* Cover */}
+      <div style={{ height: 160, background: `url(${community.coverUrl}) center/cover`, position: 'relative', flexShrink: 0 }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.5))' }} />
+      </div>
+      <div style={{ padding: '0 28px', maxWidth: 900 }}>
+        <div className="community-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: -36, position: 'relative', zIndex: 1, flexWrap: 'wrap' }}>
+          <div style={{ width: 80, height: 80, borderRadius: 18, background: 'var(--green)', border: '6px solid var(--bg)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 34, fontFamily: 'Lora', fontWeight: 600, flexShrink: 0 }}>{community.name.charAt(0)}</div>
+          <div style={{ flex: 1, paddingBottom: 4, minWidth: 0 }}>
+            <h1 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{community.name}</h1>
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>{community.members} members · {community.cat}</div>
+          </div>
+          <button className={joined ? 'btn btn-primary' : 'btn btn-green'} style={{ marginBottom: 4, flexShrink: 0 }} onClick={() => { app.community.toggle(community.name); app.toast(joined ? { msg: `Left ${community.name}`, icon: 'users' } : { msg: `Joined ${community.name}!`, kind: 'success', icon: 'users' }); }}>
+            {joined ? 'Joined ✓' : 'Join'}
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, margin: '18px 0', flexWrap: 'wrap' }}>
+          {meta.tags.map(t => <span key={t} style={{ color: 'var(--sky)', fontSize: 13, fontWeight: 500 }}>{t}</span>)}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18, paddingBottom: 40 }} className="two-col-grid">
+          <div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14, alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="pill-nav">
+                {['Recent', 'Top', 'Q&A', 'Resources'].map(t => (
+                  <button key={t} className={feedTab === t ? 'active' : ''} onClick={() => setFeedTab(t)}>{t}</button>
+                ))}
+              </div>
+              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '7px 12px', flexShrink: 0 }} onClick={() => app.toast?.({ msg: 'New post', sub: 'Post creation would open here.', icon: 'edit' })}>
+                <Icon name="plus" size={13} /> Post
+              </button>
+            </div>
+
+            {feedTab === 'Resources' ? (
+              <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16 }}>
+                <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
+                {meta.resources.map((r, i) => (
+                  <a key={i} onClick={() => app.toast?.({ msg: r, sub: 'Resource would open here.', icon: 'bookmark' })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
+                    <Icon name="bookmark" size={14} color="var(--green)" /> {r}
+                  </a>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No posts in this filter yet.</div>
+            ) : (
+              filtered.map((p, i) => {
+                const u = MOCK.users[p.user as keyof typeof MOCK.users];
+                const kc = kindColor(p.kind);
+                return (
+                  <div key={i} className="row-hover" onClick={() => app.openModal?.('discussion', p)} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, display: 'flex', gap: 14, cursor: 'pointer' }}>
+                    <div style={{ width: 30, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <Icon name="arrow" size={14} color="var(--ink-4)" />
+                      <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono', fontWeight: 600, margin: '4px 0' }}>{p.votes}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 600, textTransform: 'uppercase', flexShrink: 0 }}>{p.kind}</span>
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>by @{u?.handle || p.user} · {p.time}</span>
+                      </div>
+                      <h3 style={{ margin: '8px 0 4px', fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>{p.title}</h3>
+                      <div style={{ display: 'flex', gap: 18, marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>
+                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="comment" size={13} /> {p.replies}</span>
+                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="heart" size={13} /> {p.replies * 3 + 12}</span>
+                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="bookmark" size={13} /></span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="right-panel">
+            <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
+              <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>About</h3>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55 }}>{meta.desc}</p>
+              <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+                <Stat n={community.members} l="Members" />
+                <Stat n={String(posts.reduce((s, p) => s + p.replies, 0))} l="Replies" />
+              </div>
+            </div>
+            {meta.resources.length > 0 && (
+              <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
+                <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
+                {meta.resources.slice(0, 3).map((r, i) => (
+                  <a key={i} onClick={() => app.toast?.({ msg: r, sub: 'Resource would open here.', icon: 'bookmark' })} style={{ display: 'block', padding: '8px 0', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>{r}</a>
+                ))}
+              </div>
+            )}
+            {meta.event && (
+              <div style={{ background: 'var(--green)', color: '#fff', borderRadius: 14, padding: 16 }}>
+                <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>{meta.event.title}</h3>
+                <p style={{ margin: '0 0 12px', fontSize: 13, opacity: .9 }}>{meta.event.sub}</p>
+                <button className="btn" style={{ background: '#fff', color: 'var(--green)', padding: '6px 12px', fontSize: 12 }} onClick={() => { app.community.toggle(community.name + '-event'); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: meta.event!.title, kind: 'success', icon: 'check' }); }}>{going ? 'Going ✓' : "I'm going →"}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiscoverView({ onSelect }: { onSelect: (c: any) => void }) {
+  const app = useApp();
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }} className="no-scrollbar">
+      <h1 className="font-display" style={{ margin: '0 0 6px', fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>Communities</h1>
+      <p style={{ margin: '0 0 28px', color: 'var(--ink-3)', fontSize: 15 }}>Find your people. Join discussions, share wins, organise actions.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }} className="two-col-grid">
+        {MOCK.communities.map(c => {
+          const joined = app.community?.has(c.name);
+          return (
+            <div key={c.name} onClick={() => onSelect(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow .15s' }} className="row-hover">
+              <div style={{ height: 100, background: `url(${c.coverUrl}) center/cover` }} />
+              <div style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <h3 className="font-display" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{c.name}</h3>
+                  <button className={joined ? 'btn btn-primary' : 'btn btn-ghost'} style={{ fontSize: 12, padding: '5px 12px', flexShrink: 0 }}
+                    onClick={e => { e.stopPropagation(); app.community.toggle(c.name); app.toast(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}!`, kind: 'success', icon: 'users' }); }}>
+                    {joined ? 'Joined ✓' : 'Join'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4, display: 'flex', gap: 10 }}>
+                  <span>{c.members} members</span>
+                  <span>·</span>
+                  <span style={{ color: 'var(--green)', fontWeight: 500 }}>{c.cat}</span>
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                  {COMMUNITY_META[c.name]?.desc || ''}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
-  const joined = app.community?.has('Urban gardeners');
-  const going = app.community?.has('seedling-swap');
+  const [activeCommunity, setActiveCommunity] = React.useState<any>(null);
+  const joinedNames = ['Urban gardeners', 'Solar DIY', 'Ocean cleanup crew'];
+  const joinedCommunities = MOCK.communities.filter(c => app.community?.has(c.name) || joinedNames.includes(c.name));
+  const discoverCommunities = MOCK.communities.filter(c => !joinedCommunities.find(j => j.name === c.name));
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="forum" onNav={onNav} />
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
         {/* Left: communities sidebar */}
-        <div style={{ width: 260, borderRight: '1px solid var(--line)', background: 'var(--surface)', padding: '20px 16px', overflow: 'auto' }} className="no-scrollbar community-sidebar">
-          <h2 className="font-display" style={{ margin: '0 0 14px', fontSize: 20, fontWeight: 600 }}>Communities</h2>
-          <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '14px 0 8px', letterSpacing: '.05em' }}>YOUR COMMUNITIES</div>
-          {['Urban gardeners', 'Solar DIY', 'Ocean cleanup crew'].map(n => (
-            <button key={n} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '8px 10px', borderRadius: 8, background: n === 'Urban gardeners' ? 'var(--green-tint)' : 'transparent',
-              border: 'none', color: n === 'Urban gardeners' ? 'var(--green)' : 'var(--ink-2)',
-              cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2,
-            }}>
-              <span style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--green)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600 }}>{n.charAt(0)}</span>
-              <span style={{ flex: 1, textAlign: 'left' }}>{n}</span>
+        <div style={{ width: 240, borderRight: '1px solid var(--line)', background: 'var(--surface)', padding: '20px 14px', overflow: 'auto', flexShrink: 0 }} className="no-scrollbar community-sidebar">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h2 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Communities</h2>
+          </div>
+          <button onClick={() => setActiveCommunity(null)} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none', background: !activeCommunity ? 'var(--green-tint)' : 'transparent', color: !activeCommunity ? 'var(--green)' : 'var(--ink-3)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+            <Icon name="users" size={15} /> Discover all
+          </button>
+          {joinedCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '14px 0 6px', letterSpacing: '.05em' }}>JOINED</div>}
+          {joinedCommunities.map(c => {
+            const isActive = activeCommunity?.name === c.name;
+            return (
+              <button key={c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${c.coverUrl}) center/cover, var(--green)`, flexShrink: 0 }} />
+                <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+              </button>
+            );
+          })}
+          {discoverCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>DISCOVER</div>}
+          {discoverCommunities.map(c => (
+            <button key={c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: activeCommunity?.name === c.name ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeCommunity?.name === c.name ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${c.coverUrl}) center/cover, var(--bg-2)`, flexShrink: 0 }} />
+              <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
             </button>
           ))}
-          <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 8px', letterSpacing: '.05em' }}>DISCOVER</div>
-          {MOCK.communities.slice(3).map(c => (
-            <button key={c.name} style={{
-              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '8px 10px', borderRadius: 8, background: 'transparent',
-              border: 'none', color: 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-            }}>
-              <span style={{ width: 24, height: 24, borderRadius: 6, background: c.coverUrl ? `url(${c.coverUrl}) center/cover` : 'var(--bg-2)', color: 'var(--ink-2)', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 600, flexShrink: 0, overflow: 'hidden' }}>{!c.coverUrl && c.name.charAt(0)}</span>
-              <span style={{ flex: 1, textAlign: 'left' }}>{c.name}</span>
-            </button>
-          ))}
-          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 14, fontSize: 13 }} onClick={() => app.toast({ msg: 'New community', sub: 'Community creation form would open here.', icon: 'users' })}>
+          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 14, fontSize: 13 }} onClick={() => app.toast?.({ msg: 'New community', sub: 'Community creation coming soon.', icon: 'users' })}>
             <Icon name="plus" size={14} /> New community
           </button>
         </div>
 
-        {/* Main: community feed */}
-        <div style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
-          {/* Cover */}
-          <div style={{ height: 160, background: `url(${MOCK.communities[0].coverUrl}) center/cover`, position: 'relative' }}>
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,.15), rgba(0,0,0,.4))' }} />
-          </div>
-          <div style={{ padding: '0 28px', maxWidth: 900 }}>
-            <div className="community-header" style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginTop: -36, position: 'relative', zIndex: 1 }}>
-              <div style={{
-                width: 80, height: 80, borderRadius: 18, background: 'var(--green)',
-                border: '6px solid var(--bg)', color: '#fff',
-                display: 'grid', placeItems: 'center', fontSize: 34, fontFamily: 'Lora', fontWeight: 600,
-              }}>U</div>
-              <div style={{ flex: 1, paddingBottom: 4 }}>
-                <h1 className="font-display" style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>Urban gardeners</h1>
-                <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>24.1k members · 12 active rn · founded 2024</div>
-              </div>
-              <button className="btn btn-ghost" style={{ marginBottom: 4 }} onClick={() => app.openModal('communityabout', { name: 'Urban gardeners' })}>About</button>
-              <button className={joined ? 'btn btn-primary' : 'btn btn-green'} style={{ marginBottom: 4 }} onClick={() => { app.community.toggle('Urban gardeners'); app.toast(joined ? { msg: 'Left Urban gardeners', icon: 'users', action: { label: 'Undo', onClick: () => app.community.add('Urban gardeners') } } : { msg: 'Joined Urban gardeners', kind: 'success', icon: 'users' }); }}>{joined ? 'Joined ✓' : 'Join'}</button>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, margin: '18px 0', flexWrap: 'wrap' }}>
-              {['#balcony', '#vertical-farm', '#pollinators', '#compost', '#tools'].map(t => (
-                <span key={t} style={{ color: 'var(--sky)', fontSize: 13, fontWeight: 500 }}>{t}</span>
-              ))}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18, paddingBottom: 40 }}>
-              <div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                  <div className="pill-nav">
-                    <button className="active">Recent</button>
-                    <button>Top</button>
-                    <button>Q&A</button>
-                    <button>Resources</button>
-                  </div>
-                </div>
-
-                {/* Posts */}
-                {[
-                  { title: 'Sharing my balcony irrigation schematic — feedback welcome', user: 'maya', time: '2h', replies: 24, kind: 'discussion' },
-                  { title: 'PSA: Aphids love nasturtiums — use them as a trap crop', user: 'sarah', time: '5h', replies: 41, kind: 'tip' },
-                  { title: 'Anyone in Brooklyn want to swap seedlings this weekend?', user: 'marcus', time: '8h', replies: 12, kind: 'meetup' },
-                  { title: 'Soil test results came back — silty loam, what should I plant?', user: 'tara', time: '1d', replies: 18, kind: 'question' },
-                  { title: 'Cherry tomato yield: 4.2 kg from 2 sq meters this season', user: 'okafor', time: '2d', replies: 78, kind: 'win' },
-                ].map((p, i) => {
-                  const u = MOCK.users[p.user];
-                  const kindColor = { discussion: 'var(--sky)', tip: 'var(--green)', meetup: 'var(--sun)', question: 'var(--ink-2)', win: 'var(--green-2)' }[p.kind];
-                  return (
-                    <div key={i} className="row-hover" onClick={() => app.openModal('discussion', p)} style={{
-                      background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)',
-                      padding: 16, marginBottom: 10, display: 'flex', gap: 14, cursor: 'pointer',
-                    }}>
-                      <div style={{ width: 30, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <Icon name="arrow" size={14} color="var(--ink-3)" />
-                        <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono', fontWeight: 600, margin: '4px 0' }}>{42 + i * 13}</span>
-                        <Icon name="arrow" size={14} color="var(--ink-3)" />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{
-                            background: kindColor + '20', color: kindColor, padding: '2px 8px', borderRadius: 6,
-                            fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 600, textTransform: 'uppercase',
-                          }}>{p.kind}</span>
-                          <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>by @{u.handle} · {p.time}</span>
-                        </div>
-                        <h3 style={{ margin: '8px 0 4px', fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>{p.title}</h3>
-                        <div style={{ display: 'flex', gap: 18, marginTop: 8, fontSize: 12, color: 'var(--ink-3)' }}>
-                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="comment" size={13} /> {p.replies} replies</span>
-                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="heart" size={13} /> {p.replies * 3 + 12}</span>
-                          <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="bookmark" size={13} /></span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div>
-                <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
-                  <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>About</h3>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55 }}>
-                    For anyone growing food, herbs, or pollinator habitat in cities. Beginners welcome. Be kind.
-                  </p>
-                  <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
-                    <Stat n="24.1k" l="Members" />
-                    <Stat n="312" l="Posts /wk" />
-                  </div>
-                </div>
-                <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
-                  <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
-                  {['Starter guide for balcony growing', 'Tool library — borrow & lend', 'Soil testing — DIY', 'Pollinator-friendly plant list'].map((r, i) => (
-                    <a key={i} onClick={() => app.toast({ msg: r, sub: 'Pinned resource would open here.', icon: 'bookmark' })} style={{ display: 'block', padding: '8px 0', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>
-                      {r}
-                    </a>
-                  ))}
-                </div>
-                <div style={{ background: 'var(--green)', color: '#fff', borderRadius: 14, padding: 16 }}>
-                  <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>Seedling swap · Saturday</h3>
-                  <p style={{ margin: '0 0 12px', fontSize: 13, opacity: .9 }}>14 members already going. Bring 5+ to share.</p>
-                  <button className="btn" style={{ background: '#fff', color: 'var(--green)', padding: '6px 12px', fontSize: 12 }} onClick={() => { app.community.toggle('seedling-swap'); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: 'Seedling swap · Saturday', kind: 'success', icon: 'check' }); }}>{going ? 'Going ✓' : "I'm going →"}</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {activeCommunity
+          ? <CommunityFeed community={activeCommunity} onNav={onNav} />
+          : <DiscoverView onSelect={setActiveCommunity} />
+        }
       </main>
     </div>
   );
@@ -865,11 +1001,19 @@ export function MCompose({ close }) {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [publishing, setPublishing] = React.useState(false);
+  // Hashtag autocomplete
   const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([]);
   const [activeSuggestion, setActiveSuggestion] = React.useState(0);
   const [hashQuery, setHashQuery] = React.useState('');
   const [hashStart, setHashStart] = React.useState(-1);
   const [allTags, setAllTags] = React.useState<string[]>(HASHTAG_POOL);
+  // Mention autocomplete
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<any[]>([]);
+  const [activeMention, setActiveMention] = React.useState(0);
+  const [mentionQuery, setMentionQuery] = React.useState('');
+  const [mentionStart, setMentionStart] = React.useState(-1);
+  const mentionTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const imgRef = React.useRef<HTMLInputElement>(null);
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -892,17 +1036,47 @@ export function MCompose({ close }) {
     setImagePreview(URL.createObjectURL(f));
   };
 
+  const fetchMentions = (q: string) => {
+    if (mentionTimer.current) clearTimeout(mentionTimer.current);
+    if (!q) { setMentionSuggestions([]); return; }
+    mentionTimer.current = setTimeout(async () => {
+      const { supabase } = await import('@/lib/supabase');
+      const { data } = await supabase.from('profiles').select('id, handle, full_name, avatar_url')
+        .ilike('handle', `${q}%`).limit(6);
+      setMentionSuggestions(data ?? []);
+      setActiveMention(0);
+    }, 180);
+  };
+
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setText(val);
     const cursor = e.target.selectionStart ?? val.length;
-    // Find the # that starts the current word
     const before = val.slice(0, cursor);
-    const match = before.match(/#(\w*)$/);
-    if (match) {
-      const q = match[1];
+
+    // Check @ first (mention takes priority when both could match)
+    const mentionMatch = before.match(/@(\w*)$/);
+    if (mentionMatch) {
+      const q = mentionMatch[1];
+      setMentionQuery(q);
+      setMentionStart(cursor - mentionMatch[0].length);
+      fetchMentions(q);
+      // Clear hash state
+      setTagSuggestions([]);
+      setHashQuery('');
+      setHashStart(-1);
+      return;
+    }
+    setMentionSuggestions([]);
+    setMentionQuery('');
+    setMentionStart(-1);
+
+    // Then check # (hashtag)
+    const hashMatch = before.match(/#(\w*)$/);
+    if (hashMatch) {
+      const q = hashMatch[1];
       setHashQuery(q);
-      setHashStart(cursor - match[0].length);
+      setHashStart(cursor - hashMatch[0].length);
       const lower = q.toLowerCase();
       const hits = allTags.filter(t => t.toLowerCase().startsWith(lower) && t.toLowerCase() !== lower).slice(0, 6);
       setTagSuggestions(hits);
@@ -924,7 +1098,6 @@ export function MCompose({ close }) {
     setTagSuggestions([]);
     setHashQuery('');
     setHashStart(-1);
-    // Restore focus + move cursor after inserted tag
     setTimeout(() => {
       taRef.current?.focus();
       const pos = (before + '#' + tag + ' ').length;
@@ -932,7 +1105,31 @@ export function MCompose({ close }) {
     }, 0);
   };
 
+  const acceptMention = (profile: any) => {
+    if (mentionStart < 0) return;
+    const cursor = taRef.current?.selectionStart ?? text.length;
+    const before = text.slice(0, mentionStart);
+    const after = text.slice(cursor);
+    const newText = before + '@' + profile.handle + ' ' + after;
+    setText(newText);
+    setMentionSuggestions([]);
+    setMentionQuery('');
+    setMentionStart(-1);
+    setTimeout(() => {
+      taRef.current?.focus();
+      const pos = (before + '@' + profile.handle + ' ').length;
+      taRef.current?.setSelectionRange(pos, pos);
+    }, 0);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveMention(i => Math.min(i + 1, mentionSuggestions.length - 1)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveMention(i => Math.max(i - 1, 0)); }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptMention(mentionSuggestions[activeMention]); }
+      if (e.key === 'Escape')    { setMentionSuggestions([]); }
+      return;
+    }
     if (!tagSuggestions.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSuggestion(i => Math.min(i + 1, tagSuggestions.length - 1)); }
     if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveSuggestion(i => Math.max(i - 1, 0)); }
@@ -945,24 +1142,30 @@ export function MCompose({ close }) {
     setPublishing(true);
     try {
       const { supabase } = await import('@/lib/supabase');
+      const { notifyMentioned } = await import('@/lib/notifications');
       let image_url: string | null = null;
       if (imageFile) {
         const { uploadFile } = await import('@/lib/storage');
         image_url = await uploadFile('posts', app.user.id, imageFile);
       }
       const tags = [...new Set((text.match(/#(\w+)/g) || []).map(t => t.slice(1)))];
+      const content = text.trim();
       const payload: Record<string, any> = {
         user_id: app.user.id,
-        content: text.trim(),
+        content,
         image_url,
         post_type: cat.toLowerCase(),
       };
-      let result = await supabase.from('posts').insert({ ...payload, tags });
-      if (result.error?.code === '42703') {
-        result = await supabase.from('posts').insert(payload);
+      let result = await supabase.from('posts').insert({ ...payload, tags }).select('id').single();
+      if ((result as any).error?.code === '42703') {
+        result = await supabase.from('posts').insert(payload).select('id').single();
       }
-      const { error } = result;
+      const { data: post, error } = result as any;
       if (error) throw error;
+      // Notify mentioned users
+      if (post?.id) {
+        notifyMentioned({ postId: post.id, content, actorId: app.user.id, body: 'mentioned you in a post' });
+      }
       app.toast?.({ kind: 'success', msg: 'Post published', sub: 'Your update is live on the feed.', icon: 'check' });
       close();
     } catch (err: any) {
@@ -971,6 +1174,8 @@ export function MCompose({ close }) {
       setPublishing(false);
     }
   };
+
+  const showDropdown = mentionSuggestions.length > 0 || tagSuggestions.length > 0;
 
   return (
     <Modal onClose={close} width={560}>
@@ -982,16 +1187,30 @@ export function MCompose({ close }) {
             <textarea ref={taRef} className="fld" autoFocus value={text}
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
-              placeholder="What did you do for the planet today? Use #hashtags to tag topics."
+              placeholder="What did you do for the planet today? Use #hashtags and @mentions."
               style={{ minHeight: 110, width: '100%' }}
             />
-            {tagSuggestions.length > 0 && (
+            {showDropdown && (
               <div style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
                 background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12,
                 boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden', marginTop: 4,
               }}>
-                {tagSuggestions.map((tag, i) => (
+                {mentionSuggestions.length > 0 && mentionSuggestions.map((p, i) => (
+                  <button key={p.id} onMouseDown={e => { e.preventDefault(); acceptMention(p); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                      padding: '8px 14px', background: i === activeMention ? 'var(--surface)' : 'transparent',
+                      border: 'none', cursor: 'pointer', textAlign: 'left',
+                    }}
+                    onMouseEnter={() => setActiveMention(i)}
+                  >
+                    <Avatar src={p.avatar_url} name={p.full_name || p.handle} size={28} />
+                    <span style={{ fontSize: 14, color: 'var(--ink)', fontWeight: 600 }}>{p.full_name}</span>
+                    <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{p.handle}</span>
+                  </button>
+                ))}
+                {tagSuggestions.length > 0 && tagSuggestions.map((tag, i) => (
                   <button key={tag} onMouseDown={e => { e.preventDefault(); acceptSuggestion(tag); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, width: '100%',

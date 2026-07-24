@@ -5,6 +5,8 @@ import { PostDetailSkeleton } from "@/components/primitives";
 import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
+import { ALL_PRODUCTS } from "@/components/screens/product-detail";
+import { loadOrders } from "@/components/screens/orders";
 
 function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
   const [profile, setProfile] = React.useState<any>(null);
@@ -244,7 +246,7 @@ export function DesktopProfile({ onNav, params }) {
 
           {/* Tabs */}
           <div className="profile-tabs" style={{ borderBottom: '1px solid var(--line)', marginBottom: 18, display: 'flex', gap: 4 }}>
-            {['Posts', 'Reposts', 'Projects', 'Achievements', 'Media'].map(t => (
+            {[...(['Posts', 'Reposts', 'Projects', 'Achievements', 'Media']), ...(isOwn ? ['Orders', 'Saved'] : [])].map(t => (
               <button key={t} onClick={() => setTab(t.toLowerCase())} style={{
                 background: 'transparent', border: 'none', padding: '12px 16px',
                 color: tab === t.toLowerCase() ? 'var(--ink)' : 'var(--ink-3)',
@@ -310,6 +312,42 @@ export function DesktopProfile({ onNav, params }) {
                     ))}
                   </div>
               )}
+              {tab === 'orders' && isOwn && (() => {
+                const orders = loadOrders();
+                if (!orders.length) return <EmptyTab icon="" msg="No orders yet. Find something good in the marketplace!" />;
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {orders.slice().reverse().map((o: any) => (
+                      <div key={o.id} onClick={() => onNav?.('order', { id: o.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center' }}>
+                        {o.imgUrl && <img src={o.imgUrl} style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 10, flexShrink: 0 }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.name || o.items?.[0]?.name || 'Order'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{o.id} · {o.date ? new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
+                        </div>
+                        <SBadge status={o.status || 'processing'} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              {tab === 'saved' && isOwn && (() => {
+                const saved = ALL_PRODUCTS.filter(p => app.wishlist?.has(p.id) || app.wishlist?.has(p.title));
+                if (!saved.length) return <EmptyTab icon="" msg="Nothing saved yet. Tap the bookmark on any product to save it." />;
+                return (
+                  <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                    {saved.map(p => (
+                      <div key={p.id} onClick={() => onNav?.('product', { id: p.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer' }}>
+                        <ImagePlaceholder label={p.img} height={140} src={p.imgUrl} />
+                        <div style={{ padding: 12 }}>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.brand.toUpperCase()}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{p.title}</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Lora', marginTop: 6 }}>${p.price}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Sidebar */}
@@ -703,10 +741,11 @@ export function DesktopPostDetail({ onNav, params }) {
     try {
       await supabase.from('comments').insert({ post_id: post.id, user_id: app.user.id, content: text });
       const postOwnerId = dbPost?.user_id;
+      const { createNotification, notifyMentionedInPost } = await import('@/lib/notifications');
       if (postOwnerId && postOwnerId !== app.user.id) {
-        const { createNotification } = await import('@/lib/notifications');
         await createNotification({ userId: postOwnerId, actorId: app.user.id, type: 'comment', postId: post.id, body: `commented: "${text.slice(0, 80)}"` });
       }
+      notifyMentionedInPost({ postId: post.id, actorId: app.user.id, body: 'commented on a post you were mentioned in', excludeUserId: postOwnerId });
     } catch (e) { console.error('[postReply]', e); }
   };
 
@@ -718,13 +757,13 @@ export function DesktopPostDetail({ onNav, params }) {
     setDbPost((p: any) => p ? { ...p, comments_count: (p.comments_count ?? 0) + 1 } : p);
     try {
       await supabase.from('comments').insert({ post_id: post.id, user_id: app.user.id, content: text, parent_id: parentId });
-      const { createNotification } = await import('@/lib/notifications');
-      // notify parent comment author if different user
+      const { createNotification, notifyMentionedInPost } = await import('@/lib/notifications');
       const parent = tree.find((n: any) => n.id === parentId);
       const parentUserId = parent?.user_id;
       if (parentUserId && parentUserId !== app.user.id) {
         await createNotification({ userId: parentUserId, actorId: app.user.id, type: 'reply', postId: post.id, body: `replied: "${text.slice(0, 80)}"` });
       }
+      notifyMentionedInPost({ postId: post.id, actorId: app.user.id, body: 'replied to a post you were mentioned in', excludeUserId: parentUserId });
     } catch (e) { console.error('[postReplyToComment]', e); }
   };
   if (loading) return (

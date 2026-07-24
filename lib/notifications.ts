@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
 export type NotifType =
-  | "like" | "follow" | "comment" | "reply"
+  | "like" | "follow" | "comment" | "reply" | "mention"
   | "community_invite" | "badge" | "level_up";
 
 export async function createNotification({
@@ -72,4 +72,41 @@ export async function getUnreadCount(userId: string) {
   } catch {
     return 0;
   }
+}
+
+export async function notifyMentioned({
+  postId, content, actorId, body, excludeUserId,
+}: {
+  postId: string;
+  content: string;
+  actorId: string;
+  body: string;
+  excludeUserId?: string;
+}) {
+  const raw = content.match(/@(\w+)/g) ?? [];
+  const handles = [...new Set(raw.map((h: string) => h.slice(1).toLowerCase()))];
+  if (!handles.length) return;
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id")
+    .in("handle", handles);
+  for (const p of profiles ?? []) {
+    if (p.id === actorId || p.id === excludeUserId) continue;
+    await createNotification({ userId: p.id, actorId, type: "mention", postId, body });
+  }
+}
+
+export async function notifyMentionedInPost({
+  postId, actorId, body, excludeUserId,
+}: {
+  postId: string;
+  actorId: string;
+  body: string;
+  excludeUserId?: string;
+}) {
+  try {
+    const { data: post } = await supabase.from("posts").select("content").eq("id", postId).single();
+    if (!post?.content) return;
+    await notifyMentioned({ postId, content: post.content, actorId, body, excludeUserId });
+  } catch {}
 }

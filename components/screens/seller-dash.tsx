@@ -11,9 +11,17 @@ const SELLER_TABS = [
   ['products',  'Products',   'bag'],
   ['orders',    'Orders',     'cart'],
   ['analytics', 'Analytics',  'leaf'],
+  ['payouts',   'Payouts',    'coin'],
   ['customers', 'Customers',  'users'],
   ['messages',  'Messages',   'msg'],
   ['storefront','Storefront', 'settings'],
+];
+
+const MOCK_PAYOUT_HISTORY = [
+  { id: 'pw-s001', amount: 820.00, destination: 'GTBank ••4521', requestedAt: '2 days ago', status: 'approved' },
+  { id: 'pw-s002', amount: 1540.00, destination: 'GTBank ••4521', requestedAt: '2 weeks ago', status: 'approved' },
+  { id: 'pw-s003', amount: 290.00, destination: 'GTBank ••4521', requestedAt: '1 month ago', status: 'rejected', rejectReason: 'Open dispute pending resolution.' },
+  { id: 'pw-s004', amount: 600.00, destination: 'GTBank ••4521', requestedAt: '6 weeks ago', status: 'approved' },
 ];
 
 export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
@@ -83,6 +91,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
           {tab === 'analytics' && <AnalyticsTab products={products} />}
           {tab === 'customers' && <CustomersTab />}
           {tab === 'messages'  && <MessagesTab />}
+          {tab === 'payouts'   && <PayoutsTab orders={orders} />}
           {tab === 'storefront'&& <StorefrontTab shop={shop} />}
         </div>
       </main>
@@ -153,15 +162,7 @@ function OverviewTab({ products, orders, onTab }) {
         </div>
 
         {/* Payout card */}
-        <div style={{ background: 'var(--ink-solid)', color: '#fff', borderRadius: 16, padding: 22 }}>
-          <div style={{ fontSize: 13, opacity: .7 }}>Available to withdraw</div>
-          <div className="font-display tabular" style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 4 }}>{sMoney(net)}</div>
-          <div style={{ fontSize: 12, opacity: .6, marginTop: 4, fontFamily: 'JetBrains Mono' }}>Next auto-payout · Mon, weekly</div>
-          <button className="btn" onClick={() => app.toast?.({ msg: 'Withdrawal requested', sub: sMoney(net) + ' to Stripe · arrives in 1–2 days', kind: 'success', icon: 'coin' })} style={{ background: '#fff', color: 'var(--ink)', width: '100%', justifyContent: 'center', marginTop: 16, fontWeight: 600, padding: '11px' }}>Withdraw to Stripe</button>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, fontSize: 12, opacity: .7 }}>
-            <span>Sale fee 5%</span><span>Withdrawal 2%</span>
-          </div>
-        </div>
+        <PayoutCard net={net} onTab={onTab} />
       </div>
 
       {/* Recent orders + top products */}
@@ -511,6 +512,174 @@ function MessagesTab() {
           <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Reply…" style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 999, padding: '10px 16px', fontSize: 13.5, outline: 'none', background: 'var(--bg-2)' }} />
           <button className="btn btn-green" onClick={send} style={{ padding: '10px 18px' }}>Send</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Payout card (overview inline)
+// =====================================================================
+function PayoutCard({ net, onTab }) {
+  const app = useApp();
+  const [showRequest, setShowRequest] = React.useState(false);
+  const [amount, setAmount] = React.useState('');
+  const [submitted, setSubmitted] = React.useState(false);
+
+  const handleRequest = () => {
+    const val = parseFloat(amount);
+    if (!val || val <= 0 || val > net) return;
+    setSubmitted(true);
+    app.toast?.({ msg: 'Withdrawal request submitted', sub: sMoney(val) + ' · under review', kind: 'success', icon: 'coin' });
+    setTimeout(() => { setShowRequest(false); setAmount(''); setSubmitted(false); }, 200);
+  };
+
+  return (
+    <div style={{ background: 'var(--ink-solid)', color: '#fff', borderRadius: 16, padding: 22 }}>
+      <div style={{ fontSize: 13, opacity: .7 }}>Available to withdraw</div>
+      <div className="font-display tabular" style={{ fontSize: 34, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 4 }}>{sMoney(net)}</div>
+      <div style={{ fontSize: 12, opacity: .5, marginTop: 4, fontFamily: 'JetBrains Mono' }}>Funds clear after buyer protection window</div>
+
+      {!showRequest ? (
+        <>
+          <button onClick={() => setShowRequest(true)} style={{ background: '#fff', color: 'var(--ink)', width: '100%', justifyContent: 'center', marginTop: 16, fontWeight: 600, padding: '11px', borderRadius: 10, border: 'none', cursor: net > 0 ? 'pointer' : 'not-allowed', opacity: net > 0 ? 1 : 0.5, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="coin" size={15} /> Request Withdrawal
+          </button>
+          <button onClick={() => onTab('payouts')} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,.4)', fontSize: 12, cursor: 'pointer', width: '100%', marginTop: 10, padding: '4px 0' }}>
+            View payout history →
+          </button>
+        </>
+      ) : (
+        <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.08)', borderRadius: 10, padding: '10px 14px' }}>
+            <span style={{ opacity: .6, fontSize: 14 }}>$</span>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              placeholder={'Max ' + sMoney(net, 0)}
+              max={net}
+              autoFocus
+              style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 18, fontWeight: 700, fontFamily: 'Satoshi', flex: 1, width: 0 }}
+            />
+          </div>
+          {parseFloat(amount) > net && (
+            <div style={{ fontSize: 12, color: '#f87171', fontFamily: 'JetBrains Mono' }}>Amount exceeds available balance</div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setShowRequest(false); setAmount(''); }} style={{ flex: 1, background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, padding: '10px', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={handleRequest} disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > net} style={{ flex: 2, background: '#fff', border: 'none', borderRadius: 10, color: 'var(--ink)', fontSize: 13, fontWeight: 700, padding: '10px', cursor: 'pointer', opacity: (!amount || parseFloat(amount) <= 0 || parseFloat(amount) > net) ? 0.4 : 1 }}>Submit Request</button>
+          </div>
+          <div style={{ fontSize: 11, opacity: .45, textAlign: 'center', fontFamily: 'JetBrains Mono' }}>Reviews take 1–2 business days</div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: showRequest ? 10 : 0, fontSize: 12, opacity: .45, fontFamily: 'JetBrains Mono' }}>
+        <span>Sale fee 5%</span><span>Withdrawal fee 2%</span>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Payouts tab
+// =====================================================================
+function PayoutsTab({ orders }) {
+  const app = useApp();
+  const available = orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0) * 0.95 * 0.98;
+  const pending = orders.filter(o => o.status !== 'delivered').reduce((s, o) => s + o.total, 0);
+  const [history, setHistory] = React.useState(MOCK_PAYOUT_HISTORY);
+  const [showRequest, setShowRequest] = React.useState(false);
+  const [amount, setAmount] = React.useState('');
+
+  const statusColor = { approved: 'var(--green)', rejected: 'var(--clay)', pending: 'var(--sun)', on_hold: 'var(--ink-3)' };
+  const statusLabel = { approved: 'Approved', rejected: 'Rejected', pending: 'Pending review', on_hold: 'On Hold' };
+
+  const handleRequest = () => {
+    const val = parseFloat(amount);
+    if (!val || val <= 0 || val > available) return;
+    const newReq = { id: 'pw-s' + Date.now(), amount: val, destination: 'GTBank ••4521', requestedAt: 'just now', status: 'pending' };
+    setHistory(h => [newReq, ...h]);
+    app.toast?.({ msg: 'Withdrawal request submitted', sub: sMoney(val) + ' · under review', kind: 'success', icon: 'coin' });
+    setShowRequest(false);
+    setAmount('');
+  };
+
+  return (
+    <div style={{ maxWidth: 800, display: 'grid', gap: 16 }}>
+      {/* Balance overview */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 6 }}>Available to withdraw</div>
+          <div className="font-display tabular" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--green)' }}>{sMoney(available)}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>after fees</div>
+        </div>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 6 }}>Pending clearance</div>
+          <div className="font-display tabular" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--sun)' }}>{sMoney(pending)}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>clears on delivery</div>
+        </div>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-4)', marginBottom: 6 }}>Total withdrawn</div>
+          <div className="font-display tabular" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em' }}>{sMoney(history.filter(h => h.status === 'approved').reduce((s, h) => s + h.amount, 0))}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>all time</div>
+        </div>
+      </div>
+
+      {/* Info banner */}
+      <div style={{ padding: '12px 16px', borderRadius: 12, background: 'var(--green-tint)', border: '1px solid color-mix(in srgb, var(--green) 25%, transparent)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+        Withdrawals are reviewed by Honua within <strong>1–2 business days</strong>. Funds are released once the review is complete. Minimum withdrawal is <strong>$10.00</strong>.
+      </div>
+
+      {/* Request form or button */}
+      {showRequest ? (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 22 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>New withdrawal request</div>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <DashFld label="Amount to withdraw" prefix="$" type="number" value={amount} onChange={setAmount} placeholder={`Max ${sMoney(available, 0)}`} />
+            {parseFloat(amount) > available && (
+              <div style={{ fontSize: 12.5, color: 'var(--clay)', fontFamily: 'JetBrains Mono' }}>Amount exceeds available balance of {sMoney(available)}</div>
+            )}
+            <DashFld label="Destination account" value="GTBank ••4521" onChange={() => {}} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
+              <button className="btn btn-ghost" onClick={() => { setShowRequest(false); setAmount(''); }}>Cancel</button>
+              <button className="btn btn-green" disabled={!amount || parseFloat(amount) < 10 || parseFloat(amount) > available} onClick={handleRequest} style={{ opacity: (!amount || parseFloat(amount) < 10 || parseFloat(amount) > available) ? 0.5 : 1 }}>
+                <Icon name="coin" size={14} /> Submit request
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button className="btn btn-green" onClick={() => setShowRequest(true)} disabled={available < 10} style={{ alignSelf: 'start', padding: '11px 20px', opacity: available >= 10 ? 1 : 0.5 }}>
+          <Icon name="coin" size={15} /> Request withdrawal
+        </button>
+      )}
+
+      {/* History */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '15px 20px', borderBottom: '1px solid var(--line)', fontSize: 14, fontWeight: 600 }}>Payout history</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, padding: '11px 20px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+          <span>Reference</span><span>Amount</span><span>Destination</span><span>Status</span>
+        </div>
+        {history.map(h => (
+          <div key={h.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{h.id}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{h.requestedAt}</div>
+            </div>
+            <span className="tabular" style={{ fontSize: 14, fontWeight: 700 }}>{sMoney(h.amount)}</span>
+            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{h.destination}</span>
+            <div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[h.status]} 12%, transparent)`, color: statusColor[h.status], fontFamily: 'JetBrains Mono', display: 'inline-block' }}>
+                {statusLabel[h.status]}
+              </span>
+              {h.rejectReason && (
+                <div style={{ fontSize: 11.5, color: 'var(--clay)', marginTop: 4, lineHeight: 1.4 }}>{h.rejectReason}</div>
+              )}
+            </div>
+          </div>
+        ))}
+        {history.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>No withdrawal history yet.</div>}
       </div>
     </div>
   );

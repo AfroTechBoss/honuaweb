@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { uploadFile } from "@/lib/storage";
 import { updateProfile } from "@/lib/profile";
-import { createNotification, getUnreadCount, markAllRead } from "@/lib/notifications";
+import { createNotification, getUnreadCount, markAllRead, notifyMentionedInPost } from "@/lib/notifications";
 import { getBookmarkedPostIds, addBookmark, removeBookmark, getCollections, createCollection } from "@/lib/bookmarks";
 
 // Route key -> URL path. Mirrors the prototype's ROUTES registry, but
@@ -32,6 +32,10 @@ export function pathFor(key: string, params: any = {}): string {
     case "sell": return "/sell";
     case "seller": return "/seller";
     case "admin": return "/admin";
+    case "search": return params?.q ? `/search?q=${encodeURIComponent(params.q)}` : "/search";
+    case "orders": return "/orders";
+    case "order": return `/orders/${params?.id ?? ''}`;
+    case "product": return `/marketplace/${params?.id ?? ''}`;
     default: return "/";
   }
 }
@@ -47,10 +51,11 @@ const STATE_DEFAULTS: any = {
   joinedCommunities: ["Urban gardeners", "Solar DIY", "Ocean cleanup crew"],
   joinedChallenges: [1, 2],
   cart: [
-    { name: "Refillable shampoo bar", price: "$12" },
-    { name: "Solar phone charger", price: "$48" },
-    { name: "Bamboo cutlery set", price: "$18" },
+    { id: 'p1', name: 'Refillable shampoo bar', price: '$12', brand: 'BareHaus', tag: 'Plastic-free', imgUrl: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&q=80', quantity: 1 },
+    { id: 'p2', name: 'Solar phone charger', price: '$48', brand: 'Sunly', tag: 'Solar', imgUrl: 'https://images.unsplash.com/photo-1620634409738-62a2e2b1a5b7?w=400&q=80', quantity: 1 },
+    { id: 'p3', name: 'Bamboo cutlery set', price: '$18', brand: 'Forrest', tag: 'Compostable', imgUrl: 'https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=400&q=80', quantity: 1 },
   ],
+  cartOpen: false,
   wishlist: [],
   drafts: [],
   dark: false,
@@ -269,6 +274,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const { data: post } = await supabase.from('posts').select('user_id').eq('id', postId).single();
           if (post?.user_id) {
             await createNotification({ userId: post.user_id, actorId: st.user.id, type: 'like', postId, body: 'liked your post' });
+            notifyMentionedInPost({ postId, actorId: st.user.id, body: 'liked a post you were mentioned in', excludeUserId: post.user_id });
           }
         }
       } catch {}
@@ -560,9 +566,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     repost: dbRepost,
     community: mk("joinedCommunities"), challenge: mk("joinedChallenges"), wishlist: mk("wishlist"),
-    cart: st.cart, cartCount: st.cart.length,
-    addToCart: (item: any) => setSt((s: any) => ({ ...s, cart: [...s.cart, item] })),
-    removeFromCart: (i: number) => setSt((s: any) => ({ ...s, cart: s.cart.filter((_: any, idx2: number) => idx2 !== i) })),
+    cart: st.cart, cartCount: st.cart.reduce((n: number, i: any) => n + (i.quantity || 1), 0),
+    cartOpen: st.cartOpen,
+    openCart: () => setSt((s: any) => ({ ...s, cartOpen: true })),
+    closeCart: () => setSt((s: any) => ({ ...s, cartOpen: false })),
+    addToCart: (item: any) => setSt((s: any) => {
+      const existing = s.cart.findIndex((c: any) => c.id === item.id || c.name === item.name);
+      if (existing >= 0) {
+        const cart = [...s.cart];
+        cart[existing] = { ...cart[existing], quantity: (cart[existing].quantity || 1) + 1 };
+        return { ...s, cart };
+      }
+      return { ...s, cart: [...s.cart, { ...item, quantity: item.quantity || 1 }] };
+    }),
+    removeFromCart: (id: string) => setSt((s: any) => ({ ...s, cart: s.cart.filter((c: any) => (c.id || c.name) !== id) })),
+    updateCartQty: (id: string, qty: number) => setSt((s: any) => {
+      if (qty <= 0) return { ...s, cart: s.cart.filter((c: any) => (c.id || c.name) !== id) };
+      return { ...s, cart: s.cart.map((c: any) => (c.id || c.name) === id ? { ...c, quantity: qty } : c) };
+    }),
+    clearCart: () => setSt((s: any) => ({ ...s, cart: [] })),
     drafts: st.drafts,
     addDraft: (d: any) => setSt((s: any) => ({ ...s, drafts: [...s.drafts, d] })),
   };

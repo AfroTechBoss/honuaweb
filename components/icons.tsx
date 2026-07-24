@@ -51,6 +51,11 @@ export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor", f
     minus: <path d="M5 12h14" />,
     cart: <><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.5 13h11l2-9H6" /></>,
     coin: <><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9.5 9.5a2.5 2 0 015 0c0 1.5-2.5 1.5-2.5 2.5s2.5 1 2.5 2.5a2.5 2 0 01-5 0" /></>,
+    package: <><path d="M21 8V20a1 1 0 01-1 1H4a1 1 0 01-1-1V8" /><path d="M23 3H1v5h22V3zM10 12h4" /></>,
+    truck: <><rect x="1" y="3" width="15" height="13" rx="1" /><path d="M16 8h4l3 4v5h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></>,
+    bars: <path d="M3 6h18M3 12h18M3 18h18" />,
+    tag: <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01" />,
+    at: <><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">

@@ -20,7 +20,7 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-ghost" onClick={() => onNav?.('sell')} style={{ color: 'var(--green)', borderColor: 'var(--green-3)' }}><Icon name="bag" size={14} /> Sell on Honua</button>
             <button className="btn btn-ghost" onClick={() => app.openModal?.('list', { title: 'Your wishlist', icon: 'bookmark', sub: (app.state.wishlist.length || 'No') + ' saved items', items: app.state.wishlist.length ? app.state.wishlist.map(n => ({ icon: 'bag', title: n, sub: 'tap a product to add to cart' })) : [{ icon: 'bookmark', title: 'Nothing saved yet', sub: 'tap the bookmark on any product' }] })}><Icon name="bookmark" size={14} /> Wishlist</button>
-            <button className="btn btn-primary" onClick={() => app.openModal?.('list', { title: 'Your cart', icon: 'cart', sub: app.cartCount + ' item' + (app.cartCount === 1 ? '' : 's'), items: app.cart.length ? app.cart.map(c => ({ icon: 'bag', title: c.name, right: c.price })) : [{ icon: 'cart', title: 'Cart is empty' }] })}><Icon name="bag" size={14} /> Cart · {app.cartCount}</button>
+            <button className="btn btn-primary" onClick={() => app.openCart?.()}><Icon name="bag" size={14} /> Cart · {app.cartCount}</button>
           </div>
         </div>
 
@@ -36,7 +36,7 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
             <div style={{ display: 'flex', gap: 14, marginTop: 18, alignItems: 'center' }}>
               <span style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>$84</span>
               <span style={{ fontSize: 14, color: 'var(--ink-3)', textDecoration: 'line-through' }}>$120</span>
-              <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => { app.addToCart({ name: 'The repair kit', price: '$84' }); app.toast?.({ msg: 'Added to cart', sub: 'The repair kit · $84', kind: 'success', icon: 'cart' }); }}>Add to cart</button>
+              <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => { app.addToCart({ id: 'featured-repair-kit', name: 'The repair kit', price: '$84', brand: 'Fix-it Collective', tag: 'Repairable', quantity: 1 }); app.toast?.({ msg: 'Added to cart', sub: 'The repair kit · $84', kind: 'success', icon: 'cart' }); }}>Add to cart</button>
             </div>
           </div>
           <ImagePlaceholder label="repair kit hero — folded leather case open with tools" height={280} />
@@ -56,13 +56,14 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
         {/* Product grid */}
         <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
           {MOCK.products.map((p, i) => {
-            const wished = app.wishlist?.has(p.name);
+            const productId = `m${i + 1}`;
+            const wished = app.wishlist?.has(productId) || app.wishlist?.has(p.name);
             return (
-            <div key={i} className="post-card" onClick={() => app.openModal?.('product', p)} style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer' }}>
+            <div key={i} className="post-card" onClick={() => app.nav?.('product', { id: productId })} style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer' }}>
               <div style={{ position: 'relative' }}>
                 <ImagePlaceholder label={p.img} height={200} src={p.imgUrl} />
                 <span className="chip chip-green" style={{ position: 'absolute', top: 10, left: 10 }}>{p.tag}</span>
-                <button onClick={(e) => { e.stopPropagation(); app.wishlist.toggle(p.name); app.toast?.(wished ? { msg: 'Removed from wishlist', icon: 'bookmark' } : { msg: 'Saved to wishlist', kind: 'success', icon: 'bookmark' }); }} style={{
+                <button onClick={(e) => { e.stopPropagation(); app.wishlist.toggle(productId); app.toast?.(wished ? { msg: 'Removed from wishlist', icon: 'bookmark' } : { msg: 'Saved to wishlist', kind: 'success', icon: 'bookmark' }); }} style={{
                   position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: '50%',
                   background: 'var(--surface)', border: '1px solid var(--line)', cursor: 'pointer',
                   display: 'grid', placeItems: 'center', color: wished ? 'var(--green)' : 'var(--ink-3)',
@@ -73,9 +74,14 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
                 <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{p.name}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 16, fontWeight: 600, fontFamily: 'Lora' }}>{p.price}</span>
-                  <button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); app.addToCart({ name: p.name, price: p.price }); app.toast?.({ msg: 'Added to cart', sub: p.name, kind: 'success', icon: 'cart' }); }} style={{ padding: '5px 11px', fontSize: 12 }}>Add</button>
+                  <button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); app.addToCart({ id: 'p-' + i, ...p, quantity: 1 }); app.toast?.({ msg: 'Added to cart', sub: p.name, kind: 'success', icon: 'cart' }); }} style={{ padding: '5px 11px', fontSize: 12 }}>Add</button>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8, fontFamily: 'JetBrains Mono' }}>★★★★★ 4.{7 + i % 3} · {120 + i * 14} reviews</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>★★★★★ 4.{7 + i % 3} · {120 + i * 14} reviews</div>
+                  <button onClick={(e) => { e.stopPropagation(); app.nav?.('messages', { handle: p.brand.toLowerCase().replace(/\s+/g, '') }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--sky)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <Icon name="msg" size={11} /> Ask
+                  </button>
+                </div>
               </div>
             </div>
             );
@@ -445,7 +451,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   const showSeen = isAccepted && lastMsg?.sender_id === userId && !!lastMsg?.seen_at;
 
   return (
-    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className={`page-wrap${activeConvoId ? ' msg-in-thread' : ''}`} style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <style>{`
         @keyframes typingBounce {
           0%, 60%, 100% { transform: translateY(0); }
@@ -514,7 +520,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
 
         {/* Right panel — chat */}
         {!activeConvoId ? (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)' }}>
+          <div className="msg-detail-col" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)' }}>
             <Icon name="msg" size={40} />
             <div style={{ marginTop: 16, fontSize: 16, fontWeight: 600, color: 'var(--ink-2)' }}>Your messages</div>
             <p style={{ fontSize: 14, marginTop: 6, textAlign: 'center', maxWidth: 280 }}>Select a conversation or start a new one.</p>
@@ -524,6 +530,9 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }} className="msg-detail-col">
             {/* Header */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <button className="msg-back-btn btn btn-ghost" onClick={() => setActiveConvoId(null)} style={{ padding: '6px 10px', fontSize: 13, gap: 4 }}>
+                ← Back
+              </button>
               <span style={{ cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: otherUser?.handle })}>
                 <Avatar src={otherUser?.avatar_url} name={otherUser?.full_name} size={40} verified={otherUser?.verified} />
               </span>
@@ -680,8 +689,8 @@ export function Msg({ from, children, attach }: { from: string; children: React.
 };
 
 // =============== Desktop Notifications ===============
-const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin' };
-const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)' };
+const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin' };
+const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)' };
 
 function timeAgo(ts: string) {
   const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -724,7 +733,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     // Mark this one read locally
     setItems(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
     switch (n.type) {
-      case 'like': case 'comment': case 'reply': return n.post_id && onNav?.('post', { id: n.post_id });
+      case 'like': case 'comment': case 'reply': case 'mention': return n.post_id && onNav?.('post', { id: n.post_id });
       case 'follow': return n.actor?.handle && onNav?.('profile', { handle: n.actor.handle });
       case 'community_invite': return onNav?.('forum');
       case 'badge': case 'level_up': return onNav?.('profile');
@@ -736,6 +745,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     'All': [],
     'Likes': ['like'],
     'Comments': ['comment', 'reply'],
+    'Mentions': ['mention'],
     'Follows': ['follow'],
     'Community': ['community_invite'],
     'Badges': ['badge', 'level_up'],
@@ -1735,9 +1745,10 @@ function CheckEmailScreen({ email, onBackToSignIn }: { email: string; onBackToSi
 // ── OAuth Onboarding Flow ─────────────────────────────────────────────────────
 export function OAuthOnboardingFlow() {
   const app = useApp();
-  const totalSteps = 5;
+  const totalSteps = 6;
   const [step, setStep] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
+  const [suggestedFollows, setSuggestedFollows] = React.useState<string[]>([]);
 
   // Pre-fill from Google user data
   const [name, setName] = React.useState(app.user?.name || '');
@@ -1816,12 +1827,13 @@ export function OAuthOnboardingFlow() {
     setStep(s => s + 1);
   };
 
-  const stepTitles = ['Welcome to Honua', 'Choose your username', 'Where are you based?', 'What do you care about?', 'Almost done'];
+  const stepTitles = ['Welcome to Honua', 'Choose your username', 'Where are you based?', 'What do you care about?', 'People to follow', 'Almost done'];
   const stepSubs = [
     'Let\'s confirm your name and photo.',
     'This is how the community will find you.',
     'Optional — helps connect you with local initiatives.',
     'Pick at least 3 topics to personalise your feed.',
+    'Follow a few voices to get your feed going.',
     'A short intro and you\'re in.',
   ];
 
@@ -1925,7 +1937,34 @@ export function OAuthOnboardingFlow() {
           </div>
         )}
 
-        {/* Step 5: Bio + Terms */}
+        {/* Step 5: Suggested follows */}
+        {step === 5 && (() => {
+          const suggestions = Object.entries(MOCK.users).filter(([k]) => k !== 'you').map(([, u]) => u);
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {suggestions.map(u => {
+                const following = suggestedFollows.includes(u.handle);
+                return (
+                  <div key={u.handle} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                    <Avatar src={u.avatar} name={u.name} size={44} verified={u.verified} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{u.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
+                    </div>
+                    <button
+                      onClick={() => setSuggestedFollows(prev => following ? prev.filter(h => h !== u.handle) : [...prev, u.handle])}
+                      style={{ padding: '7px 16px', borderRadius: 999, border: following ? '1.5px solid var(--green)' : '1.5px solid var(--line)', background: following ? 'var(--green)' : 'transparent', color: following ? '#fff' : 'var(--ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .15s', flexShrink: 0 }}
+                    >
+                      {following ? 'Following' : 'Follow'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* Step 6: Bio + Terms */}
         {step === totalSteps && (
           <div>
             <label style={lab}>SHORT BIO (OPTIONAL)</label>
@@ -1950,7 +1989,7 @@ export function OAuthOnboardingFlow() {
           {loading ? 'Setting up your profile…' : step === totalSteps ? '🌿 Enter Honua' : 'Continue'}
         </button>
 
-        {step === 3 && (
+        {(step === 3 || step === 5) && (
           <button onClick={next} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, marginTop: 12, padding: 8 }}>
             Skip for now
           </button>

@@ -23,11 +23,13 @@ export function DesktopSidebar({ active, onNav }: any) {
 
   const items: any[] = [
     ["Home", "home", "home"],
+    ["Search", "search", "search"],
     ["Explore", "compass", "explore"],
     ["Impact", "leaf", "impact"],
     ["Action map", "map", "map"],
     ["Carbon market", "globe", "carbon"],
     ["Marketplace", "bag", "marketplace"],
+    ["Orders", "package", "orders"],
     ["Bookmarks", "bookmark", "bookmarks"],
     ["Notifications", "bell", "notifications", app.unreadNotifs || 0],
     ["Messages", "msg", "messages", 0],
@@ -158,40 +160,94 @@ export function DesktopSidebar({ active, onNav }: any) {
 export function MobileNav() {
   const app = useApp();
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = React.useState(false);
+
   if (!app.authed) return null;
 
   const pathKey = pathname === "/" ? "home"
     : pathname.startsWith("/explore") ? "explore"
+    : pathname.startsWith("/marketplace") ? "marketplace"
+    : pathname.startsWith("/messages") ? "messages"
     : pathname.startsWith("/notifications") ? "notifications"
+    : pathname.startsWith("/communities") ? "communities"
     : pathname.startsWith("/profile") ? "profile"
+    : pathname.startsWith("/bookmarks") ? "bookmarks"
+    : pathname.startsWith("/settings") ? "settings"
     : "";
 
-  const items: [string, string, string][] = [
+  const nav = (key: string) => { setMoreOpen(false); app.nav?.(key); };
+
+  const mainItems: [string, string, string][] = [
     ["Home", "home", "home"],
     ["Explore", "compass", "explore"],
-    ["Alerts", "bell", "notifications"],
-    ["Profile", "user", "profile"],
+    ["Shop", "bag", "marketplace"],
+    ["Messages", "comment", "messages"],
   ];
 
-  const nav = (key: string) => app.nav?.(key);
+  const moreItems: [string, string, string][] = [
+    ["Notifications", "bell", "notifications"],
+    ["Communities", "users", "communities"],
+    ["Bookmarks", "bookmark", "bookmarks"],
+    ["My Profile", "user", "profile"],
+    ["Impact", "leaf", "impact"],
+    ["Settings", "settings", "settings"],
+  ];
+
+  const moreActive = moreItems.some(([,, k]) => k === pathKey);
 
   return (
-    <nav className="mobile-nav">
-      {items.slice(0, 2).map(([label, icon, key]) => (
-        <button key={key} onClick={() => nav(key)} className={`mobile-nav-item${pathKey === key ? " active" : ""}`}>
-          <Icon name={icon} size={22} stroke={pathKey === key ? 2 : 1.75} />
-          <span>{label}</span>
+    <>
+      {moreOpen && (
+        <div className="more-sheet-backdrop" onClick={() => setMoreOpen(false)}>
+          <div className="more-sheet" onClick={e => e.stopPropagation()}>
+            <div className="more-sheet-handle" />
+            <div className="more-sheet-scroll">
+              <div className="more-sheet-grid">
+                {moreItems.map(([label, icon, key]) => (
+                  <button key={key} onClick={() => nav(key)} className={`more-sheet-item${pathKey === key ? " active" : ""}`}>
+                    <div className="more-sheet-icon">
+                      <Icon name={icon} size={22} stroke={pathKey === key ? 2 : 1.75} />
+                    </div>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="more-sheet-actions">
+                <button onClick={() => { setMoreOpen(false); app.nav?.("sell"); }} className="more-sheet-action-btn">
+                  <Icon name="bag" size={16} /> Sell on Honua
+                </button>
+                <button onClick={() => { setMoreOpen(false); app.logout?.(); }} className="more-sheet-action-btn logout">
+                  <Icon name="logout" size={16} /> Log out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <nav className="mobile-nav">
+        {mainItems.map(([label, icon, key]) => (
+          <button key={key} onClick={() => nav(key)} className={`mobile-nav-item${pathKey === key ? " active" : ""}`}>
+            <Icon name={icon} size={22} stroke={pathKey === key ? 2 : 1.75} />
+            <span>{label}</span>
+          </button>
+        ))}
+        <button onClick={() => setMoreOpen(o => !o)} className={`mobile-nav-item${moreActive || moreOpen ? " active" : ""}`}>
+          <Icon name="bars" size={22} stroke={moreActive || moreOpen ? 2 : 1.75} />
+          <span>More</span>
         </button>
-      ))}
-      <button className="mobile-nav-compose" onClick={() => app.openModal?.("compose")}>
-        <Icon name="plus" size={20} stroke={2.2} />
-      </button>
-      {items.slice(2).map(([label, icon, key]) => (
-        <button key={key} onClick={() => nav(key)} className={`mobile-nav-item${pathKey === key ? " active" : ""}`}>
-          <Icon name={icon} size={22} stroke={pathKey === key ? 2 : 1.75} />
-          <span>{label}</span>
-        </button>
-      ))}
-    </nav>
+      </nav>
+    </>
+  );
+}
+
+export function MobileComposeFab() {
+  const app = useApp();
+  const pathname = usePathname();
+  const showFab = pathname === "/" || pathname.startsWith("/explore") || pathname.startsWith("/profile");
+  if (!app.authed || !showFab) return null;
+  return (
+    <button className="mobile-compose-fab" onClick={() => app.openModal?.("compose")}>
+      <Icon name="plus" size={24} stroke={2.2} color="#fff" />
+    </button>
   );
 }

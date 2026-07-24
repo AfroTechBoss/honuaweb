@@ -44,7 +44,7 @@ function ChipGroup({ options, value = [], onToggle, single }: { options: string[
   );
 }
 
-function CheckRow({ checked, onToggle, title, sub }: { checked?: boolean; onToggle?: () => void; title?: string; sub?: string }) {
+function CheckRow({ checked, onToggle, title, sub, policyHref }: { checked?: boolean; onToggle?: () => void; title?: string; sub?: string; policyHref?: string }) {
   return (
     <button onClick={onToggle} className="opt-row" style={{ alignItems: 'flex-start' }}>
       <span style={{
@@ -54,7 +54,16 @@ function CheckRow({ checked, onToggle, title, sub }: { checked?: boolean; onTogg
         display: 'grid', placeItems: 'center',
       }}>{checked && <Icon name="check" size={13} stroke={3} />}</span>
       <span style={{ flex: 1 }}>
-        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{title}</span>
+        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>
+          {policyHref ? (
+            <>
+              I agree to the{' '}
+              <a href={policyHref} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--green)', textDecoration: 'underline' }}>
+                Honua Seller Policy
+              </a>
+            </>
+          ) : title}
+        </span>
         {sub && <span style={{ display: 'block', fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.45 }}>{sub}</span>}
       </span>
     </button>
@@ -351,7 +360,7 @@ function ApplyWizard({ onNav, onCancel }) {
               <ReviewCard title="Impact" onEdit={() => setStep(2)} rows={[['Practices', f.practices.join(', ') || '—'], ['Certs', f.certs.join(', ') || 'None'], ['Story', (f.impact || '—').slice(0, 90) + (f.impact.length > 90 ? '…' : '')]]} />
               <ReviewCard title="Business & payouts" onEdit={() => setStep(3)} rows={[['Legal name', f.legalName || '—'], ['Type', f.bizType], ['Country', f.country || '—'], ['Payout', f.payout === 'stripe' ? 'Stripe' : f.payout === 'bank' ? 'Bank transfer' : '—']]} />
               <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
-                <CheckRow checked={f.agreeSeller} onToggle={() => set('agreeSeller', !f.agreeSeller)} title="I agree to the Honua Seller Policy" sub="Listing standards, fulfilment timelines, returns and the fee schedule." />
+                <CheckRow checked={f.agreeSeller} onToggle={() => set('agreeSeller', !f.agreeSeller)} policyHref="/seller-policy" sub="Listing standards, fulfilment timelines, returns and the fee schedule." />
                 <CheckRow checked={f.agreeImpact} onToggle={() => set('agreeImpact', !f.agreeImpact)} title="I'll keep my impact claims honest" sub="Everything in my listings is accurate and I can back up sustainability claims if asked." />
               </div>
             </div>
