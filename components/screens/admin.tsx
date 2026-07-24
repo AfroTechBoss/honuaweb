@@ -23,6 +23,7 @@ const ADMIN_NAV_GROUPS = [
     items: [
       ['moderation', 'Moderation', 'flame'],
       ['appeals', 'Appeals', 'flag'],
+      ['challenges', 'Challenges', 'award'],
       ['products', 'Products', 'bag'],
       ['users', 'Users', 'users'],
       ['sellers', 'Sellers', 'leaf'],
@@ -123,6 +124,61 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const [payouts, setPayouts] = React.useState(MOCK_PAYOUTS);
   const [appeals, setAppeals] = React.useState(MOCK_APPEALS);
   const [adminTeam, setAdminTeam] = React.useState(MOCK_ADMIN_TEAM_INIT);
+  const [dbChallenges, setDbChallenges] = React.useState<any[]>([]);
+  const [pendingChallenges, setPendingChallenges] = React.useState<any[]>([]);
+  const [challengesLoaded, setChallengesLoaded] = React.useState(false);
+
+  const loadChallenges = React.useCallback(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const [{ data: active }, { data: pending }] = await Promise.all([
+        supabase.from('challenges').select('*').eq('status', 'active').order('participant_count', { ascending: false }),
+        supabase.from('challenges').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      ]);
+      if (active) setDbChallenges(active);
+      if (pending) setPendingChallenges(pending);
+      setChallengesLoaded(true);
+    }).catch(() => setChallengesLoaded(true));
+  }, []);
+
+  React.useEffect(() => { loadChallenges(); }, [loadChallenges]);
+
+  const approveChallenge = async (id: string) => {
+    const { supabase } = await import('@/lib/supabase');
+    const c = pendingChallenges.find(x => x.id === id);
+    await supabase.from('challenges').update({ status: 'active' }).eq('id', id);
+    setPendingChallenges(p => p.filter(x => x.id !== id));
+    setDbChallenges(a => [{ ...c, status: 'active' }, ...a]);
+    log('approved challenge', c?.title ?? '', 'check');
+    app.toast?.({ msg: 'Challenge approved', sub: c?.title, kind: 'success', icon: 'check' });
+  };
+
+  const rejectChallenge = async (id: string, reason: string) => {
+    const { supabase } = await import('@/lib/supabase');
+    const c = pendingChallenges.find(x => x.id === id);
+    await supabase.from('challenges').update({ status: 'archived', reject_reason: reason }).eq('id', id);
+    setPendingChallenges(p => p.filter(x => x.id !== id));
+    log('rejected challenge', c?.title ?? '', 'close');
+    app.toast?.({ msg: 'Challenge rejected', sub: c?.title, icon: 'close' });
+  };
+
+  const archiveChallenge = async (id: string) => {
+    const { supabase } = await import('@/lib/supabase');
+    const c = dbChallenges.find(x => x.id === id);
+    await supabase.from('challenges').update({ status: 'archived' }).eq('id', id);
+    setDbChallenges(a => a.filter(x => x.id !== id));
+    log('archived challenge', c?.title ?? '', 'trash');
+    app.toast?.({ msg: 'Challenge archived', sub: c?.title, icon: 'trash' });
+  };
+
+  const createAdminChallenge = async (data: any) => {
+    const { supabase } = await import('@/lib/supabase');
+    const { data: inserted, error } = await supabase.from('challenges').insert({ ...data, status: 'active' }).select().single();
+    if (!error && inserted) {
+      setDbChallenges(a => [inserted, ...a]);
+      log('created challenge', data.title, 'check');
+      app.toast?.({ msg: 'Challenge created', sub: data.title, kind: 'success', icon: 'award' });
+    }
+  };
 
   const log = (action, target, kind = 'check') =>
     setAudit(a => [{ id: 'l' + Date.now(), actor: 'You', action, target, time: 'just now', kind }, ...a]);
@@ -203,7 +259,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const pendingSellers = (app.state?.sellerStatus === 'pending' ? 1 : 0) + MOCK_APPLICATIONS.length;
   const pendingPayouts = payouts.filter(p => p.status === 'pending').length;
   const pendingAppeals = appeals.filter(a => a.status === 'open').length;
-  const badges = { moderation: openCount, appeals: pendingAppeals, products: flaggedCount, sellers: pendingSellers, payouts: pendingPayouts };
+  const badges = { moderation: openCount, appeals: pendingAppeals, challenges: pendingChallenges.length, products: flaggedCount, sellers: pendingSellers, payouts: pendingPayouts };
 
   const W = collapsed ? 68 : 232;
 
@@ -378,9 +434,10 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
         </div>
 
         <div style={{ padding: '24px 28px 60px' }}>
-          {section === 'overview' && <AdminOverview reports={reports} users={users} products={products} audit={audit} appeals={appeals} onSection={setSection} />}
+          {section === 'overview' && <AdminOverview reports={reports} users={users} products={products} audit={audit} appeals={appeals} pendingChallenges={pendingChallenges.length} onSection={setSection} />}
           {section === 'moderation' && <AdminModeration reports={reports} onResolve={resolveReport} onSuspend={suspendFromReport} />}
           {section === 'appeals' && <AdminAppeals appeals={appeals} onResolve={resolveAppeal} />}
+          {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
           {section === 'products' && <AdminProducts products={products} onStatus={setProductStatus} />}
           {section === 'users' && <AdminUsers users={users} onStatus={setUserStatus} onRole={setUserRole} />}
           {section === 'sellers' && <AdminSellers onNav={onNav} />}
@@ -399,7 +456,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
 // =====================================================================
 // OVERVIEW
 // =====================================================================
-function AdminOverview({ reports, users, products, audit, appeals, onSection }) {
+function AdminOverview({ reports, users, products, audit, appeals, pendingChallenges, onSection }) {
   const s = MOCK_ADMIN.stats;
   const openCount = reports.filter(r => r.status === 'open').length;
   const suspended = users.filter(u => u.status !== 'active').length;
@@ -431,6 +488,7 @@ function AdminOverview({ reports, users, products, audit, appeals, onSection }) 
           <div style={{ display: 'grid', gap: 10 }}>
             <AttnRow icon="flame" color="var(--clay)" label="Open reports" value={openCount} onClick={() => onSection('moderation')} />
             <AttnRow icon="flag" color="var(--sky)" label="Open appeals" value={openAppeals} onClick={() => onSection('appeals')} />
+            <AttnRow icon="award" color="var(--sun)" label="Pending challenges" value={pendingChallenges ?? 0} onClick={() => onSection('challenges')} />
             <AttnRow icon="bag" color="var(--sun)" label="Flagged products" value={products.filter(p => p.status === 'flagged').length} onClick={() => onSection('products')} />
             <AttnRow icon="leaf" color="var(--sky)" label="Seller applications" value={MOCK_APPLICATIONS.length} onClick={() => onSection('sellers')} />
             <AttnRow icon="lock" color="var(--ink-3)" label="Suspended / banned" value={suspended} onClick={() => onSection('users')} />
@@ -940,6 +998,186 @@ function AdminSettings() {
           </button>
         </div>
       </Modal>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// CHALLENGES
+// =====================================================================
+const CAT_COLORS: Record<string, string> = {
+  Transport: 'var(--green)', Energy: 'var(--sun)', Food: 'var(--sky)',
+  Waste: 'var(--clay)', Nature: 'var(--green-2)', Lifestyle: 'var(--ink-3)', General: 'var(--ink-3)',
+};
+
+function AdminChallenges({ active, pending, loaded, onApprove, onReject, onArchive, onCreate }) {
+  const app = useApp();
+  const [tab, setTab] = React.useState<'pending' | 'active' | 'create'>(pending.length > 0 ? 'pending' : 'active');
+  const [rejectModal, setRejectModal] = React.useState<string | null>(null);
+  const [rejectReason, setRejectReason] = React.useState('');
+  const [form, setForm] = React.useState({ title: '', description: '', category: 'Energy', days: 30, reward: '' });
+  const [creating, setCreating] = React.useState(false);
+
+  React.useEffect(() => {
+    if (pending.length > 0 && tab === 'active') setTab('pending');
+  }, [pending.length]);
+
+  const handleCreate = async () => {
+    if (!form.title.trim()) return;
+    setCreating(true);
+    await onCreate({ title: form.title.trim(), description: form.description.trim() || null, category: form.category, days: form.days, reward: form.reward.trim() || null });
+    setForm({ title: '', description: '', category: 'Energy', days: 30, reward: '' });
+    setCreating(false);
+    setTab('active');
+  };
+
+  const handleReject = async () => {
+    if (!rejectModal) return;
+    await onReject(rejectModal, rejectReason.trim());
+    setRejectModal(null);
+    setRejectReason('');
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {(['pending', 'active', 'create'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            padding: '7px 14px', borderRadius: 8, border: '1px solid var(--line)',
+            background: tab === t ? 'var(--ink-solid)' : 'var(--surface)',
+            color: tab === t ? '#fff' : 'var(--ink-2)',
+            fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Satoshi',
+            display: 'flex', alignItems: 'center', gap: 7,
+          }}>
+            {t === 'pending' ? 'Approval queue' : t === 'active' ? 'Active challenges' : 'Create challenge'}
+            {t === 'pending' && pending.length > 0 && (
+              <span style={{ background: 'var(--clay)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, fontFamily: 'JetBrains Mono' }}>{pending.length}</span>
+            )}
+            {t === 'active' && (
+              <span style={{ background: 'var(--green)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, fontFamily: 'JetBrains Mono' }}>{active.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Approval queue */}
+      {tab === 'pending' && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
+          {!loaded && (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Loading…</div>
+          )}
+          {loaded && pending.length === 0 && (
+            <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+              <Icon name="check" size={28} color="var(--green)" />
+              <div style={{ marginTop: 10, fontWeight: 600 }}>All caught up</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>No pending challenge submissions.</div>
+            </div>
+          )}
+          {pending.map((c, i) => (
+            <div key={c.id} style={{ padding: '18px 22px', borderTop: i === 0 ? 'none' : '1px solid var(--line)', display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'start' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span className="chip" style={{ background: (CAT_COLORS[c.category] ?? 'var(--ink-3)') + '18', color: CAT_COLORS[c.category] ?? 'var(--ink-3)', border: 'none', fontSize: 11 }}>{c.category}</span>
+                  <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-4)' }}>{c.days}d</span>
+                  <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-4)' }}>· submitted {c.created_at ? new Date(c.created_at).toLocaleDateString() : 'recently'}</span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{c.title}</div>
+                {c.description && <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>{c.description}</div>}
+                {c.reward && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6, fontFamily: 'JetBrains Mono' }}>Suggested reward: {c.reward}</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button className="btn btn-ghost" onClick={() => { setRejectModal(c.id); setRejectReason(''); }} style={{ color: 'var(--clay)', borderColor: sTint('var(--clay)', 30), fontSize: 12, padding: '6px 12px' }}>
+                  Reject
+                </button>
+                <button className="btn btn-green" onClick={() => onApprove(c.id)} style={{ fontSize: 12, padding: '6px 12px' }}>
+                  Approve
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Active challenges */}
+      {tab === 'active' && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
+          {!loaded && <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Loading…</div>}
+          {loaded && active.length === 0 && (
+            <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+              <Icon name="award" size={28} color="var(--ink-3)" />
+              <div style={{ marginTop: 10, fontWeight: 600 }}>No active challenges</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>Create one from the Create tab or approve a submission.</div>
+            </div>
+          )}
+          {/* Table header */}
+          {active.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 80px 120px 80px', gap: 12, padding: '12px 22px', borderBottom: '1px solid var(--line)', fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>
+              <span>CHALLENGE</span><span>CATEGORY</span><span>DURATION</span><span>PARTICIPANTS</span><span></span>
+            </div>
+          )}
+          {active.map((c, i) => (
+            <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '2fr 80px 80px 120px 80px', gap: 12, padding: '14px 22px', borderTop: i === 0 ? 'none' : '1px solid var(--line)', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{c.title}</div>
+                {c.reward && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{c.reward}</div>}
+              </div>
+              <span style={{ fontSize: 12, color: CAT_COLORS[c.category] ?? 'var(--ink-3)', fontWeight: 600 }}>{c.category}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--ink-3)' }}>{c.days}d</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600 }}>{(c.participant_count ?? 0).toLocaleString()}</span>
+                <div style={{ flex: 1, height: 4, background: 'var(--line)', borderRadius: 999, minWidth: 40 }}>
+                  <div style={{ width: Math.min((c.participant_count ?? 0) / 500 * 100, 100) + '%', height: '100%', background: 'var(--green)', borderRadius: 999 }} />
+                </div>
+              </div>
+              <button className="btn btn-ghost" onClick={() => onArchive(c.id)} style={{ fontSize: 11, padding: '5px 10px', color: 'var(--ink-3)' }}>Archive</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create challenge (admin — goes live immediately) */}
+      {tab === 'create' && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 24, maxWidth: 560 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>New challenge <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400 }}>— publishes immediately</span></div>
+          <span className="fld-label">Title</span>
+          <input className="fld" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Bike-to-work week" style={{ marginBottom: 14 }} />
+          <span className="fld-label">Description <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(optional)</span></span>
+          <textarea className="fld" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="What's the challenge about?" rows={2} style={{ marginBottom: 14, resize: 'none' }} />
+          <span className="fld-label">Category</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+            {['Energy', 'Transport', 'Food', 'Waste', 'Nature', 'Lifestyle'].map(c => (
+              <button key={c} onClick={() => setForm(f => ({ ...f, category: c }))} className={'chip ' + (form.category === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: form.category === c ? 'none' : undefined }}>{c}</button>
+            ))}
+          </div>
+          <span className="fld-label">Duration</span>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            {[7, 14, 21, 30].map(d => (
+              <button key={d} onClick={() => setForm(f => ({ ...f, days: d }))} className={'chip ' + (form.days === d ? 'chip-green' : '')} style={{ cursor: 'pointer', border: form.days === d ? 'none' : undefined }}>{d} days</button>
+            ))}
+          </div>
+          <span className="fld-label">Reward</span>
+          <input className="fld" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: e.target.value }))} placeholder="e.g. 120 GP + Cyclist badge" style={{ marginBottom: 20 }} />
+          <button className="btn btn-green" onClick={handleCreate} disabled={!form.title.trim() || creating} style={{ opacity: form.title.trim() && !creating ? 1 : .5 }}>
+            <Icon name="plus" size={14} /> {creating ? 'Creating…' : 'Publish challenge'}
+          </button>
+        </div>
+      )}
+
+      {/* Reject modal */}
+      {rejectModal && (
+        <Modal onClose={() => { setRejectModal(null); setRejectReason(''); }} width={440}>
+          <ModalHead icon="close" title="Reject challenge?" onClose={() => { setRejectModal(null); setRejectReason(''); }} sub="The submitter won't be notified automatically." />
+          <div style={{ padding: '0 24px 4px' }}>
+            <span className="fld-label">Reason <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(optional)</span></span>
+            <textarea className="fld" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="e.g. Too similar to an existing challenge." rows={3} autoFocus style={{ resize: 'none' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '20px 24px' }}>
+            <button className="btn btn-ghost" onClick={() => { setRejectModal(null); setRejectReason(''); }}>Cancel</button>
+            <button className="btn btn-ghost" onClick={handleReject} style={{ color: 'var(--clay)', borderColor: sTint('var(--clay)', 30) }}>Reject submission</button>
+          </div>
+        </Modal>
       )}
     </div>
   );

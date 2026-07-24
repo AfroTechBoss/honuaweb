@@ -1,4 +1,5 @@
 "use client";
+// AuthGate: all hooks unconditionally declared before any early return
 import React, { useEffect, useLayoutEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AppProvider, useApp } from "@/components/app-context";
@@ -235,21 +236,22 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     setReady(true);
   }, []);
 
+  const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
+  const isAuthed = authed || hasStoredSession;
+
   useEffect(() => {
-    if (authReady && authed && pathname === "/login") router.replace("/");
-  }, [authReady, authed, pathname, router]);
+    if (!ready) return;
+    if (authReady && authed && pathname === "/login") {
+      router.replace("/");
+    } else if (!isAuthed && !isPublic) {
+      router.replace("/login");
+    }
+  }, [ready, authReady, authed, pathname, isAuthed, isPublic, router]);
 
   // Server renders nothing
   if (!ready) return null;
 
-  const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
-  const isAuthed = authed || hasStoredSession;
-
-  // Not authed and no stored session — go to login
-  if (!isAuthed && !isPublic) {
-    router.replace("/login");
-    return null;
-  }
+  if (!isAuthed && !isPublic) return null;
 
   return (
     <>

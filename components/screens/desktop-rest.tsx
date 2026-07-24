@@ -3,6 +3,7 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
+import { logImpact, TASK_IMPACTS } from "@/lib/impact";
 
 // =============== Desktop Forum / Communities ===============
 const COMMUNITY_POSTS: Record<string, any[]> = {
@@ -332,10 +333,34 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
 };
 
 // =============== Desktop Tasks / Challenges ===============
+const TODAY_TASKS: [string, string][] = [
+  ['Bike commute', '+24 GP'],
+  ['Meatless meal', '+12 GP'],
+  ['Compost food scraps', '+18 GP'],
+  ['10 min education', '+50 GP'],
+  ['Skip ride-share', '+30 GP'],
+];
+
 export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [dbChallenges, setDbChallenges] = React.useState<any[]>([]);
   const [dbLoaded, setDbLoaded] = React.useState(false);
+  const [loggedToday, setLoggedToday] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    if (!app.user?.id) return;
+    const todayStr = new Date().toISOString().substring(0, 10);
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data: todayLogs } = await supabase
+        .from('impact_logs')
+        .select('action')
+        .eq('user_id', app.user.id)
+        .gte('logged_at', todayStr);
+      if (todayLogs) {
+        setLoggedToday(new Set(todayLogs.map((l: any) => l.action)));
+      }
+    }).catch(() => {});
+  }, [app.user?.id]);
 
   React.useEffect(() => {
     if (!app.user?.id) return;
@@ -359,6 +384,19 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
       }
     }).catch(() => {});
   }, [app.user?.id]);
+
+  const handleLogTask = async (taskName: string) => {
+    if (loggedToday.has(taskName)) {
+      app.toast({ msg: `${taskName} — already logged today ✓`, icon: 'check' });
+      return;
+    }
+    const impact = TASK_IMPACTS[taskName] ?? { co2: 0.5, pts: 10, cat: 'General' };
+    setLoggedToday(prev => new Set([...prev, taskName]));
+    app.toast({ msg: `${taskName} logged!`, sub: `+${impact.pts} GP · −${impact.co2} kg CO₂`, kind: 'success', icon: 'check' });
+    if (app.user?.id) {
+      await logImpact({ user_id: app.user.id, action: taskName, category: impact.cat, co2_saved_kg: impact.co2, points: impact.pts });
+    }
+  };
 
   const handleToggleChallenge = async (c: any) => {
     const isJoined = app.challenge?.has(c.id);
@@ -397,38 +435,37 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Today · Thursday May 22</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>3 / 5 logged</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{loggedToday.size} / {TODAY_TASKS.length} logged</span>
               <div style={{ width: 100, height: 6, background: 'var(--line)', borderRadius: 999 }}>
-                <div style={{ width: '60%', height: '100%', background: 'var(--green)', borderRadius: 999 }} />
+                <div style={{ width: (loggedToday.size / TODAY_TASKS.length * 100) + '%', height: '100%', background: 'var(--green)', borderRadius: 999 }} />
               </div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-            {[
-              ['Bike commute', true, '+24 GP'],
-              ['Meatless meal', true, '+12 GP'],
-              ['Compost food scraps', true, '+18 GP'],
-              ['10 min education', false, '+50 GP'],
-              ['Skip ride-share', false, '+30 GP'],
-            ].map(([t, done, r], i) => (
-              <div key={i} onClick={() => app.toast(done ? { msg: `${t} — already logged ✓`, icon: 'check' } : { msg: `${t} logged · ${r}`, kind: 'success', icon: 'check' })} style={{
+            {TODAY_TASKS.map(([t, r], i) => {
+              const done = loggedToday.has(t);
+              const cardStyle: React.CSSProperties = {
                 background: done ? 'var(--green-tint)' : 'var(--bg-2)',
                 borderRadius: 12, padding: 14, cursor: 'pointer',
                 border: done ? '1px solid var(--green-3)' : '1px dashed var(--line-2)',
-              }}>
-                <div style={{
-                  width: 24, height: 24, borderRadius: 8,
-                  background: done ? 'var(--green)' : 'transparent',
-                  border: done ? 'none' : '2px solid var(--line-2)',
-                  display: 'grid', placeItems: 'center', color: '#fff',
-                  marginBottom: 10,
-                }}>
-                  {done && <Icon name="check" size={14} stroke={2.5} />}
+              };
+              const checkStyle: React.CSSProperties = {
+                width: 24, height: 24, borderRadius: 8,
+                background: done ? 'var(--green)' : 'transparent',
+                border: done ? 'none' : '2px solid var(--line-2)',
+                display: 'grid', placeItems: 'center', color: '#fff',
+                marginBottom: 10,
+              };
+              return (
+                <div key={i} onClick={() => handleLogTask(t)} style={cardStyle}>
+                  <div style={checkStyle}>
+                    {done && <Icon name="check" size={14} stroke={2.5} />}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{t}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 4 }}>{r}</div>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{t}</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 4 }}>{r}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -448,7 +485,13 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{c.t}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.sub} · {c.joined} joined</div>
                 </div>
-                <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.t}" streak continues — ${c.sub.toLowerCase()}. Keep it going.` })}>Log today</button>
+                <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={async () => {
+                  app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.t}" streak continues — ${c.sub.toLowerCase()}. Keep it going.` });
+                  if (app.user?.id) {
+                    const cat = c.col === 'var(--green)' ? 'Transport' : 'Lifestyle';
+                    await logImpact({ user_id: app.user.id, action: c.t, category: cat, co2_saved_kg: 1.5, points: 20 });
+                  }
+                }}>Log today</button>
               </div>
               <div style={{ height: 8, background: 'var(--line)', borderRadius: 999, marginBottom: 8 }}>
                 <div style={{ width: (c.p * 100) + '%', height: '100%', background: c.col, borderRadius: 999 }} />
@@ -1404,6 +1447,8 @@ export function MStartProject({ close }) {
   const app = useApp();
   const [name, setName] = React.useState('');
   const [cat, setCat] = React.useState('Cleanup');
+  const [date, setDate] = React.useState('');
+  const [location, setLocation] = React.useState('');
   return (
     <Modal onClose={close} width={540}>
       <ModalHead icon="pin" title="Start a project" sub="Rally your neighborhood around a local action." onClose={close} />
@@ -1415,8 +1460,17 @@ export function MStartProject({ close }) {
           {['Cleanup', 'Garden', 'Energy', 'Repair', 'Policy', 'Waste'].map(c => <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>)}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div><span className="fld-label">Date</span><input className="fld" type="text" placeholder="Sat, Jun 7 · 9am" /></div>
-          <div><span className="fld-label">Location</span><input className="fld" type="text" placeholder="Brooklyn, NY" /></div>
+          <div>
+            <span className="fld-label">Date &amp; time</span>
+            <input
+              className="fld"
+              type="datetime-local"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              style={{ colorScheme: 'light dark' }}
+            />
+          </div>
+          <div><span className="fld-label">Location</span><input className="fld" type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Brooklyn, NY" /></div>
         </div>
         <div style={{ marginTop: 14 }}><span className="fld-label">Description</span><textarea className="fld" placeholder="What will you do, what to bring…" /></div>
       </div>
@@ -1432,26 +1486,65 @@ export function MStartProject({ close }) {
 export function MCreateChallenge({ close }) {
   const app = useApp();
   const [title, setTitle] = React.useState('');
+  const [desc, setDesc] = React.useState('');
   const [cat, setCat] = React.useState('Energy');
   const [days, setDays] = React.useState(30);
+  const [reward, setReward] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubmit = async () => {
+    if (!title.trim() || !app.user?.id) return;
+    setLoading(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase.from('challenges').insert({
+        title: title.trim(),
+        description: desc.trim() || null,
+        category: cat,
+        days,
+        reward: reward.trim() || null,
+        status: 'pending',
+        submitted_by: app.user.id,
+      });
+      if (error) throw error;
+      close();
+      app.toast({ kind: 'success', msg: 'Challenge submitted!', sub: 'Our team will review it and publish if approved.', icon: 'flame' });
+    } catch {
+      app.toast({ msg: 'Could not submit challenge', kind: 'error', icon: 'close' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Modal onClose={close} width={520}>
-      <ModalHead icon="flame" iconColor="var(--clay)" title="Create a challenge" sub="Design a streak the whole community can join." onClose={close} />
+      <ModalHead icon="flame" iconColor="var(--clay)" title="Submit a challenge" sub="Our team reviews submissions before they go live." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
         <span className="fld-label">Challenge title</span>
         <input className="fld" autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Car-free fortnight" style={{ marginBottom: 14 }} />
+        <span className="fld-label">Description <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(optional)</span></span>
+        <textarea className="fld" value={desc} onChange={e => setDesc(e.target.value)} placeholder="What's the goal and why does it matter?" rows={2} style={{ marginBottom: 14, resize: 'none' }} />
         <span className="fld-label">Category</span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {['Energy', 'Transport', 'Food', 'Waste', 'Nature'].map(c => <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>)}
+          {['Energy', 'Transport', 'Food', 'Waste', 'Nature', 'Lifestyle'].map(c => (
+            <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>
+          ))}
         </div>
         <span className="fld-label">Duration</span>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {[7, 14, 30].map(d => <button key={d} onClick={() => setDays(d)} className={'chip ' + (days === d ? 'chip-green' : '')} style={{ cursor: 'pointer', border: days === d ? 'none' : undefined }}>{d} days</button>)}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {[7, 14, 21, 30].map(d => (
+            <button key={d} onClick={() => setDays(d)} className={'chip ' + (days === d ? 'chip-green' : '')} style={{ cursor: 'pointer', border: days === d ? 'none' : undefined }}>{d} days</button>
+          ))}
         </div>
+        <span className="fld-label">Suggested reward <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(optional)</span></span>
+        <input className="fld" value={reward} onChange={e => setReward(e.target.value)} placeholder="e.g. 120 GP + Cyclist badge" style={{ marginBottom: 4 }} />
+        <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginBottom: 4 }}>Final rewards are set by admins.</div>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Challenge created', sub: `"${title}" is live — invite your community to join.`, icon: 'flame' }); }} disabled={!title.trim()} style={{ opacity: title.trim() ? 1 : .5 }}>Create</button>
+        <button className="btn btn-green" onClick={handleSubmit} disabled={!title.trim() || loading} style={{ opacity: title.trim() && !loading ? 1 : .5 }}>
+          {loading ? 'Submitting…' : 'Submit for review'}
+        </button>
       </ModalFoot>
     </Modal>
   );
