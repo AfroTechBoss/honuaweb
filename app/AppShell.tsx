@@ -236,10 +236,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!authReady) return;
-    const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
-    if (!authed && !isPublic) router.replace("/login");
-    if (authed && pathname === "/login") router.replace("/");
+    if (authReady && authed && pathname === "/login") router.replace("/");
   }, [authReady, authed, pathname, router]);
 
   // Server renders nothing
@@ -248,9 +245,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
   const isAuthed = authed || hasStoredSession;
 
-  // Not authed and no stored session — redirect immediately once auth is resolved
+  // Not authed and no stored session — go to login
   if (!isAuthed && !isPublic) {
-    if (authReady) router.replace("/login");
+    router.replace("/login");
     return null;
   }
 
