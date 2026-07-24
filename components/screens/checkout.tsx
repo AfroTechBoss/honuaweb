@@ -431,6 +431,13 @@ export function DesktopCheckout() {
   const [orderSnapshot, setOrderSnapshot] = React.useState<{ id: string; total: number; itemCount: number; items: any[]; address: any } | null>(null);
   const [showOrderModal, setShowOrderModal] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
+  const [mob, setMob] = React.useState(false);
+  React.useEffect(() => {
+    const check = () => setMob(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // Controlled shipping/contact fields so we can snapshot on success
   const [email, setEmail] = React.useState(app.state?.user?.email || '');
@@ -533,10 +540,10 @@ export function DesktopCheckout() {
       <style>{`@keyframes skelPulse { 0%,100%{opacity:.4} 50%{opacity:.8} }`}</style>
       <CheckoutNav onBack={() => router.back()} />
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 440px', gap: 0, maxWidth: 1060, margin: '0 auto', width: '100%', padding: '32px 24px 60px', alignItems: 'start' }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: mob ? '1fr' : '1fr 440px', gap: 0, maxWidth: 1060, margin: '0 auto', width: '100%', padding: mob ? '16px 16px 80px' : '32px 24px 60px', alignItems: 'start', overflowX: 'hidden' }}>
 
         {/* Left: payment */}
-        <div style={{ paddingRight: 48 }}>
+        <div style={{ paddingRight: mob ? 0 : 48 }}>
           <h1 className="font-display" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 6px' }}>Payment</h1>
           <p style={{ color: 'var(--ink-3)', fontSize: 14, margin: '0 0 28px' }}>All transactions are secure and encrypted.</p>
 
@@ -591,7 +598,7 @@ export function DesktopCheckout() {
         </div>
 
         {/* Right: order summary */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: 24, position: 'sticky', top: 24 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: mob ? 16 : 24, position: mob ? 'static' : 'sticky', top: 24, marginTop: mob ? 24 : 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 18 }}>Order summary</div>
 
           {/* Items */}
