@@ -1325,11 +1325,22 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
         ...(postKind ? { post_kind: postKind } : {}),
         ...(data?.communityId ? { community_id: data.communityId } : {}),
       };
-      let result = await supabase.from('posts').insert({ ...payload, tags }).select('id').single();
-      if ((result as any).error?.code === '42703' || (result as any).error?.code === 'PGRST204' || (result as any).error?.status === 400) {
-        // Column doesn't exist yet — strip optional columns and retry
-        const { post_kind: _pk, tags: _t, ...safePayload } = { ...payload, tags } as any;
-        result = await supabase.from('posts').insert(safePayload).select('id').single();
+      // Try full payload first; on any column error progressively strip optional fields
+      const fullPayload = { ...payload, tags };
+      let result = await supabase.from('posts').insert(fullPayload).select('id').single();
+      if ((result as any).error) {
+        // Strip tags
+        const { tags: _t, ...noTags } = fullPayload as any;
+        result = await supabase.from('posts').insert(noTags).select('id').single();
+      }
+      if ((result as any).error) {
+        // Strip post_kind + community_id as well (columns may not exist yet)
+        result = await supabase.from('posts').insert({
+          user_id: payload.user_id,
+          content: payload.content,
+          image_url: payload.image_url,
+          post_type: payload.post_type,
+        }).select('id').single();
       }
       const { data: post, error } = result as any;
       if (error) throw error;
