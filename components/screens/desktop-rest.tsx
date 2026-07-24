@@ -109,9 +109,10 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) {
-        // community_id column doesn't exist yet — migration 007 not run
+        console.error('[CommunityFeed] fetch error:', error);
         setMigrationPending(true);
       } else {
+        console.log('[CommunityFeed] fetched', data?.length ?? 0, 'posts for community', community.id);
         setMigrationPending(false);
         setRealPosts(data ?? []);
       }
@@ -1424,19 +1425,20 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
       // Try full payload; progressively strip optional columns that may not exist yet.
       // community_id is ALWAYS kept — it's essential for community posts.
       const fullPayload = { ...payload, tags };
+      console.log('[publish] attempting with community_id:', payload.community_id);
       let result = await supabase.from('posts').insert(fullPayload).select('id').single();
       if ((result as any).error) {
-        // Strip tags (may not exist)
+        console.log('[publish] full payload failed:', (result as any).error.message, '— retrying without tags');
         const { tags: _t, ...noTags } = fullPayload as any;
         result = await supabase.from('posts').insert(noTags).select('id').single();
       }
       if ((result as any).error) {
-        // Strip post_kind only (keep community_id!)
+        console.log('[publish] no-tags failed:', (result as any).error.message, '— retrying without post_kind');
         const { post_kind: _pk, tags: _t2, ...noKind } = fullPayload as any;
         result = await supabase.from('posts').insert(noKind).select('id').single();
       }
       if ((result as any).error) {
-        // Last resort: bare minimum but still keep community_id
+        console.log('[publish] no-kind failed:', (result as any).error.message, '— retrying bare minimum');
         result = await supabase.from('posts').insert({
           user_id: payload.user_id,
           content: payload.content,
@@ -1445,6 +1447,7 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
           ...(payload.community_id ? { community_id: payload.community_id } : {}),
         }).select('id').single();
       }
+      console.log('[publish] final result:', (result as any).data, (result as any).error);
       const { data: post, error } = result as any;
       if (error) throw error;
       // Notify mentioned users

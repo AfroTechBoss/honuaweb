@@ -230,7 +230,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   // so we don't depend on AppProvider's effect (which fires after children)
   useLayoutEffect(() => {
     try {
-      const key = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      // Match any Supabase auth key — format varies by version/config
+      const key = Object.keys(localStorage).find(k =>
+        (k.startsWith('sb-') && k.includes('auth')) || k.includes('supabase.auth')
+      );
       setHasStoredSession(!!key && !!localStorage.getItem(key));
     } catch {}
     setReady(true);
@@ -243,15 +246,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (!ready) return;
     if (authReady && authed && pathname === "/login") {
       router.replace("/");
-    } else if (!isAuthed && !isPublic) {
+    } else if (authReady && !authed && !isPublic) {
+      // Only redirect after Supabase has confirmed there really is no session
       router.replace("/login");
     }
-  }, [ready, authReady, authed, pathname, isAuthed, isPublic, router]);
+  }, [ready, authReady, authed, pathname, isPublic, router]);
 
   // Server renders nothing
   if (!ready) return null;
 
-  if (!isAuthed && !isPublic) return null;
+  // While Supabase confirms the session, show skeleton instead of redirecting
+  if (!authReady && !isPublic && !isAuthed) return <AppSkeleton path={pathname} />;
 
   return (
     <>
