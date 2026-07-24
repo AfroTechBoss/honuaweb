@@ -99,25 +99,43 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
   const going = app.community?.has(community.name + '-event');
 
   const [migrationPending, setMigrationPending] = React.useState(false);
+
+  const fetchPosts = React.useCallback(async (supabase: any) => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles!posts_user_id_fkey(full_name, handle, avatar_url)')
+      .eq('community_id', community.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) {
+      setMigrationPending(true);
+    } else {
+      setMigrationPending(false);
+      setRealPosts(data ?? []);
+    }
+  }, [community.id]);
+
   React.useEffect(() => {
     if (!community.id) return;
+    let channel: any;
     import('@/lib/supabase').then(async ({ supabase }) => {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles!posts_user_id_fkey(full_name, handle, avatar_url)')
-        .eq('community_id', community.id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) {
-        console.error('[CommunityFeed] fetch error:', error);
-        setMigrationPending(true);
-      } else {
-        console.log('[CommunityFeed] fetched', data?.length ?? 0, 'posts for community', community.id);
-        setMigrationPending(false);
-        setRealPosts(data ?? []);
-      }
+      await fetchPosts(supabase);
+      // Realtime: listen for new posts in this community
+      channel = supabase
+        .channel(`community-posts-${community.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'posts',
+          filter: `community_id=eq.${community.id}`,
+        }, async () => {
+          // Re-fetch to get the full post with profile join
+          await fetchPosts(supabase);
+        })
+        .subscribe();
     });
-  }, [community.id]);
+    return () => { channel?.unsubscribe?.(); };
+  }, [community.id, fetchPosts]);
   const kindColor = (k: string) => ({ discussion: 'var(--sky)', tip: 'var(--green)', meetup: 'var(--sun)', question: 'var(--ink-2)', win: 'var(--green)' }[k] || 'var(--ink-3)');
 
   const sorted = feedTab === 'Top' ? [...realPosts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0)) : realPosts;
