@@ -669,6 +669,12 @@ input, textarea, select { font-family: inherit; }
   .profile-tabs button { font-size: 13px !important; padding: 10px 10px !important; }
 
   .profile-stats { flex-wrap: wrap !important; gap: 12px !important; }
+
+  /* Bookmarks: hide sidebar, show horizontal chip scroll instead */
+  .bookmark-layout { grid-template-columns: 1fr !important; }
+  .bookmark-sidebar { display: none !important; }
+  .bookmark-mobile-collections { display: flex !important; }
+  .bookmark-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Tablet tweaks */
