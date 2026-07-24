@@ -1218,7 +1218,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                       {searchResults.communities.map(c => {
                         const joined = app.community?.has(c.name);
                         return (
-                          <div key={c.name} onClick={() => onNav?.('forum', { community: c.name })} className="row-hover"
+                          <div key={c.name} onClick={() => onNav?.('communities', { slug: c.slug || c.name })} className="row-hover"
                             style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, cursor: 'pointer' }}>
                             <div style={{ width: 48, height: 48, borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
                               <img src={c.coverUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1360,7 +1360,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           {MOCK.communities.slice(0, 3).map(c => {
             const joined = app.community?.has(c.name);
             return (
-            <div key={c.name} onClick={() => onNav?.('forum', { community: c.name })} className="post-card" style={{
+            <div key={c.name} onClick={() => onNav?.('communities', { slug: c.slug || c.name })} className="post-card" style={{
               background: 'var(--surface)', borderRadius: 16,
               border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer',
             }}>

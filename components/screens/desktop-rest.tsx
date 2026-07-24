@@ -242,7 +242,69 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
   );
 }
 
-function DiscoverView({ onSelect, communities: communityList, onToggleJoin }: { onSelect: (c: any) => void; communities?: any[]; onToggleJoin?: (c: any) => void }) {
+// Standalone page for /communities/[slug]
+export function CommunityFeedPage({ slug, onNav }: { slug: string; onNav: any }) {
+  const app = useApp();
+  const [community, setCommunity] = React.useState<any>(null);
+  const [notFound, setNotFound] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!slug) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data, error } = await supabase
+        .from('communities')
+        .select('id, name, slug, description, cover_url, avatar_url, category, member_count, created_by')
+        .or(`slug.eq.${slug},name.eq.${decodeURIComponent(slug)}`)
+        .maybeSingle();
+      if (error || !data) { setNotFound(true); return; }
+      setCommunity({
+        id: data.id, name: data.name, members: data.member_count ?? 0,
+        cat: data.category ?? 'Community', coverUrl: data.cover_url ?? '',
+        avatarUrl: data.avatar_url ?? '', createdBy: data.created_by,
+        description: data.description,
+      });
+    });
+  }, [slug]);
+
+  const handleToggleJoin = async (c: any) => {
+    const isJoined = app.community?.has(c.name);
+    app.community.toggle(c.name);
+    if (c.id && app.user?.id) {
+      const { supabase } = await import('@/lib/supabase');
+      if (isJoined) await supabase.from('community_members').delete().match({ community_id: c.id, user_id: app.user.id });
+      else await supabase.from('community_members').insert({ community_id: c.id, user_id: app.user.id });
+    }
+  };
+
+  if (notFound) return (
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <DesktopSidebar active="forum" onNav={onNav} />
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--ink-3)' }}>
+        <div style={{ fontSize: 40 }}>🌿</div>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>Community not found</div>
+        <button className="btn btn-ghost" onClick={() => onNav?.('forum')}>← Back to communities</button>
+      </main>
+    </div>
+  );
+
+  if (!community) return (
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <DesktopSidebar active="forum" onNav={onNav} />
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Loading…</main>
+    </div>
+  );
+
+  return (
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <DesktopSidebar active="forum" onNav={onNav} />
+      <main style={{ flex: 1, overflow: 'hidden', height: '100%' }}>
+        <CommunityFeed community={community} onNav={onNav} onToggleJoin={handleToggleJoin} />
+      </main>
+    </div>
+  );
+}
+
+function DiscoverView({ onSelect, onNav, communities: communityList, onToggleJoin }: { onSelect: (c: any) => void; onNav?: any; communities?: any[]; onToggleJoin?: (c: any) => void }) {
   const app = useApp();
   const list = communityList ?? MOCK.communities;
   return (
@@ -253,7 +315,7 @@ function DiscoverView({ onSelect, communities: communityList, onToggleJoin }: { 
         {list.map(c => {
           const joined = app.community?.has(c.name);
           return (
-            <div key={c.id ?? c.name} onClick={() => onSelect(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow .15s' }} className="row-hover">
+            <div key={c.id ?? c.name} onClick={() => { onSelect(c); if (c.id) onNav?.('communities', { slug: c.slug || c.name }); }} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow .15s' }} className="row-hover">
               <div style={{ height: 100, background: `url(${c.coverUrl ?? c.cover_url}) center/cover` }} />
               <div style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
@@ -364,7 +426,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           {myCommunities.map(c => {
             const isActive = activeCommunity?.name === c.name;
             return (
-              <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
+              <button key={c.id ?? c.name} onClick={() => { setActiveCommunity(c); onNav?.('communities', { slug: c.slug || c.name }); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
                 <CommunityIcon c={c} />
                 <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
               </button>
@@ -374,7 +436,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           {joinedCommunities.map(c => {
             const isActive = activeCommunity?.name === c.name;
             return (
-              <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
+              <button key={c.id ?? c.name} onClick={() => { setActiveCommunity(c); onNav?.('communities', { slug: c.slug || c.name }); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
                 <CommunityIcon c={c} />
                 <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
               </button>
@@ -382,7 +444,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           })}
           {discoverCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>DISCOVER</div>}
           {discoverCommunities.map(c => (
-            <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: activeCommunity?.name === c.name ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeCommunity?.name === c.name ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+            <button key={c.id ?? c.name} onClick={() => { setActiveCommunity(c); onNav?.('communities', { slug: c.slug || c.name }); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: activeCommunity?.name === c.name ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeCommunity?.name === c.name ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
               <CommunityIcon c={c} fallbackBg="var(--bg-2)" />
               <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
             </button>
@@ -394,7 +456,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
 
         {activeCommunity
           ? <CommunityFeed community={activeCommunity} onNav={onNav} onToggleJoin={handleToggleJoin} />
-          : <DiscoverView onSelect={setActiveCommunity} communities={communities} onToggleJoin={handleToggleJoin} />
+          : <DiscoverView onSelect={setActiveCommunity} onNav={onNav} communities={communities} onToggleJoin={handleToggleJoin} />
         }
       </main>
     </div>
@@ -1359,21 +1421,28 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
         ...(postKind ? { post_kind: postKind } : {}),
         ...(data?.communityId ? { community_id: data.communityId } : {}),
       };
-      // Try full payload first; on any column error progressively strip optional fields
+      // Try full payload; progressively strip optional columns that may not exist yet.
+      // community_id is ALWAYS kept — it's essential for community posts.
       const fullPayload = { ...payload, tags };
       let result = await supabase.from('posts').insert(fullPayload).select('id').single();
       if ((result as any).error) {
-        // Strip tags
+        // Strip tags (may not exist)
         const { tags: _t, ...noTags } = fullPayload as any;
         result = await supabase.from('posts').insert(noTags).select('id').single();
       }
       if ((result as any).error) {
-        // Strip post_kind + community_id as well (columns may not exist yet)
+        // Strip post_kind only (keep community_id!)
+        const { post_kind: _pk, tags: _t2, ...noKind } = fullPayload as any;
+        result = await supabase.from('posts').insert(noKind).select('id').single();
+      }
+      if ((result as any).error) {
+        // Last resort: bare minimum but still keep community_id
         result = await supabase.from('posts').insert({
           user_id: payload.user_id,
           content: payload.content,
           image_url: payload.image_url,
           post_type: payload.post_type,
+          ...(payload.community_id ? { community_id: payload.community_id } : {}),
         }).select('id').single();
       }
       const { data: post, error } = result as any;
