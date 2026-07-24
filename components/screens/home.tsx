@@ -471,6 +471,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           supabase.from('posts')
             .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
             .in('user_id', followingIds)
+            .is('community_id', null)
             .order('created_at', { ascending: false })
             .limit(50),
           timeout,
@@ -480,6 +481,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
         let query = supabase
           .from('posts')
           .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+          .is('community_id', null)
           .order('created_at', { ascending: false })
           .limit(50);
         if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
@@ -507,7 +509,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
             .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
             .eq('id', newPost.id)
             .single();
-          if (!data) return;
+          if (!data || data.community_id) return; // ignore community posts
           // For the Following tab only include posts from followed users
           if (tab === 'following') {
             const followingIds = (await supabase.from('follows').select('following_id').eq('follower_id', app.user?.id ?? '')).data?.map((f: any) => f.following_id) ?? [];
@@ -936,7 +938,7 @@ function HomeSearch({ onNav }: { onNav: any }) {
       const term = q.trim();
       const [{ data: users }, { data: posts }] = await Promise.all([
         supabase.from('profiles').select('id, handle, full_name, avatar_url, verified').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(5),
-        supabase.from('posts').select('id, content, created_at, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url)').ilike('content', `%${term}%`).order('created_at', { ascending: false }).limit(5),
+        supabase.from('posts').select('id, content, created_at, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url)').ilike('content', `%${term}%`).is('community_id', null).order('created_at', { ascending: false }).limit(5),
       ]);
       const communities = MOCK.communities?.filter((c: any) =>
         c.name?.toLowerCase().includes(term.toLowerCase()) || c.cat?.toLowerCase().includes(term.toLowerCase())
@@ -1100,7 +1102,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
     const term = q.trim();
     const [{ data: users }, { data: posts }] = await Promise.all([
       supabase.from('profiles').select('id, handle, full_name, avatar_url, verified, bio, impact_score').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(6),
-      supabase.from('posts').select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)').ilike('content', `%${term}%`).order('created_at', { ascending: false }).limit(8),
+      supabase.from('posts').select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)').ilike('content', `%${term}%`).is('community_id', null).order('created_at', { ascending: false }).limit(8),
     ]);
     const communities = MOCK.communities.filter(c => c.name.toLowerCase().includes(term.toLowerCase()) || c.cat.toLowerCase().includes(term.toLowerCase()));
     setSearchResults({ users: users ?? [], posts: posts ?? [], communities });
@@ -1126,6 +1128,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
         .from('posts')
         .select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)')
         .contains('tags', [activeTag])
+        .is('community_id', null)
         .order('created_at', { ascending: false })
         .limit(30)
         .then(({ data }) => { setTagPosts(data ?? []); setTagLoading(false); });

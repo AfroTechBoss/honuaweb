@@ -211,7 +211,7 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
                 const kc = kindColors[kind] || 'var(--ink-3)';
                 const ago = (() => { const s = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m` : s < 86400 ? `${Math.floor(s/3600)}h` : `${Math.floor(s/86400)}d`; })();
                 return (
-                  <div key={p.id} className="row-hover" onClick={() => onNav?.('post', { id: p.id })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, cursor: 'pointer' }}>
+                  <div key={p.id} className="row-hover" onClick={() => onNav?.('post', { id: p.id, slug: community.slug || community.name })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                       {kind !== 'post' && <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase' }}>{kind}</span>}
                       <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
@@ -256,6 +256,27 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Standalone community post detail page: /communities/post/[slug]/[id]
+export function CommunityPostDetail({ slug, postId, onNav }: { slug: string; postId: string; onNav: any }) {
+  const [PostDetail, setPostDetail] = React.useState<React.ComponentType<any> | null>(null);
+  React.useEffect(() => {
+    import('@/components/screens/profile').then(m => setPostDetail(() => m.DesktopPostDetail));
+  }, []);
+  return (
+    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+      <DesktopSidebar active="forum" onNav={onNav} />
+      <div style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
+        <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px 16px 0' }}>
+          <button onClick={() => onNav?.('communities', { slug })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 13, fontWeight: 600, marginBottom: 4, padding: 0 }}>
+            ← Back to community
+          </button>
+        </div>
+        {PostDetail && <PostDetail onNav={onNav} params={{ id: postId }} />}
       </div>
     </div>
   );
