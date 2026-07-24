@@ -1326,8 +1326,10 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
         ...(data?.communityId ? { community_id: data.communityId } : {}),
       };
       let result = await supabase.from('posts').insert({ ...payload, tags }).select('id').single();
-      if ((result as any).error?.code === '42703') {
-        result = await supabase.from('posts').insert(payload).select('id').single();
+      if ((result as any).error?.code === '42703' || (result as any).error?.code === 'PGRST204' || (result as any).error?.status === 400) {
+        // Column doesn't exist yet — strip optional columns and retry
+        const { post_kind: _pk, tags: _t, ...safePayload } = { ...payload, tags } as any;
+        result = await supabase.from('posts').insert(safePayload).select('id').single();
       }
       const { data: post, error } = result as any;
       if (error) throw error;
