@@ -198,7 +198,7 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
               <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55 }}>{meta.desc}</p>
               <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
                 <Stat n={community.members} l="Members" />
-                <Stat n={String(posts.reduce((s, p) => s + p.replies, 0))} l="Replies" />
+                <Stat n={String(realPosts.reduce((s, p) => s + (p.comments_count ?? 0), 0))} l="Replies" />
               </div>
             </div>
             {meta.resources.length > 0 && (
