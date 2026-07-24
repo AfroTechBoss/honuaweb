@@ -160,7 +160,7 @@ export function DesktopSidebar({ active, onNav }: any) {
     </aside>
     </React.Fragment>
   );
-}
+} // DesktopSidebar
 
 function LogoutConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (

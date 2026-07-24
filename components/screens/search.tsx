@@ -1,5 +1,5 @@
 "use client";
-// v2
+// v3 — real Supabase search
 import React from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
@@ -8,8 +8,9 @@ import { MOCK } from "@/components/post-card";
 import { MOCK_SELLER } from "@/components/seller-data";
 import { useApp } from "@/components/app-context";
 import { DesktopSidebar } from "@/components/sidebar";
+import { supabase } from "@/lib/supabase";
 
-// ---- Search corpus ----
+// Products remain mock (no products table yet)
 const ALL_PRODUCTS = [
   ...MOCK.products.map(p => ({ ...p, _type: 'product' as const })),
   ...MOCK_SELLER.products.map(p => ({
@@ -18,23 +19,21 @@ const ALL_PRODUCTS = [
   })),
 ];
 
-const ALL_SELLERS = [
-  { name: MOCK_SELLER.shop.name, handle: MOCK_SELLER.shop.handle, tagline: MOCK_SELLER.shop.tagline, location: MOCK_SELLER.shop.location, score: MOCK_SELLER.shop.impactScore, rating: MOCK_SELLER.shop.rating, reviews: MOCK_SELLER.shop.reviews, avatar: null },
-  { name: 'BareHaus', handle: 'barehaus', tagline: 'Clean beauty, zero compromise', location: 'Amsterdam, NL', score: 88, rating: 4.7, reviews: 134, avatar: null },
-  { name: 'Sunly', handle: 'sunly', tagline: 'Solar-powered everyday carry', location: 'Berlin, DE', score: 91, rating: 4.8, reviews: 209, avatar: null },
-  { name: 'Forrest', handle: 'forrest', tagline: 'Compostable products for the kitchen', location: 'Vancouver, CA', score: 85, rating: 4.6, reviews: 87, avatar: null },
-  { name: 'Loop', handle: 'loop', tagline: 'Zero-waste packaging systems', location: 'London, UK', score: 79, rating: 4.4, reviews: 56, avatar: null },
-];
-
-const ALL_POSTS = MOCK.posts.map(p => ({ ...p, _type: 'post' as const, userName: MOCK.users[p.user]?.name, userHandle: MOCK.users[p.user]?.handle, userAvatar: MOCK.users[p.user]?.avatar }));
-
 function match(query: string, ...fields: (string | undefined | null)[]): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   return fields.some(f => f?.toLowerCase().includes(q));
 }
 
-type Tab = 'all' | 'products' | 'sellers' | 'posts';
+function timeAgo(ts: string): string {
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+type Tab = 'all' | 'products' | 'people' | 'posts';
 
 function ProductCard({ product, onNav }: { product: any; onNav: any }) {
   return (
@@ -64,9 +63,12 @@ function ProductCard({ product, onNav }: { product: any; onNav: any }) {
   );
 }
 
-function SellerCard({ seller, onNav }: { seller: any; onNav: any }) {
+function PeopleCard({ person, onNav }: { person: any; onNav: any }) {
+  const name = person.full_name ?? person.name;
+  const score = person.impact_score ?? person.score;
+  const bio = person.bio ?? person.tagline;
   return (
-    <div onClick={() => onNav?.('profile', { handle: seller.handle })} style={{
+    <div onClick={() => onNav?.('profile', { handle: person.handle })} style={{
       background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14,
       padding: '16px 18px', cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center',
       transition: 'border-color .15s',
@@ -74,22 +76,27 @@ function SellerCard({ seller, onNav }: { seller: any; onNav: any }) {
       onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--green)')}
       onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}
     >
-      <Avatar src={seller.avatar} name={seller.name} size={48} />
+      <Avatar src={person.avatar_url ?? person.avatar} name={name} size={48} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{seller.name}</div>
-        <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{seller.handle}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{seller.tagline}</div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>{name}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{person.handle}</div>
+        {bio && <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bio}</div>}
       </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{ fontSize: 11, color: 'var(--ink-4)' }}>Impact</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)', fontFamily: 'JetBrains Mono' }}>{seller.score}</div>
-        <div style={{ fontSize: 11, color: 'var(--ink-4)' }}>★ {seller.rating} ({seller.reviews})</div>
-      </div>
+      {score != null && (
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, color: 'var(--ink-4)' }}>Impact</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)', fontFamily: 'JetBrains Mono' }}>{score}</div>
+        </div>
+      )}
     </div>
   );
 }
 
 function PostRow({ post, onNav }: { post: any; onNav: any }) {
+  const userName = post.profile?.full_name ?? post.userName;
+  const userHandle = post.profile?.handle ?? post.userHandle;
+  const userAvatar = post.profile?.avatar_url ?? post.userAvatar;
+  const timeStr = post.created_at ? timeAgo(post.created_at) : (post.time ?? '');
   return (
     <div onClick={() => onNav?.('post', { id: post.id })} style={{
       background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14,
@@ -99,13 +106,13 @@ function PostRow({ post, onNav }: { post: any; onNav: any }) {
       onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}
     >
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-        <Avatar src={post.userAvatar} name={post.userName} size={36} />
+        <Avatar src={userAvatar} name={userName} size={36} />
         <div>
-          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{post.userName}</span>
-          <span style={{ fontSize: 12, color: 'var(--ink-4)', marginLeft: 6, fontFamily: 'JetBrains Mono' }}>@{post.userHandle}</span>
-          <span style={{ fontSize: 12, color: 'var(--ink-4)', marginLeft: 6 }}>· {post.time}</span>
+          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{userName}</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-4)', marginLeft: 6, fontFamily: 'JetBrains Mono' }}>@{userHandle}</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-4)', marginLeft: 6 }}>· {timeStr}</span>
         </div>
-        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: 'var(--green)' }}>{post.category}</span>
+        {post.category && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: 'var(--green)' }}>{post.category}</span>}
       </div>
       <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>
       {post.tags && (
@@ -121,6 +128,9 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
   const searchParams = useSearchParams();
   const [query, setQuery] = React.useState(searchParams?.get('q') || '');
   const [tab, setTab] = React.useState<Tab>('all');
+  const [dbPeople, setDbPeople] = React.useState<any[]>([]);
+  const [dbPosts, setDbPosts] = React.useState<any[]>([]);
+  const [searching, setSearching] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const { nav } = useApp();
 
@@ -128,17 +138,46 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
     inputRef.current?.focus();
   }, []);
 
-  const products = ALL_PRODUCTS.filter(p => match(query, p.name, p.brand, p.tag));
-  const sellers = ALL_SELLERS.filter(s => match(query, s.name, s.handle, s.tagline, s.location));
-  const posts = ALL_POSTS.filter(p => match(query, p.content, p.userName, p.userHandle, p.category, ...(p.tags || [])));
+  React.useEffect(() => {
+    if (query.length < 2) {
+      setDbPeople([]);
+      setDbPosts([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      const [{ data: people }, { data: posts }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, handle, full_name, avatar_url, bio, impact_score')
+          .or(`handle.ilike.%${query}%,full_name.ilike.%${query}%`)
+          .limit(20),
+        supabase
+          .from('posts')
+          .select('id, content, created_at, image_url, likes_count, comments_count, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url)')
+          .ilike('content', `%${query}%`)
+          .order('created_at', { ascending: false })
+          .limit(20),
+      ]);
+      setDbPeople(people ?? []);
+      setDbPosts(posts ?? []);
+      setSearching(false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  const totalCount = products.length + sellers.length + posts.length;
+  const products = ALL_PRODUCTS.filter(p => match(query, p.name, p.brand, p.tag));
+  const people = dbPeople;
+  const posts = dbPosts;
+
+  const totalCount = products.length + people.length + posts.length;
   const hasQuery = query.length > 0;
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: totalCount },
     { key: 'products', label: 'Products', count: products.length },
-    { key: 'sellers', label: 'Sellers', count: sellers.length },
+    { key: 'people', label: 'People', count: people.length },
     { key: 'posts', label: 'Posts', count: posts.length },
   ];
 
@@ -147,6 +186,10 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
   let resultsBody: React.ReactNode;
   if (!hasQuery) {
     resultsBody = <EmptyState />;
+  } else if (searching) {
+    resultsBody = <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Searching…</div>;
+  } else if (query.length < 2) {
+    resultsBody = <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Keep typing…</div>;
   } else if (totalCount === 0) {
     resultsBody = <NoResults query={query} />;
   } else {
@@ -161,11 +204,11 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
             </div>
           </Section>
         )}
-        {(tab === 'all' || tab === 'sellers') && sellers.length > 0 && (
-          <Section label="Sellers" count={sellers.length} showAll={tab === 'all' && sellers.length > 3} onShowAll={() => setTab('sellers')}>
+        {(tab === 'all' || tab === 'people') && people.length > 0 && (
+          <Section label="People" count={people.length} showAll={tab === 'all' && people.length > 3} onShowAll={() => setTab('people')}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(tab === 'all' ? sellers.slice(0, 3) : sellers).map((s, i) => (
-                <SellerCard key={i} seller={s} onNav={handleNav} />
+              {(tab === 'all' ? people.slice(0, 3) : people).map((p, i) => (
+                <PeopleCard key={i} person={p} onNav={handleNav} />
               ))}
             </div>
           </Section>
@@ -197,7 +240,7 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
                 ref={inputRef}
                 value={query}
                 onChange={e => { setQuery(e.target.value); setTab('all'); }}
-                placeholder="Search products, sellers, posts…"
+                placeholder="Search posts, people, products…"
                 style={{
                   width: '100%', padding: '12px 14px 12px 42px',
                   background: 'var(--bg)', border: '1px solid var(--line)',
@@ -229,7 +272,7 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
                 {t.label}
-                {hasQuery && (
+                {hasQuery && !searching && (
                   <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', background: tab === t.key ? 'var(--green-tint)' : 'var(--bg-2)', color: tab === t.key ? 'var(--green)' : 'var(--ink-4)', padding: '1px 6px', borderRadius: 999 }}>
                     {t.count}
                   </span>
@@ -274,7 +317,7 @@ function EmptyState() {
       </div>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>Search Honua</div>
-        <div style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.6, maxWidth: 360 }}>Find sustainable products, sellers, and posts from the community</div>
+        <div style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.6, maxWidth: 360 }}>Find sustainable products, people, and posts from the community</div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 400 }}>
         {suggestions.map(s => (

@@ -87,7 +87,7 @@ const COMMUNITY_META: Record<string, { desc: string; tags: string[]; resources: 
   },
 };
 
-function CommunityFeed({ community, onNav }: { community: any; onNav?: any }) {
+function CommunityFeed({ community, onNav, onToggleJoin }: { community: any; onNav?: any; onToggleJoin?: (c: any) => void }) {
   const app = useApp();
   const [feedTab, setFeedTab] = React.useState('Recent');
   const joined = app.community?.has(community.name);
@@ -112,7 +112,7 @@ function CommunityFeed({ community, onNav }: { community: any; onNav?: any }) {
             <h1 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{community.name}</h1>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>{community.members} members · {community.cat}</div>
           </div>
-          <button className={joined ? 'btn btn-primary' : 'btn btn-green'} style={{ marginBottom: 4, flexShrink: 0 }} onClick={() => { app.community.toggle(community.name); app.toast(joined ? { msg: `Left ${community.name}`, icon: 'users' } : { msg: `Joined ${community.name}!`, kind: 'success', icon: 'users' }); }}>
+          <button className={joined ? 'btn btn-primary' : 'btn btn-green'} style={{ marginBottom: 4, flexShrink: 0 }} onClick={() => onToggleJoin ? onToggleJoin(community) : (app.community.toggle(community.name), app.toast(joined ? { msg: `Left ${community.name}`, icon: 'users' } : { msg: `Joined ${community.name}!`, kind: 'success', icon: 'users' }))}>
             {joined ? 'Joined ✓' : 'Join'}
           </button>
         </div>
@@ -204,23 +204,24 @@ function CommunityFeed({ community, onNav }: { community: any; onNav?: any }) {
   );
 }
 
-function DiscoverView({ onSelect }: { onSelect: (c: any) => void }) {
+function DiscoverView({ onSelect, communities: communityList, onToggleJoin }: { onSelect: (c: any) => void; communities?: any[]; onToggleJoin?: (c: any) => void }) {
   const app = useApp();
+  const list = communityList ?? MOCK.communities;
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }} className="no-scrollbar">
       <h1 className="font-display" style={{ margin: '0 0 6px', fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>Communities</h1>
       <p style={{ margin: '0 0 28px', color: 'var(--ink-3)', fontSize: 15 }}>Find your people. Join discussions, share wins, organise actions.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }} className="two-col-grid">
-        {MOCK.communities.map(c => {
+        {list.map(c => {
           const joined = app.community?.has(c.name);
           return (
-            <div key={c.name} onClick={() => onSelect(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow .15s' }} className="row-hover">
-              <div style={{ height: 100, background: `url(${c.coverUrl}) center/cover` }} />
+            <div key={c.id ?? c.name} onClick={() => onSelect(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden', cursor: 'pointer', transition: 'box-shadow .15s' }} className="row-hover">
+              <div style={{ height: 100, background: `url(${c.coverUrl ?? c.cover_url}) center/cover` }} />
               <div style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                   <h3 className="font-display" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{c.name}</h3>
                   <button className={joined ? 'btn btn-primary' : 'btn btn-ghost'} style={{ fontSize: 12, padding: '5px 12px', flexShrink: 0 }}
-                    onClick={e => { e.stopPropagation(); app.community.toggle(c.name); app.toast(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}!`, kind: 'success', icon: 'users' }); }}>
+                    onClick={e => { e.stopPropagation(); onToggleJoin ? onToggleJoin(c) : (app.community.toggle(c.name), app.toast(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}!`, kind: 'success', icon: 'users' })); }}>
                     {joined ? 'Joined ✓' : 'Join'}
                   </button>
                 </div>
@@ -244,9 +245,48 @@ function DiscoverView({ onSelect }: { onSelect: (c: any) => void }) {
 export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [activeCommunity, setActiveCommunity] = React.useState<any>(null);
-  const joinedNames = ['Urban gardeners', 'Solar DIY', 'Ocean cleanup crew'];
-  const joinedCommunities = MOCK.communities.filter(c => app.community?.has(c.name) || joinedNames.includes(c.name));
-  const discoverCommunities = MOCK.communities.filter(c => !joinedCommunities.find(j => j.name === c.name));
+  const [communities, setCommunities] = React.useState<any[]>(MOCK.communities);
+
+  React.useEffect(() => {
+    if (!app.user?.id) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const [{ data: comms, error }, { data: joined }] = await Promise.all([
+        supabase.from('communities').select('id, name, slug, description, cover_url, category, member_count').order('member_count', { ascending: false }),
+        supabase.from('community_members').select('community_id').eq('user_id', app.user.id),
+      ]);
+      if (!error && comms && comms.length > 0) {
+        setCommunities(comms.map((c: any) => ({
+          id: c.id, name: c.name, members: c.member_count ?? 0,
+          cat: c.category ?? 'Community', coverUrl: c.cover_url ?? '',
+          description: c.description,
+        })));
+        if (joined) {
+          const joinedSet = new Set(joined.map((j: any) => j.community_id));
+          comms.forEach((c: any) => {
+            if (joinedSet.has(c.id) && !app.community.has(c.name)) app.community.add(c.name);
+          });
+        }
+      }
+    }).catch(() => {});
+  }, [app.user?.id]);
+
+  const handleToggleJoin = async (c: any) => {
+    const name = c.name;
+    const isJoined = app.community?.has(name);
+    app.community.toggle(name);
+    app.toast(isJoined ? { msg: `Left ${name}`, icon: 'users' } : { msg: `Joined ${name}!`, kind: 'success', icon: 'users' });
+    if (c.id && app.user?.id) {
+      const { supabase } = await import('@/lib/supabase');
+      if (isJoined) {
+        await supabase.from('community_members').delete().match({ community_id: c.id, user_id: app.user.id });
+      } else {
+        await supabase.from('community_members').insert({ community_id: c.id, user_id: app.user.id });
+      }
+    }
+  };
+
+  const joinedCommunities = communities.filter(c => app.community?.has(c.name));
+  const discoverCommunities = communities.filter(c => !app.community?.has(c.name));
 
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -264,7 +304,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           {joinedCommunities.map(c => {
             const isActive = activeCommunity?.name === c.name;
             return (
-              <button key={c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
+              <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: isActive ? 'var(--green-tint)' : 'transparent', border: 'none', color: isActive ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
                 <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${c.coverUrl}) center/cover, var(--green)`, flexShrink: 0 }} />
                 <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
               </button>
@@ -272,7 +312,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           })}
           {discoverCommunities.length > 0 && <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>DISCOVER</div>}
           {discoverCommunities.map(c => (
-            <button key={c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: activeCommunity?.name === c.name ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeCommunity?.name === c.name ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+            <button key={c.id ?? c.name} onClick={() => setActiveCommunity(c)} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, background: activeCommunity?.name === c.name ? 'var(--green-tint)' : 'transparent', border: 'none', color: activeCommunity?.name === c.name ? 'var(--green)' : 'var(--ink-2)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
               <div style={{ width: 22, height: 22, borderRadius: 6, background: `url(${c.coverUrl}) center/cover, var(--bg-2)`, flexShrink: 0 }} />
               <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
             </button>
@@ -283,8 +323,8 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
         </div>
 
         {activeCommunity
-          ? <CommunityFeed community={activeCommunity} onNav={onNav} />
-          : <DiscoverView onSelect={setActiveCommunity} />
+          ? <CommunityFeed community={activeCommunity} onNav={onNav} onToggleJoin={handleToggleJoin} />
+          : <DiscoverView onSelect={setActiveCommunity} communities={communities} onToggleJoin={handleToggleJoin} />
         }
       </main>
     </div>
@@ -294,6 +334,51 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
 // =============== Desktop Tasks / Challenges ===============
 export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
+  const [dbChallenges, setDbChallenges] = React.useState<any[]>([]);
+  const [dbLoaded, setDbLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!app.user?.id) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const [{ data: challs, error }, { data: joined }] = await Promise.all([
+        supabase.from('challenges').select('id, title, description, category, days, reward, participant_count').order('participant_count', { ascending: false }),
+        supabase.from('challenge_participants').select('challenge_id').eq('user_id', app.user.id),
+      ]);
+      if (!error && challs && challs.length > 0) {
+        setDbChallenges(challs.map((c: any) => ({
+          id: c.id, title: c.title, joined: `${(c.participant_count ?? 0).toLocaleString()}`,
+          days: c.days, reward: c.reward ?? '', cat: c.category ?? 'General',
+        })));
+        setDbLoaded(true);
+        if (joined) {
+          const joinedSet = new Set(joined.map((j: any) => j.challenge_id));
+          challs.forEach((c: any) => {
+            if (joinedSet.has(c.id) && !app.challenge.has(c.id)) app.challenge.add(c.id);
+          });
+        }
+      }
+    }).catch(() => {});
+  }, [app.user?.id]);
+
+  const handleToggleChallenge = async (c: any) => {
+    const isJoined = app.challenge?.has(c.id);
+    app.challenge.toggle(c.id);
+    app.toast(isJoined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: c.title, kind: 'success', icon: 'flame' });
+    if (typeof c.id === 'string' && app.user?.id) {
+      const { supabase } = await import('@/lib/supabase');
+      if (isJoined) {
+        await supabase.from('challenge_participants').delete().match({ challenge_id: c.id, user_id: app.user.id });
+      } else {
+        await supabase.from('challenge_participants').insert({ challenge_id: c.id, user_id: app.user.id });
+      }
+    }
+  };
+
+  const allChallenges = dbLoaded ? dbChallenges : MOCK.challenges.concat([
+    { id: 5, title: "Repair, don't replace", joined: '6.2k', days: 30, reward: '180 GP', cat: 'Waste' },
+    { id: 6, title: 'Library card month', joined: '15.4k', days: 30, reward: '90 GP', cat: 'Consume' },
+  ]);
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="tasks" onNav={onNav} />
@@ -385,10 +470,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          {MOCK.challenges.concat([
-            { id: 5, title: 'Repair, don\'t replace', joined: '6.2k', days: 30, reward: '180 GP', cat: 'Waste' },
-            { id: 6, title: 'Library card month', joined: '15.4k', days: 30, reward: '90 GP', cat: 'Consume' },
-          ]).map(c => {
+          {allChallenges.map(c => {
             const joined = app.challenge?.has(c.id);
             return (
             <div key={c.id} className="post-card" onClick={() => app.openModal('challenge', c)} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, cursor: 'pointer' }}>
@@ -398,7 +480,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
               </div>
               <h3 style={{ margin: '12px 0 4px', fontSize: 15, fontWeight: 600 }}>{c.title}</h3>
               <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.joined} joined · earn {c.reward}</div>
-              <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.challenge.toggle(c.id); app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: c.title, kind: 'success', icon: 'flame' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join challenge'}</button>
+              <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); handleToggleChallenge(c); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join challenge'}</button>
             </div>
             );
           })}
