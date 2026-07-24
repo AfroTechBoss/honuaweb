@@ -211,7 +211,7 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
                 const kc = kindColors[kind] || 'var(--ink-3)';
                 const ago = (() => { const s = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m` : s < 86400 ? `${Math.floor(s/3600)}h` : `${Math.floor(s/86400)}d`; })();
                 return (
-                  <div key={p.id} className="row-hover" style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, cursor: 'pointer' }}>
+                  <div key={p.id} className="row-hover" onClick={() => onNav?.('post', { id: p.id })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                       {kind !== 'post' && <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase' }}>{kind}</span>}
                       <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
