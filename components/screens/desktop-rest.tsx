@@ -104,7 +104,7 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
     import('@/lib/supabase').then(async ({ supabase }) => {
       const { data, error } = await supabase
         .from('posts')
-        .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles(full_name, handle, avatar_url)')
+        .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles!posts_user_id_fkey(full_name, handle, avatar_url)')
         .eq('community_id', community.id)
         .order('created_at', { ascending: false })
         .limit(50);
