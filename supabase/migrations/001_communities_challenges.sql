@@ -3,9 +3,15 @@
 -- Run this in Supabase Dashboard > SQL Editor
 -- ============================================================
 
+-- Drop and recreate (safe to re-run)
+drop table if exists challenge_participants cascade;
+drop table if exists community_members cascade;
+drop table if exists challenges cascade;
+drop table if exists communities cascade;
+
 -- ---- Communities ----
 
-create table if not exists communities (
+create table communities (
   id            uuid primary key default gen_random_uuid(),
   name          text not null,
   slug          text not null unique,
@@ -17,7 +23,7 @@ create table if not exists communities (
   created_at    timestamptz not null default now()
 );
 
-create table if not exists community_members (
+create table community_members (
   community_id  uuid not null references communities(id) on delete cascade,
   user_id       uuid not null references auth.users(id) on delete cascade,
   joined_at     timestamptz not null default now(),
@@ -44,7 +50,7 @@ create trigger trg_community_member_count
 
 -- ---- Challenges ----
 
-create table if not exists challenges (
+create table challenges (
   id                uuid primary key default gen_random_uuid(),
   title             text not null,
   description       text,
@@ -56,7 +62,7 @@ create table if not exists challenges (
   ends_at           timestamptz
 );
 
-create table if not exists challenge_participants (
+create table challenge_participants (
   challenge_id   uuid not null references challenges(id) on delete cascade,
   user_id        uuid not null references auth.users(id) on delete cascade,
   joined_at      timestamptz not null default now(),
