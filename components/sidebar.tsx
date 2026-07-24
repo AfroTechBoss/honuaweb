@@ -11,6 +11,7 @@ export function DesktopSidebar({ active, onNav }: any) {
   const app = useApp();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
+  const [confirmLogout, setConfirmLogout] = React.useState(false);
   React.useEffect(() => {
     if (localStorage.getItem(COLLAPSED_KEY) === "1") setCollapsed(true);
   }, []);
@@ -41,7 +42,10 @@ export function DesktopSidebar({ active, onNav }: any) {
 
   const w = collapsed ? 64 : 248;
 
+  const logoutModal = confirmLogout ? <LogoutConfirm onConfirm={() => { setConfirmLogout(false); app.logout?.(); }} onCancel={() => setConfirmLogout(false)} /> : null;
+
   return (
+    <React.Fragment>{logoutModal}
     <aside className="desktop-sidebar" style={{
       width: w, flexShrink: 0,
       borderRight: "1px solid var(--line)", background: "var(--surface)",
@@ -143,7 +147,7 @@ export function DesktopSidebar({ active, onNav }: any) {
                 ["Settings", "settings", () => onNav?.("settings")],
                 ["Switch appearance", "sparkles", () => app.toggleDark?.()],
                 ["Help & support", "comment", () => app.toast?.({ msg: "Help center", sub: "Support docs would open here.", icon: "comment" })],
-                ["Log out", "logout", () => app.logout?.()],
+                ["Log out", "logout", () => { setMenuOpen(false); setConfirmLogout(true); }],
               ] as any[]).map(([l, ic, fn]) => (
                 <button key={l} onClick={() => { setMenuOpen(false); fn(); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 10px", border: "none", background: "transparent", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, color: l === "Log out" ? "var(--clay)" : "var(--ink-2)", fontFamily: "Satoshi" }} className="row-hover">
                   <Icon name={ic} size={16} /> {l}
@@ -154,6 +158,22 @@ export function DesktopSidebar({ active, onNav }: any) {
         )}
       </div>
     </aside>
+    </React.Fragment>
+  );
+}
+
+function LogoutConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 18, padding: 28, width: '100%', maxWidth: 320, boxShadow: '0 24px 60px rgba(0,0,0,.25)' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>Log out?</div>
+        <div style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.55, marginBottom: 24 }}>You'll need to sign back in to access your account.</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink-2)', fontWeight: 600, fontSize: 14, cursor: 'pointer', fontFamily: 'Satoshi' }}>Cancel</button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: 'var(--clay)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'Satoshi' }}>Log out</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -161,6 +181,7 @@ export function MobileNav() {
   const app = useApp();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const [confirmLogout, setConfirmLogout] = React.useState(false);
 
   if (!app.authed) return null;
 
@@ -197,6 +218,7 @@ export function MobileNav() {
 
   return (
     <>
+      {confirmLogout && <LogoutConfirm onConfirm={() => { setConfirmLogout(false); setMoreOpen(false); app.logout?.(); }} onCancel={() => setConfirmLogout(false)} />}
       {moreOpen && (
         <div className="more-sheet-backdrop" onClick={() => setMoreOpen(false)}>
           <div className="more-sheet" onClick={e => e.stopPropagation()}>
@@ -216,7 +238,7 @@ export function MobileNav() {
                 <button onClick={() => { setMoreOpen(false); app.nav?.("sell"); }} className="more-sheet-action-btn">
                   <Icon name="bag" size={16} /> Sell on Honua
                 </button>
-                <button onClick={() => { setMoreOpen(false); app.logout?.(); }} className="more-sheet-action-btn logout">
+                <button onClick={() => { setConfirmLogout(true); }} className="more-sheet-action-btn logout">
                   <Icon name="logout" size={16} /> Log out
                 </button>
               </div>
