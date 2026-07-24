@@ -248,8 +248,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p));
   const isAuthed = authed || hasStoredSession;
 
-  // Not authed and no stored session — show skeleton until confirmed, then redirect
-  if (!isAuthed && !isPublic) return <AppSkeleton path={pathname} />;
+  // Not authed and no stored session — redirect immediately once auth is resolved
+  if (!isAuthed && !isPublic) {
+    if (authReady) router.replace("/login");
+    return null;
+  }
 
   return (
     <>

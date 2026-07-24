@@ -423,7 +423,7 @@ input, textarea, select { font-family: inherit; }
 /* ─── More bottom sheet ─────────────────────────────────────────────────── */
 .more-sheet-backdrop {
   display: none;
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: 300;
   background: rgba(0,0,0,.45);
   align-items: flex-end;
 }
