@@ -98,16 +98,23 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
   const meta = COMMUNITY_META[community.name] || { desc: '', tags: [], resources: [] };
   const going = app.community?.has(community.name + '-event');
 
+  const [migrationPending, setMigrationPending] = React.useState(false);
   React.useEffect(() => {
     if (!community.id) return;
     import('@/lib/supabase').then(async ({ supabase }) => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('posts')
         .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles(full_name, handle, avatar_url)')
         .eq('community_id', community.id)
         .order('created_at', { ascending: false })
         .limit(50);
-      setRealPosts(data ?? []);
+      if (error) {
+        // community_id column doesn't exist yet — migration 007 not run
+        setMigrationPending(true);
+      } else {
+        setMigrationPending(false);
+        setRealPosts(data ?? []);
+      }
     });
   }, [community.id]);
   const kindColor = (k: string) => ({ discussion: 'var(--sky)', tip: 'var(--green)', meetup: 'var(--sun)', question: 'var(--ink-2)', win: 'var(--green)' }[k] || 'var(--ink-3)');
@@ -163,7 +170,19 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
               </button>
             </div>
 
-            {filtered.length === 0 ? (
+            {migrationPending ? (
+              <div style={{ padding: '24px 20px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 14, fontSize: 13, color: '#92400e', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠️ Database migration needed</div>
+                <div style={{ marginBottom: 10 }}>Community posts require two SQL migrations to be run in <strong>Supabase Dashboard → SQL Editor</strong>.</div>
+                <pre style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', fontSize: 11, fontFamily: 'JetBrains Mono', overflowX: 'auto', margin: 0, color: '#78350f' }}>{`-- Migration 007: link posts to communities
+alter table posts add column if not exists community_id uuid references communities(id) on delete set null;
+create index if not exists posts_community_id_idx on posts(community_id);
+
+-- Migration 008: post kind badge
+alter table posts add column if not exists post_kind text check (post_kind in ('tip','question','win','discussion'));`}</pre>
+                <div style={{ marginTop: 10, color: '#78350f' }}>After running both, refresh this page and your posts will appear.</div>
+              </div>
+            ) : filtered.length === 0 ? (
               <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No posts yet. Be the first to post!</div>
             ) : (
               filtered.map((p) => {
