@@ -68,29 +68,26 @@ where not exists (select 1 from products where name is not null and price_cents 
 -- Client-generated text ids (e.g. ORD-2K4F9A)
 create table if not exists orders (id text primary key);
 
--- If a leftover orders table used uuid ids, convert to text so the app's
--- client-generated ids ('ORD-XXXXXX') can be inserted. Old policies on the
--- table block the type change, so drop them first — ours are recreated below.
+-- The app uses client-generated text ids ('ORD-XXXXXX'). If a leftover orders
+-- table used uuid ids, converting the column in place is blocked by policies on
+-- other tables that reference orders — so: if the leftover table is EMPTY,
+-- drop it (cascade removes dependent constraints/policies) and recreate it
+-- with a text id. If it has rows, stop and let a human decide.
 do $$
-declare pol record;
+declare n bigint;
 begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'orders'
       and column_name = 'id' and data_type = 'uuid'
   ) then
-    begin
-      for pol in
-        select policyname from pg_policies
-        where schemaname = 'public' and tablename = 'orders'
-      loop
-        execute format('drop policy if exists %I on public.orders', pol.policyname);
-      end loop;
-      alter table public.orders alter column id drop default;
-      alter table public.orders alter column id type text using id::text;
-    exception when others then
-      raise exception 'orders.id is uuid and could not be converted to text (%). If the old orders table is unused, run: drop table if exists orders cascade; then re-run this migration.', sqlerrm;
-    end;
+    execute 'select count(*) from public.orders' into n;
+    if n = 0 then
+      drop table public.orders cascade;
+      create table public.orders (id text primary key);
+    else
+      raise exception 'Leftover orders table has % row(s) with uuid ids and cannot be converted automatically. Back up anything you need, run: drop table if exists orders cascade; then re-run this migration.', n;
+    end if;
   end if;
 end $$;
 
