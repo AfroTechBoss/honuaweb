@@ -1,26 +1,37 @@
 -- ============================================================
 -- Migration 014: Real marketplace — products + orders
 -- Run this in Supabase Dashboard > SQL Editor
+-- Safe to re-run. Also safe if partial/older versions of these
+-- tables already exist: every column is backfilled first.
 -- ============================================================
 
+-- OPTIONAL clean slate: if you previously created products/orders tables that
+-- the app never used and the alters below still clash, uncomment these two
+-- lines and re-run. (Only do this if those tables hold nothing you care about.)
+-- drop table if exists product_reviews cascade;
+-- drop table if exists products cascade; drop table if exists orders cascade;
+
+-- Needed by the admin policies below (no-op if 011 already ran)
+alter table profiles add column if not exists role text default 'user';
+
 -- ---- Products ----
-create table if not exists products (
-  id            uuid primary key default gen_random_uuid(),
-  name          text not null,
-  brand         text not null,
-  price_cents   int  not null,
-  tag           text,
-  category      text default 'Home',
-  image_url     text,
-  description   text,
-  rating        numeric(2,1) default 4.8,
-  review_count  int default 0,
-  seller_id     uuid references public.profiles(id) on delete set null,
-  status        text not null default 'live' check (status in ('live', 'flagged', 'removed')),
-  featured      boolean not null default false,
-  compare_at_cents int,
-  created_at    timestamptz not null default now()
-);
+create table if not exists products (id uuid primary key default gen_random_uuid());
+
+-- Backfill every column in case an older products table existed
+alter table products add column if not exists name          text;
+alter table products add column if not exists brand         text;
+alter table products add column if not exists price_cents   int;
+alter table products add column if not exists tag           text;
+alter table products add column if not exists category      text default 'Home';
+alter table products add column if not exists image_url     text;
+alter table products add column if not exists description   text;
+alter table products add column if not exists rating        numeric(2,1) default 4.8;
+alter table products add column if not exists review_count  int default 0;
+alter table products add column if not exists seller_id     uuid references public.profiles(id) on delete set null;
+alter table products add column if not exists status        text not null default 'live';
+alter table products add column if not exists featured      boolean not null default false;
+alter table products add column if not exists compare_at_cents int;
+alter table products add column if not exists created_at    timestamptz not null default now();
 
 alter table products enable row level security;
 
@@ -38,7 +49,7 @@ create policy "admins manage all products"
     exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'moderator'))
   );
 
--- Seed the catalogue (previously mock data). Safe to re-run.
+-- Seed the catalogue (previously mock data). Only inserts into an empty table.
 insert into products (name, brand, price_cents, tag, category, image_url, description, rating, review_count, featured, compare_at_cents)
 select * from (values
   ('Refillable shampoo bar',  'BareHaus', 1200, 'Plastic-free', 'Home',     'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&q=80',  'Zero-waste shampoo bar in a refillable tin. Ships plastic-free and carbon-neutral.', 4.7, 134, false, null),
@@ -52,18 +63,18 @@ select * from (values
 where not exists (select 1 from products);
 
 -- ---- Orders ----
-create table if not exists orders (
-  id             text primary key,                -- client-generated e.g. HN-2K4F9A
-  user_id        uuid not null references public.profiles(id) on delete cascade,
-  items          jsonb not null default '[]'::jsonb,
-  subtotal_cents int not null default 0,
-  shipping_cents int not null default 0,
-  total_cents    int not null default 0,
-  email          text,
-  address        jsonb,
-  status         text not null default 'processing' check (status in ('processing', 'shipped', 'delivered', 'cancelled', 'returned')),
-  created_at     timestamptz not null default now()
-);
+-- Client-generated text ids (e.g. ORD-2K4F9A)
+create table if not exists orders (id text primary key);
+
+alter table orders add column if not exists user_id        uuid references public.profiles(id) on delete cascade;
+alter table orders add column if not exists items          jsonb not null default '[]'::jsonb;
+alter table orders add column if not exists subtotal_cents int not null default 0;
+alter table orders add column if not exists shipping_cents int not null default 0;
+alter table orders add column if not exists total_cents    int not null default 0;
+alter table orders add column if not exists email          text;
+alter table orders add column if not exists address        jsonb;
+alter table orders add column if not exists status         text not null default 'processing';
+alter table orders add column if not exists created_at     timestamptz not null default now();
 
 alter table orders enable row level security;
 
@@ -82,16 +93,18 @@ create policy "admins see all orders" on orders for select using (
 );
 
 -- ---- Product reviews (real ratings instead of fabricated stars) ----
-create table if not exists product_reviews (
-  id          uuid primary key default gen_random_uuid(),
-  product_id  uuid not null references products(id) on delete cascade,
-  user_id     uuid not null references public.profiles(id) on delete cascade,
-  order_id    text references orders(id) on delete set null,
-  stars       int not null check (stars between 1 and 5),
-  body        text,
-  created_at  timestamptz not null default now(),
-  unique (product_id, user_id)
-);
+create table if not exists product_reviews (id uuid primary key default gen_random_uuid());
+
+alter table product_reviews add column if not exists product_id uuid references products(id) on delete cascade;
+alter table product_reviews add column if not exists user_id    uuid references public.profiles(id) on delete cascade;
+alter table product_reviews add column if not exists order_id   text references orders(id) on delete set null;
+alter table product_reviews add column if not exists stars      int;
+alter table product_reviews add column if not exists body       text;
+alter table product_reviews add column if not exists created_at timestamptz not null default now();
+
+-- One review per user per product (needed for the client's upsert)
+create unique index if not exists product_reviews_product_user_uidx
+  on product_reviews (product_id, user_id);
 
 alter table product_reviews enable row level security;
 

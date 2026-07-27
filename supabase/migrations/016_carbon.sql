@@ -1,21 +1,24 @@
 -- ============================================================
 -- Migration 016: Carbon market — credits + purchases
 -- Run this in Supabase Dashboard > SQL Editor
+-- Safe to re-run; every column is backfilled before use.
 -- ============================================================
 
-create table if not exists carbon_credits (
-  id           uuid primary key default gen_random_uuid(),
-  name         text not null,
-  region       text,
-  type         text,                              -- Forestry / Wetland / DAC / …
-  verifier     text,
-  vintage      text,
-  price_cents  int not null,                      -- per tonne
-  volume_t     numeric not null default 0,        -- tonnes available
-  tag          text,                              -- Premium / Verified / Removal
-  active       boolean not null default true,
-  created_at   timestamptz not null default now()
-);
+-- Needed by the admin policy below (no-op if already present)
+alter table profiles add column if not exists role text default 'user';
+
+create table if not exists carbon_credits (id uuid primary key default gen_random_uuid());
+
+alter table carbon_credits add column if not exists name        text;
+alter table carbon_credits add column if not exists region      text;
+alter table carbon_credits add column if not exists type        text;
+alter table carbon_credits add column if not exists verifier    text;
+alter table carbon_credits add column if not exists vintage     text;
+alter table carbon_credits add column if not exists price_cents int;
+alter table carbon_credits add column if not exists volume_t    numeric not null default 0;
+alter table carbon_credits add column if not exists tag         text;
+alter table carbon_credits add column if not exists active      boolean not null default true;
+alter table carbon_credits add column if not exists created_at  timestamptz not null default now();
 
 alter table carbon_credits enable row level security;
 
@@ -27,28 +30,27 @@ create policy "admins manage credits" on carbon_credits for all using (
   exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'moderator'))
 );
 
--- Seed the six demo credits. Safe to re-run.
+-- Seed the six demo credits. Only inserts into an empty table.
 insert into carbon_credits (name, region, type, verifier, vintage, price_cents, volume_t, tag)
 select * from (values
-  ('Mau Forest restoration',            'Kenya',     'Forestry',  'Verra VCS',     '2025',  1820, 12400, 'Premium'),
-  ('Borneo peatland protection',        'Indonesia', 'Wetland',   'Gold Standard', '2024',  2480,  8200, 'Verified'),
-  ('Patagonia rewilding',               'Chile',     'Rewilding', 'Plan Vivo',     '2025',  3150,  4100, 'Premium'),
-  ('Direct air capture (Hellisheiði)',  'Iceland',   'DAC',       'Puro.Earth',    '2026', 42000,   120, 'Removal'),
-  ('Mangrove blue carbon',              'Senegal',   'Coastal',   'Verra VCS',     '2024',  2200,  6800, 'Verified'),
-  ('Biochar (Sonoma Coop)',             'USA',       'Soil',      'Puro.Earth',    '2025', 11800,   900, 'Removal')
+  ('Mau Forest restoration',            'Kenya',     'Forestry',  'Verra VCS',     '2025',  1820, 12400::numeric, 'Premium'),
+  ('Borneo peatland protection',        'Indonesia', 'Wetland',   'Gold Standard', '2024',  2480,  8200::numeric, 'Verified'),
+  ('Patagonia rewilding',               'Chile',     'Rewilding', 'Plan Vivo',     '2025',  3150,  4100::numeric, 'Premium'),
+  ('Direct air capture (Hellisheiði)',  'Iceland',   'DAC',       'Puro.Earth',    '2026', 42000,   120::numeric, 'Removal'),
+  ('Mangrove blue carbon',              'Senegal',   'Coastal',   'Verra VCS',     '2024',  2200,  6800::numeric, 'Verified'),
+  ('Biochar (Sonoma Coop)',             'USA',       'Soil',      'Puro.Earth',    '2025', 11800,   900::numeric, 'Removal')
 ) as v(name, region, type, verifier, vintage, price_cents, volume_t, tag)
 where not exists (select 1 from carbon_credits);
 
 -- ---- Purchases (retirements) ----
-create table if not exists carbon_purchases (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references public.profiles(id) on delete cascade,
-  credit_id    uuid references carbon_credits(id) on delete set null,
-  credit_name  text,                              -- snapshot so history survives credit deletion
-  tonnes       numeric not null check (tonnes > 0),
-  total_cents  int not null default 0,
-  created_at   timestamptz not null default now()
-);
+create table if not exists carbon_purchases (id uuid primary key default gen_random_uuid());
+
+alter table carbon_purchases add column if not exists user_id     uuid references public.profiles(id) on delete cascade;
+alter table carbon_purchases add column if not exists credit_id   uuid references carbon_credits(id) on delete set null;
+alter table carbon_purchases add column if not exists credit_name text;   -- snapshot so history survives credit deletion
+alter table carbon_purchases add column if not exists tonnes      numeric;
+alter table carbon_purchases add column if not exists total_cents int not null default 0;
+alter table carbon_purchases add column if not exists created_at  timestamptz not null default now();
 
 alter table carbon_purchases enable row level security;
 
@@ -63,7 +65,7 @@ create or replace function decrement_credit_volume()
 returns trigger language plpgsql security definer as $$
 begin
   if NEW.credit_id is not null then
-    update carbon_credits set volume_t = greatest(volume_t - NEW.tonnes, 0) where id = NEW.credit_id;
+    update carbon_credits set volume_t = greatest(volume_t - coalesce(NEW.tonnes, 0), 0) where id = NEW.credit_id;
   end if;
   return null;
 end;

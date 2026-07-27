@@ -4,18 +4,45 @@
 --   → community vouches → verified at 3 vouches
 --   → linked post gains co2_saved_kg and enters the Verified feed
 -- Run this in Supabase Dashboard > SQL Editor
+-- Safe to re-run; every column is backfilled before use.
 -- ============================================================
 
--- Extend impact_logs
+-- Guards: base tables/columns this migration touches
+create table if not exists impact_logs (id uuid primary key default gen_random_uuid());
+alter table impact_logs add column if not exists user_id      uuid references public.profiles(id) on delete cascade;
+alter table impact_logs add column if not exists action       text;
+alter table impact_logs add column if not exists category     text;
+alter table impact_logs add column if not exists co2_saved_kg numeric default 0;
+alter table impact_logs add column if not exists points       integer default 0;
+alter table impact_logs add column if not exists verified     boolean default false;
+alter table impact_logs add column if not exists logged_at    timestamptz default now();
+
+alter table public.posts add column if not exists co2_saved_kg numeric default 0;
+
+-- Verification columns
 alter table impact_logs add column if not exists proof_url text;
 alter table impact_logs add column if not exists post_id uuid references public.posts(id) on delete set null;
-alter table impact_logs add column if not exists status text not null default 'unverified'
-  check (status in ('unverified', 'pending', 'verified'));
+alter table impact_logs add column if not exists status text not null default 'unverified';
 alter table impact_logs add column if not exists vouch_count int not null default 0;
 alter table impact_logs add column if not exists description text;
 
 -- Existing verified=true logs (legacy flag) map to verified status
 update impact_logs set status = 'verified' where verified = true and status = 'unverified';
+
+-- RLS on impact_logs (re-assert; also present in migration 002)
+alter table impact_logs enable row level security;
+
+drop policy if exists "impact_logs: owner insert" on impact_logs;
+create policy "impact_logs: owner insert"
+  on impact_logs for insert with check (auth.uid() = user_id);
+
+drop policy if exists "impact_logs: public read" on impact_logs;
+create policy "impact_logs: public read"
+  on impact_logs for select using (true);
+
+drop policy if exists "impact_logs: owner update" on impact_logs;
+create policy "impact_logs: owner update"
+  on impact_logs for update using (auth.uid() = user_id);
 
 -- ---- Vouches ----
 create table if not exists impact_vouches (
@@ -81,8 +108,3 @@ drop trigger if exists trg_impact_vouch on impact_vouches;
 create trigger trg_impact_vouch
   after insert or delete on impact_vouches
   for each row execute function handle_impact_vouch();
-
--- Owners may update their own logs (attach proof/post after the fact)
-drop policy if exists "impact_logs: owner update" on impact_logs;
-create policy "impact_logs: owner update"
-  on impact_logs for update using (auth.uid() = user_id);

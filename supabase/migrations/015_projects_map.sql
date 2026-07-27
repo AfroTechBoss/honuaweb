@@ -1,9 +1,23 @@
 -- ============================================================
 -- Migration 015: Action Map — real projects with coordinates + RSVPs
 -- Run this in Supabase Dashboard > SQL Editor
+-- Safe to re-run, and safe if projects doesn't exist yet or is
+-- missing columns: everything is created/backfilled first.
 -- ============================================================
 
--- Extend the existing projects table for the map
+-- Base table (schema.sql normally creates this; guard in case it didn't run)
+create table if not exists public.projects (id uuid primary key default gen_random_uuid());
+
+alter table public.projects add column if not exists user_id     uuid references public.profiles(id) on delete cascade;
+alter table public.projects add column if not exists title       text;
+alter table public.projects add column if not exists description text;
+alter table public.projects add column if not exists cover_url   text;
+alter table public.projects add column if not exists status      text default 'active';
+alter table public.projects add column if not exists members     integer default 1;
+alter table public.projects add column if not exists impact_kg   numeric default 0;
+alter table public.projects add column if not exists created_at  timestamptz default now();
+
+-- Map columns
 alter table public.projects add column if not exists lat double precision;
 alter table public.projects add column if not exists lng double precision;
 alter table public.projects add column if not exists category text default 'Cleanup';
