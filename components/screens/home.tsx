@@ -704,10 +704,15 @@ function HomeMentionSpan({ handle, onNav }: { handle: string; onNav: any }) {
         setLoading(true);
         import('@/lib/supabase').then(async ({ supabase }) => {
           try {
-            const { data } = await supabase.from('profiles').select('id, handle, full_name, avatar_url, followers_count, following_count').eq('handle', handle).maybeSingle();
-            setLoading(false);
-            if (data) { _profileCache[handle] = data; setProfile(data); }
-            else setNotFound(true);
+            const { data } = await supabase.from('profiles').select('id, handle, full_name, avatar_url').eq('handle', handle).maybeSingle();
+            if (!data) { setLoading(false); setNotFound(true); return; }
+            // followers_count / following_count aren't columns — count from follows
+            const [{ count: followers }, { count: following }] = await Promise.all([
+              supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', data.id),
+              supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', data.id),
+            ]);
+            const full = { ...data, followers_count: followers ?? 0, following_count: following ?? 0 };
+            _profileCache[handle] = full; setProfile(full); setLoading(false);
           } catch { setLoading(false); setNotFound(true); }
         });
       }
