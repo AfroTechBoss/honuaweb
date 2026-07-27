@@ -494,9 +494,43 @@ export function formatCount(n) {
   return String(n);
 };
 
-// Right column trending widget for desktop
+// Right column trending widget for desktop — real tag counts from recent posts
+let _trendsCache: { tag: string; posts: string }[] | null = null;
 export function TrendingPanel() {
   const app = useApp();
+  const [trends, setTrends] = React.useState<{ tag: string; posts: string }[]>(_trendsCache ?? MOCK.trends);
+  const [isReal, setIsReal] = React.useState(!!_trendsCache);
+
+  React.useEffect(() => {
+    if (_trendsCache) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      // Tags + hashtags from the last 7 days of posts
+      const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      const { data } = await supabase.from('posts')
+        .select('tags, content')
+        .gte('created_at', since)
+        .limit(400);
+      if (!data?.length) return;
+      const counts: Record<string, number> = {};
+      for (const p of data) {
+        const fromTags: string[] = Array.isArray(p.tags) ? p.tags : [];
+        const fromContent = ((p.content ?? '').match(/#(\w+)/g) ?? []).map((t: string) => t.slice(1));
+        for (const t of new Set([...fromTags, ...fromContent])) {
+          if (t) counts[t] = (counts[t] ?? 0) + 1;
+        }
+      }
+      const top = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([tag, n]) => ({ tag, posts: String(n) }));
+      if (top.length) {
+        _trendsCache = top;
+        setTrends(top);
+        setIsReal(true);
+      }
+    }).catch(() => {});
+  }, []);
+
   return (
     <div style={{
       background: 'var(--surface)', borderRadius: 16,
@@ -506,7 +540,7 @@ export function TrendingPanel() {
         <h3 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Trending now</h3>
         <Icon name="sparkles" size={16} color="var(--green)" />
       </div>
-      {MOCK.trends.map((t, i) => (
+      {trends.map((t, i) => (
         <div key={t.tag} onClick={() => app.nav?.('explore', { tag: t.tag })} className="row-hover" style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           padding: '10px 8px', margin: '0 -8px', borderRadius: 8,
@@ -516,7 +550,7 @@ export function TrendingPanel() {
           <div>
             <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>#{i + 1} · trending</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginTop: 2 }}>#{t.tag}</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.posts} posts today</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.posts} post{t.posts === '1' ? '' : 's'}{isReal ? ' this week' : ' today'}</div>
           </div>
           <Icon name="arrow" size={16} color="var(--ink-4)" />
         </div>
@@ -525,9 +559,38 @@ export function TrendingPanel() {
   );
 };
 
-// Right column streak / impact summary widget
+// Right column streak / impact summary widget — real numbers from impact_logs
 export function MyImpactCard() {
   const app = useApp();
+  const [stats, setStats] = React.useState<{ monthCo2: number; streak: number; pts: number; actions: number } | null>(null);
+
+  const load = React.useCallback(() => {
+    if (!app.user?.id) return;
+    import('@/lib/impact').then(async ({ getAllLogs, computeStreak }) => {
+      const logs = await getAllLogs(app.user.id);
+      const monthStart = new Date();
+      monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+      const monthKey = monthStart.toISOString();
+      setStats({
+        monthCo2: logs.filter(l => (l.logged_at ?? '') >= monthKey).reduce((s, l) => s + Number(l.co2_saved_kg ?? 0), 0),
+        streak: computeStreak(logs),
+        pts: logs.reduce((s, l) => s + Number(l.points ?? 0), 0),
+        actions: logs.length,
+      });
+    }).catch(() => {});
+  }, [app.user?.id]);
+
+  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    window.addEventListener('honua:impact-logged', load);
+    return () => window.removeEventListener('honua:impact-logged', load);
+  }, [load]);
+
+  const monthLabel = new Date().toLocaleString('default', { month: 'short' }).toUpperCase();
+  const co2 = stats?.monthCo2 ?? 0;
+  const co2Display = co2 >= 1000 ? `−${(co2 / 1000).toFixed(1)}` : `−${Math.round(co2)}`;
+  const co2Unit = co2 >= 1000 ? ' t' : ' kg';
+
   return (
     <div onClick={() => app.nav?.('impact')} style={{
       background: 'linear-gradient(135deg, #1f6f3f 0%, #2e9a5b 100%)',
@@ -539,23 +602,29 @@ export function MyImpactCard() {
         borderRadius: '50%', background: 'rgba(255,255,255,.07)',
       }} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <span style={{ fontSize: 12, opacity: .85, fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>YOUR IMPACT · MAY</span>
+        <span style={{ fontSize: 12, opacity: .85, fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>YOUR IMPACT · {monthLabel}</span>
         <Icon name="leaf" size={18} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div>
-          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>−164<span style={{ fontSize: 14, opacity: .7 }}> kg</span></div>
-          <div style={{ fontSize: 11, opacity: .85 }}>CO₂ avoided</div>
+      {stats && stats.actions === 0 ? (
+        <div style={{ fontSize: 13.5, lineHeight: 1.55, opacity: .95 }}>
+          No actions logged yet. Log your first sustainable action to start your streak.
         </div>
-        <div>
-          <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>12<span style={{ fontSize: 14, opacity: .7 }}> day</span></div>
-          <div style={{ fontSize: 11, opacity: .85 }}>streak</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>{co2Display}<span style={{ fontSize: 14, opacity: .7 }}>{co2Unit}</span></div>
+            <div style={{ fontSize: 11, opacity: .85 }}>CO₂ avoided</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 600, fontFamily: 'Lora' }}>{stats?.streak ?? 0}<span style={{ fontSize: 14, opacity: .7 }}> day{(stats?.streak ?? 0) === 1 ? '' : 's'}</span></div>
+            <div style={{ fontSize: 11, opacity: .85 }}>streak</div>
+          </div>
         </div>
-      </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, fontSize: 12, opacity: .9 }}>
-        <span>1,240 GP</span>
+        <span>{(stats?.pts ?? 0).toLocaleString()} GP</span>
         <span>·</span>
-        <span>24 IT</span>
+        <span>{stats?.actions ?? 0} action{(stats?.actions ?? 0) === 1 ? '' : 's'}</span>
         <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
           See dashboard <Icon name="arrow" size={12} />
         </span>
@@ -564,33 +633,55 @@ export function MyImpactCard() {
   );
 };
 
-// Suggested follows
+// Suggested follows — real profiles you don't follow yet, ranked by impact
 export function SuggestedFollows() {
   const app = useApp();
-  const list = ['okafor', 'maya', 'greentech'];
+  const [people, setPeople] = React.useState<any[] | null>(null);
+
+  React.useEffect(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase.from('profiles')
+        .select('id, handle, full_name, avatar_url, verified, impact_score')
+        .order('impact_score', { ascending: false })
+        .limit(20);
+      if (!data?.length) return;
+      const followedHandles: string[] = app.state?.following ?? [];
+      const filtered = data
+        .filter((p: any) => p.id !== app.user?.id && p.handle && !followedHandles.includes(p.handle))
+        .slice(0, 3);
+      if (filtered.length) setPeople(filtered);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.user?.id]);
+
+  // Fall back to demo users until real profiles exist
+  const list = people ?? ['okafor', 'maya', 'greentech'].map(k => {
+    const u = MOCK.users[k];
+    return { handle: u.handle, full_name: u.name, avatar_url: u.avatar, verified: u.verified, impact_score: u.score, _mock: true };
+  });
+
   return (
     <div style={{
       background: 'var(--surface)', borderRadius: 16,
       border: '1px solid var(--line)', padding: 18,
     }}>
       <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 600 }}>People to follow</h3>
-      {list.map(k => {
-        const u = MOCK.users[k];
+      {list.map((u: any) => {
         const following = app.follow?.has(u.handle);
         return (
-          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
-            <span onClick={() => app.nav?.('profile', { handle: u.handle })} style={{ cursor: 'pointer' }}><Avatar src={u.avatar} name={u.name} size={36} verified={u.verified} /></span>
+          <div key={u.handle} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+            <span onClick={() => app.nav?.('profile', { handle: u.handle })} style={{ cursor: 'pointer' }}><Avatar src={u.avatar_url} name={u.full_name} size={36} verified={u.verified} /></span>
             <div onClick={() => app.nav?.('profile', { handle: u.handle })} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
               <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                {u.name}
+                {u.full_name}
                 {u.verified && <span style={{
                   background: 'var(--sky)', color: '#fff', width: 12, height: 12,
                   borderRadius: '50%', fontSize: 8, display: 'inline-grid', placeItems: 'center',
                 }}>✓</span>}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle} · {u.score} impact</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle} · {u.impact_score ?? 0} impact</div>
             </div>
-            <button className={following ? 'btn btn-green' : 'btn btn-ghost'} onClick={() => { app.follow.toggle(u.handle); app.toast?.(following ? { msg: `Unfollowed ${u.name}`, icon: 'user' } : { msg: `Following ${u.name}`, kind: 'success', icon: 'user' }); }} style={{ padding: '5px 12px', fontSize: 12 }}>{following ? 'Following' : 'Follow'}</button>
+            <button className={following ? 'btn btn-green' : 'btn btn-ghost'} onClick={() => { app.follow.toggle(u.handle); app.toast?.(following ? { msg: `Unfollowed ${u.full_name}`, icon: 'user' } : { msg: `Following ${u.full_name}`, kind: 'success', icon: 'user' }); }} style={{ padding: '5px 12px', fontSize: 12 }}>{following ? 'Following' : 'Follow'}</button>
           </div>
         );
       })}

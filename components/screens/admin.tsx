@@ -520,14 +520,35 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
   const openCount = reports.filter(r => r.status === 'open').length;
   const suspended = users.filter(u => u.status !== 'active').length;
   const openAppeals = appeals.filter(a => a.status === 'open').length;
+
+  // Real platform counts from Supabase (falls back to demo stats until loaded)
+  const [real, setReal] = React.useState<any>(null);
+  React.useEffect(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const [members, posts, orders, apps] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('posts').select('*', { count: 'exact', head: true }),
+        supabase.from('orders').select('total_cents').gte('created_at', since),
+        supabase.from('seller_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      ]);
+      setReal({
+        members: members.count ?? null,
+        posts: posts.count ?? null,
+        gmv: orders.data ? orders.data.reduce((sum: number, o: any) => sum + (o.total_cents ?? 0), 0) / 100 : null,
+        pendingApps: apps.count ?? null,
+      });
+    }).catch(() => {});
+  }, []);
+
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <SStat label="Members" value={s.members.toLocaleString()} icon="users" trend={s.membersTrend} sub="vs last month" />
-        <SStat label="Active sellers" value={s.sellers} icon="leaf" trend={s.sellersTrend} sub="vs last month" />
-        <SStat label="GMV · 30d" value={sMoney(s.gmv, 0)} icon="coin" trend={s.gmvTrend} accent="var(--sun)" />
-        <SStat label="Daily active" value={s.dau.toLocaleString()} icon="bolt" trend={s.dauTrend} accent="var(--sky)" />
+        <SStat label="Members" value={(real?.members ?? s.members).toLocaleString()} icon="users" sub={real?.members != null ? 'live count' : 'vs last month'} trend={real?.members != null ? undefined : s.membersTrend} />
+        <SStat label="Posts" value={(real?.posts ?? s.sellers).toLocaleString()} icon="leaf" sub={real?.posts != null ? 'live count' : 'vs last month'} trend={real?.posts != null ? undefined : s.sellersTrend} />
+        <SStat label="GMV · 30d" value={sMoney(real?.gmv ?? s.gmv, 0)} icon="coin" accent="var(--sun)" sub={real?.gmv != null ? 'from real orders' : undefined} trend={real?.gmv != null ? undefined : s.gmvTrend} />
+        <SStat label="Seller queue" value={String(real?.pendingApps ?? MOCK_APPLICATIONS.length)} icon="bolt" accent="var(--sky)" sub="pending review" />
       </div>
 
       {/* charts + attention */}
@@ -549,7 +570,7 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
             <AttnRow icon="flag" color="var(--sky)" label="Open appeals" value={openAppeals} onClick={() => onSection('appeals')} />
             <AttnRow icon="award" color="var(--sun)" label="Pending challenges" value={pendingChallenges ?? 0} onClick={() => onSection('challenges')} />
             <AttnRow icon="bag" color="var(--sun)" label="Flagged products" value={products.filter(p => p.status === 'flagged').length} onClick={() => onSection('products')} />
-            <AttnRow icon="leaf" color="var(--sky)" label="Seller applications" value={MOCK_APPLICATIONS.length} onClick={() => onSection('sellers')} />
+            <AttnRow icon="leaf" color="var(--sky)" label="Seller applications" value={real?.pendingApps ?? MOCK_APPLICATIONS.length} onClick={() => onSection('sellers')} />
             <AttnRow icon="lock" color="var(--ink-3)" label="Suspended / banned" value={suspended} onClick={() => onSection('users')} />
           </div>
         </div>

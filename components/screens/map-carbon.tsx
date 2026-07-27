@@ -536,8 +536,11 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
               <Icon name="globe" size={20} />
             </div>
             <div>
-              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>THIS MONTH IN {locationName.toUpperCase()}</div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>2,840 hours · 380 kg waste removed · 92 trees planted</div>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>RIGHT NOW IN {locationName.toUpperCase()}</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                {projects.length} project{projects.length === 1 ? '' : 's'} · {projects.reduce((s, p) => s + (p.going ?? 0), 0)} people taking part
+                {dbProjects.length > 0 && ` · ${dbProjects.length} community-created`}
+              </div>
             </div>
           </div>
         </div>
@@ -592,6 +595,10 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
   const yearLabel = new Date().getFullYear();
   const offsetsDisplay = myOffsets ? `${myOffsets.tonnes % 1 === 0 ? myOffsets.tonnes : myOffsets.tonnes.toFixed(1)} t` : '0 t';
   const offsetsSub = myOffsets ? `$${(myOffsets.totalCents / 100).toFixed(0)} retired` : 'none yet';
+  // Real market stats computed from the listed credits
+  const parsePrice = (c: any) => c.price_cents ? c.price_cents / 100 : parseFloat(String(c.price).replace(/[^0-9.]/g, '')) || 0;
+  const avgPrice = credits.length ? credits.reduce((s, c) => s + parsePrice(c), 0) / credits.length : 0;
+  const totalVolume = credits.reduce((s, c) => s + (parseFloat(String(c.volume).replace(/[^0-9.]/g, '')) || 0), 0);
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="carbon" onNav={onNav} />
@@ -604,7 +611,7 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
             <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Every credit on Honua is on-chain verified, third-party audited, and traceable to a project you can actually visit.</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost" onClick={() => app.openModal?.('wallet')}>Wallet · 24 IT</button>
+            <button className="btn btn-ghost" onClick={() => app.openModal?.('wallet')}>Wallet{myOffsets && myOffsets.tonnes > 0 ? ` · ${offsetsDisplay} retired` : ''}</button>
             <button className="btn btn-primary" onClick={() => app.openModal?.('offsetyear')}>Offset my year</button>
           </div>
         </div>
@@ -612,8 +619,8 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
         {/* Stat strip */}
         <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '20px 0 18px' }}>
           {[
-            ['SPOT PRICE · tCO₂', '$24.10', '+1.8%'],
-            ['VOLUME · 24h', '2,840 t', '+12%'],
+            ['AVG PRICE · tCO₂', `$${avgPrice.toFixed(2)}`, 'across listed credits'],
+            ['AVAILABLE VOLUME', `${Math.round(totalVolume).toLocaleString()} t`, 'ready to retire'],
             ['PROJECTS LISTED', String(credits.length), 'live credits'],
             [`YOUR OFFSETS · ${yearLabel}`, offsetsDisplay, offsetsSub],
           ].map(([l, v, d]) => (
@@ -623,7 +630,7 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
             }}>
               <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.06em' }}>{l}</div>
               <div style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Lora', marginTop: 4, letterSpacing: '-0.02em' }}>{v}</div>
-              <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2, fontFamily: 'JetBrains Mono' }}>↗ {d}</div>
+              <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2, fontFamily: 'JetBrains Mono' }}>{d}</div>
             </div>
           ))}
         </div>
