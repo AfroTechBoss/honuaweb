@@ -6,6 +6,27 @@
 -- Safe to re-run.
 -- ============================================================
 
+-- A leftover order_items table from an earlier experiment may still exist with
+-- a uuid order_id (its FK was cascade-dropped with the old orders table, but
+-- the table survived). The new orders use text ids, so: if the leftover is
+-- EMPTY, drop and recreate it; if it has rows, stop and let a human decide.
+do $$
+declare n bigint;
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'order_items'
+      and column_name = 'order_id' and data_type = 'uuid'
+  ) then
+    execute 'select count(*) from public.order_items' into n;
+    if n = 0 then
+      drop table public.order_items cascade;
+    else
+      raise exception 'Leftover order_items table has % row(s) with uuid order ids. Back up anything you need, run: drop table if exists order_items cascade; then re-run this migration.', n;
+    end if;
+  end if;
+end $$;
+
 create table if not exists order_items (id uuid primary key default gen_random_uuid());
 
 alter table order_items add column if not exists order_id    text references orders(id) on delete cascade;
