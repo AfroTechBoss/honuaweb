@@ -203,6 +203,139 @@ export async function advanceOrderItem(itemId: string, status: string): Promise<
   } catch { return false; }
 }
 
+// ---- Payouts ----
+export const SALE_FEE = 0.05;        // platform fee on each sale
+export const WITHDRAWAL_FEE = 0.02;  // fee withheld from each withdrawal
+
+export type SellerBalance = {
+  earned: number;       // delivered sales, after sale fee — lifetime
+  pendingClear: number; // sold but not yet delivered (gross)
+  reserved: number;     // already requested/approved payouts (gross)
+  available: number;    // earned - reserved, floored at 0
+};
+
+// Computed from the seller's own order_items + payout_requests (both readable
+// under their RLS policies). Delivered items clear; pending/approved payouts
+// reduce what's left to withdraw.
+export async function getSellerBalance(sellerId: string): Promise<SellerBalance> {
+  const empty = { earned: 0, pendingClear: 0, reserved: 0, available: 0 };
+  try {
+    const [{ data: items }, { data: payouts }] = await Promise.all([
+      supabase.from('order_items').select('price_cents, quantity, status').eq('seller_id', sellerId),
+      supabase.from('payout_requests').select('amount_cents, status').eq('seller_id', sellerId),
+    ]);
+    let deliveredCents = 0, pendingCents = 0;
+    for (const it of items ?? []) {
+      if (it.status === 'cancelled') continue;
+      const line = (it.price_cents ?? 0) * (it.quantity ?? 1);
+      if (it.status === 'delivered') deliveredCents += line;
+      else pendingCents += line;
+    }
+    const earned = (deliveredCents * (1 - SALE_FEE)) / 100;
+    const reserved = (payouts ?? [])
+      .filter((p: any) => p.status === 'pending' || p.status === 'approved')
+      .reduce((s: number, p: any) => s + (p.amount_cents ?? 0), 0) / 100;
+    return {
+      earned,
+      pendingClear: pendingCents / 100,
+      reserved,
+      available: Math.max(0, earned - reserved),
+    };
+  } catch { return empty; }
+}
+
+export async function getMyPayouts(sellerId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('payout_requests').select('*').eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map(mapPayout);
+  } catch { return []; }
+}
+
+function relTime(ts: string): string {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function mapPayout(r: any) {
+  return {
+    id: r.id,
+    amount: (r.amount_cents ?? 0) / 100,
+    net: (r.net_cents ?? 0) / 100,
+    fee: (r.fee_cents ?? 0) / 100,
+    destination: r.destination ?? '—',
+    requestedAt: relTime(r.created_at),
+    status: r.status ?? 'pending',
+    rejectReason: r.reject_reason ?? undefined,
+    sellerId: r.seller_id,
+    _db: true,
+  };
+}
+
+export async function requestPayout(sellerId: string, amount: number, destination: string): Promise<boolean> {
+  try {
+    const amountCents = Math.round(amount * 100);
+    const feeCents = Math.round(amountCents * WITHDRAWAL_FEE);
+    const { error } = await supabase.from('payout_requests').insert({
+      seller_id: sellerId,
+      amount_cents: amountCents,
+      fee_cents: feeCents,
+      net_cents: amountCents - feeCents,
+      destination,
+      status: 'pending',
+    });
+    return !error;
+  } catch { return false; }
+}
+
+function accountAge(createdAt?: string): string {
+  if (!createdAt) return 'new';
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
+  if (days < 31) return `${Math.max(1, days)} day${days === 1 ? '' : 's'}`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'}`;
+  return `${Math.floor(months / 12)} year${Math.floor(months / 12) === 1 ? '' : 's'}`;
+}
+
+// Admin: pending queue with seller identity. Risk signals (trust/disputes)
+// aren't modelled yet, so we surface honest neutral defaults rather than
+// fabricated scores; account age is real.
+export async function getPendingPayouts(): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('payout_requests')
+      .select('*, seller:profiles!payout_requests_seller_id_fkey(full_name, handle, created_at, impact_score)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error || !data) return [];
+    return data.map((r: any) => ({
+      ...mapPayout(r),
+      seller: r.seller?.full_name ?? 'Seller',
+      handle: r.seller?.handle ?? '—',
+      accountAge: accountAge(r.seller?.created_at),
+      // No trust/dispute model yet — neutral, non-blocking defaults
+      trustScore: '—',
+      openDisputes: 0,
+      available: (r.amount_cents ?? 0) / 100,
+    }));
+  } catch { return []; }
+}
+
+export async function reviewPayout(id: string, status: 'approved' | 'rejected' | 'on_hold', rejectReason?: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('payout_requests')
+      .update({ status, reject_reason: rejectReason ?? null, reviewed_at: new Date().toISOString() })
+      .eq('id', id);
+    return !error;
+  } catch { return false; }
+}
+
 export async function getDbOrders(userId: string): Promise<any[]> {
   try {
     const { data, error } = await supabase

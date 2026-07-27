@@ -136,7 +136,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const [products, setProducts] = React.useState(MOCK_ADMIN.products);
   const [users, setUsers] = React.useState<any[]>(MOCK_ADMIN.users);
   const [audit, setAudit] = React.useState(MOCK_ADMIN.audit);
-  const [payouts, setPayouts] = React.useState(MOCK_PAYOUTS);
+  const [payouts, setPayouts] = React.useState<any[]>(MOCK_PAYOUTS);
   const [appeals, setAppeals] = React.useState(MOCK_APPEALS);
   const [adminTeam, setAdminTeam] = React.useState(MOCK_ADMIN_TEAM_INIT);
   const [dbChallenges, setDbChallenges] = React.useState<any[]>([]);
@@ -286,10 +286,22 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
     app.toast?.({ msg: 'Role updated', sub: '@' + u?.handle + ' → ' + role, kind: 'success', icon: 'award' });
   };
 
+  // Real pending payout requests merged ahead of the demo queue
+  React.useEffect(() => {
+    import('@/lib/market').then(({ getPendingPayouts }) => getPendingPayouts()).then(rows => {
+      if (rows.length) setPayouts(prev => [...rows, ...prev.filter((p: any) => !p._db)]);
+    }).catch(() => {});
+  }, []);
+
   // payout actions
-  const setPayoutStatus = (id, status, rejectReason?) => {
-    setPayouts(ps => ps.map(p => p.id === id ? { ...p, status, ...(rejectReason ? { rejectReason } : {}) } : p));
+  const setPayoutStatus = async (id, status, rejectReason?) => {
     const payout = payouts.find(p => p.id === id);
+    setPayouts(ps => ps.map(p => p.id === id ? { ...p, status, ...(rejectReason ? { rejectReason } : {}) } : p));
+    if (payout?._db) {
+      const { reviewPayout } = await import('@/lib/market');
+      const ok = await reviewPayout(id, status, rejectReason);
+      if (!ok) { app.toast?.({ msg: 'Could not update payout', kind: 'error', icon: 'close' }); return; }
+    }
     const verb = status === 'approved' ? 'approved payout' : status === 'rejected' ? 'rejected payout' : 'placed payout on hold';
     log(verb, payout?.seller || '', status === 'approved' ? 'coin' : status === 'rejected' ? 'close' : 'lock');
     app.toast?.({ msg: status === 'approved' ? 'Payout approved' : status === 'rejected' ? 'Payout rejected' : 'Payout on hold', sub: payout?.seller + ' · ' + sMoney(payout?.amount ?? 0), kind: status === 'approved' ? 'success' : undefined, icon: status === 'approved' ? 'coin' : status === 'rejected' ? 'close' : 'lock' });
@@ -777,7 +789,7 @@ function AdminPayouts({ payouts, onAction }) {
   const statusColor = { pending: 'var(--sun)', approved: 'var(--green)', rejected: 'var(--clay)', on_hold: 'var(--ink-3)' };
   const statusLabel = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected', on_hold: 'On Hold' };
 
-  const trustColor = (score) => score >= 85 ? 'var(--green)' : score >= 70 ? 'var(--sun)' : 'var(--clay)';
+  const trustColor = (score) => typeof score !== 'number' ? 'var(--ink-3)' : score >= 85 ? 'var(--green)' : score >= 70 ? 'var(--sun)' : 'var(--clay)';
 
   const handleReject = () => {
     if (!rejectReason.trim() || !rejectModal) return;
@@ -880,7 +892,7 @@ function AdminPayouts({ payouts, onAction }) {
                   <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginBottom: 6 }}>TRUST SCORE</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1, height: 6, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
-                      <div style={{ width: selP.trustScore + '%', height: '100%', borderRadius: 999, background: trustColor(selP.trustScore) }} />
+                      <div style={{ width: (typeof selP.trustScore === 'number' ? selP.trustScore : 0) + '%', height: '100%', borderRadius: 999, background: trustColor(selP.trustScore) }} />
                     </div>
                     <span style={{ fontSize: 14, fontWeight: 700, color: trustColor(selP.trustScore), fontFamily: 'JetBrains Mono' }}>{selP.trustScore}</span>
                   </div>

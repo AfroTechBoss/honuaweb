@@ -47,10 +47,21 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
     setOrders(await getSellerOrders(app.user.id));
   }, [app.user?.id]);
 
+  // Real payout balance + history (null balance = demo mode)
+  const [balance, setBalance] = React.useState<any>(null);
+  const [payouts, setPayouts] = React.useState<any[]>(MOCK_PAYOUT_HISTORY);
+  const reloadPayouts = React.useCallback(async () => {
+    if (!app.user?.id) return;
+    const { getSellerBalance, getMyPayouts } = await import('@/lib/market');
+    const [bal, hist] = await Promise.all([getSellerBalance(app.user.id), getMyPayouts(app.user.id)]);
+    setBalance(bal);
+    if (hist.length) setPayouts(hist);
+  }, [app.user?.id]);
+
   React.useEffect(() => {
-    if (approved && dbMode) { reloadProducts(); reloadOrders(); }
+    if (approved && dbMode) { reloadProducts(); reloadOrders(); reloadPayouts(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approved, dbMode, reloadProducts, reloadOrders]);
+  }, [approved, dbMode, reloadProducts, reloadOrders, reloadPayouts]);
 
   // Realtime: new sales pop in while the dashboard is open
   React.useEffect(() => {
@@ -164,13 +175,13 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
 
         {/* Tab body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }} className="no-scrollbar">
-          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} />}
+          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} balance={balance} onRequest={reloadPayouts} />}
           {tab === 'products'  && <ProductsTab products={productsView} onEdit={setEditing} onRemove={removeProduct} onToggle={toggleProduct} />}
           {tab === 'orders'    && <OrdersTab orders={orders} onAdvance={advanceOrder} />}
           {tab === 'analytics' && <AnalyticsTab products={productsView} orders={orders} />}
           {tab === 'customers' && <CustomersTab />}
           {tab === 'messages'  && <MessagesTab />}
-          {tab === 'payouts'   && <PayoutsTab orders={orders} />}
+          {tab === 'payouts'   && <PayoutsTab orders={orders} balance={balance} payouts={payouts} onRequest={reloadPayouts} />}
           {tab === 'storefront'&& <StorefrontTab shop={shop} />}
         </div>
       </main>
@@ -218,13 +229,13 @@ const unitSeries = (orders: any[]) => dailySeries(orders, o => o.qty ?? 1) ?? MO
 // =====================================================================
 // Overview tab
 // =====================================================================
-function OverviewTab({ products, orders, onTab }) {
+function OverviewTab({ products, orders, onTab, balance, onRequest }) {
   const app = useApp();
   const realSeries = revenueSeries(orders);
   const confirmed = orders.filter(o => ['confirmed', 'shipped', 'delivered'].includes(o.status)).reduce((s, o) => s + o.total, 0);
-  const pending = orders.filter(o => o.status === 'processing').reduce((s, o) => s + o.total, 0);
-  const available = orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0);
-  const net = available * 0.95 * 0.98;
+  const pending = balance ? balance.pendingClear : orders.filter(o => o.status === 'processing').reduce((s, o) => s + o.total, 0);
+  // Real available balance when DB-backed; else the demo estimate
+  const net = balance ? balance.available : orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0) * 0.95 * 0.98;
   const lowStock = products.filter(p => p.type === 'physical' && p.stock != null && p.stock <= (p.threshold || 5));
   const openOrders = orders.filter(o => ['processing', 'confirmed'].includes(o.status));
 
@@ -258,7 +269,7 @@ function OverviewTab({ products, orders, onTab }) {
         </div>
 
         {/* Payout card */}
-        <PayoutCard net={net} onTab={onTab} />
+        <PayoutCard net={net} onTab={onTab} onRequest={onRequest} />
       </div>
 
       {/* Recent orders + top products */}
@@ -670,18 +681,24 @@ function MessagesTab() {
 // =====================================================================
 // Payout card (overview inline)
 // =====================================================================
-function PayoutCard({ net, onTab }) {
+function PayoutCard({ net, onTab, onRequest }) {
   const app = useApp();
   const [showRequest, setShowRequest] = React.useState(false);
   const [amount, setAmount] = React.useState('');
-  const [submitted, setSubmitted] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
 
-  const handleRequest = () => {
+  const handleRequest = async () => {
     const val = parseFloat(amount);
     if (!val || val <= 0 || val > net) return;
-    setSubmitted(true);
+    setSubmitting(true);
+    if (app.user?.id) {
+      const { requestPayout } = await import('@/lib/market');
+      const ok = await requestPayout(app.user.id, val, 'Default payout method');
+      if (!ok) { app.toast?.({ msg: 'Could not submit request', sub: 'Check migration 022 has been run.', kind: 'error', icon: 'close' }); setSubmitting(false); return; }
+      await onRequest?.();
+    }
     app.toast?.({ msg: 'Withdrawal request submitted', sub: sMoney(val) + ' · under review', kind: 'success', icon: 'coin' });
-    setTimeout(() => { setShowRequest(false); setAmount(''); setSubmitted(false); }, 200);
+    setShowRequest(false); setAmount(''); setSubmitting(false);
   };
 
   return (
@@ -734,25 +751,31 @@ function PayoutCard({ net, onTab }) {
 // =====================================================================
 // Payouts tab
 // =====================================================================
-function PayoutsTab({ orders }) {
+function PayoutsTab({ orders, balance, payouts, onRequest }) {
   const app = useApp();
-  const available = orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0) * 0.95 * 0.98;
-  const pending = orders.filter(o => o.status !== 'delivered').reduce((s, o) => s + o.total, 0);
-  const [history, setHistory] = React.useState(MOCK_PAYOUT_HISTORY);
+  // Real balance when DB-backed; else the demo estimate
+  const available = balance ? balance.available : orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0) * 0.95 * 0.98;
+  const pending = balance ? balance.pendingClear : orders.filter(o => o.status !== 'delivered').reduce((s, o) => s + o.total, 0);
+  const history = payouts ?? MOCK_PAYOUT_HISTORY;
   const [showRequest, setShowRequest] = React.useState(false);
   const [amount, setAmount] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
 
   const statusColor = { approved: 'var(--green)', rejected: 'var(--clay)', pending: 'var(--sun)', on_hold: 'var(--ink-3)' };
   const statusLabel = { approved: 'Approved', rejected: 'Rejected', pending: 'Pending review', on_hold: 'On Hold' };
 
-  const handleRequest = () => {
+  const handleRequest = async () => {
     const val = parseFloat(amount);
     if (!val || val <= 0 || val > available) return;
-    const newReq = { id: 'pw-s' + Date.now(), amount: val, destination: 'GTBank ••4521', requestedAt: 'just now', status: 'pending' };
-    setHistory(h => [newReq, ...h]);
+    setSubmitting(true);
+    if (app.user?.id) {
+      const { requestPayout } = await import('@/lib/market');
+      const ok = await requestPayout(app.user.id, val, 'Default payout method');
+      if (!ok) { app.toast?.({ msg: 'Could not submit request', sub: 'Check migration 022 has been run.', kind: 'error', icon: 'close' }); setSubmitting(false); return; }
+      await onRequest?.();
+    }
     app.toast?.({ msg: 'Withdrawal request submitted', sub: sMoney(val) + ' · under review', kind: 'success', icon: 'coin' });
-    setShowRequest(false);
-    setAmount('');
+    setShowRequest(false); setAmount(''); setSubmitting(false);
   };
 
   return (
@@ -793,8 +816,8 @@ function PayoutsTab({ orders }) {
             <DashFld label="Destination account" value="GTBank ••4521" onChange={() => {}} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
               <button className="btn btn-ghost" onClick={() => { setShowRequest(false); setAmount(''); }}>Cancel</button>
-              <button className="btn btn-green" disabled={!amount || parseFloat(amount) < 10 || parseFloat(amount) > available} onClick={handleRequest} style={{ opacity: (!amount || parseFloat(amount) < 10 || parseFloat(amount) > available) ? 0.5 : 1 }}>
-                <Icon name="coin" size={14} /> Submit request
+              <button className="btn btn-green" disabled={submitting || !amount || parseFloat(amount) < 10 || parseFloat(amount) > available} onClick={handleRequest} style={{ opacity: (submitting || !amount || parseFloat(amount) < 10 || parseFloat(amount) > available) ? 0.5 : 1 }}>
+                <Icon name="coin" size={14} /> {submitting ? 'Submitting…' : 'Submit request'}
               </button>
             </div>
           </div>
@@ -814,7 +837,7 @@ function PayoutsTab({ orders }) {
         {history.map(h => (
           <div key={h.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{h.id}</div>
+              <div style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{String(h.id).slice(0, 8)}</div>
               <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{h.requestedAt}</div>
             </div>
             <span className="tabular" style={{ fontSize: 14, fontWeight: 700 }}>{sMoney(h.amount)}</span>
