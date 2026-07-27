@@ -9,8 +9,8 @@ export async function POST(req: Request) {
   }
 
   // Dynamic import so the server bundle only includes Stripe when the key is set
-  const Stripe = (await import(/* webpackIgnore: true */ 'stripe')).default;
-  const stripe = new Stripe(secretKey, { apiVersion: '2025-06-30.basil' });
+  const Stripe = (await import('stripe')).default;
+  const stripe = new Stripe(secretKey, { apiVersion: '2026-06-24.dahlia' });
 
   const amount = (items as any[]).reduce((sum, item) => {
     const cents = Math.round(parseFloat(String(item.price).replace(/[^0-9.]/g, '')) * 100) || 0;
