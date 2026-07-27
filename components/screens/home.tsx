@@ -1,5 +1,6 @@
 ﻿"use client";
 import React from "react";
+import { createPortal } from "react-dom";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, ShareSheet, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { ImageLightbox } from "@/components/post-card";
 
@@ -469,7 +470,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
         if (!followingIds.length) { setDbPosts([]); setLoadingFeed(false); return; }
         const { data } = await Promise.race([
           supabase.from('posts')
-            .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+            .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)), quote_post:quote_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
             .in('user_id', followingIds)
             .is('community_id', null)
             .order('created_at', { ascending: false })
@@ -480,7 +481,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
       } else {
         let query = supabase
           .from('posts')
-          .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+          .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)), quote_post:quote_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
           .is('community_id', null)
           .order('created_at', { ascending: false })
           .limit(50);
@@ -579,7 +580,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           ) : feed.length > 0 ? (
             <>
               {feed.map(p => dbPosts.length > 0
-                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
+                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onStoryShared={loadStories} onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
                 : <PostCard key={p.id} post={p} />
               )}
             </>
@@ -617,8 +618,138 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   );
 };
 
+// ── Quote card for home feed ──────────────────────────────────────────────────
+function HomeQuoteCard({ post, onNav }: { post: any; onNav: any }) {
+  const p = post?.profile ?? post;
+  const ago = (ts: string) => {
+    if (!ts) return '';
+    const normalized = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z';
+    const s = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
+    if (isNaN(s) || s < 0) return '';
+    if (s < 60) return 'now'; if (s < 3600) return `${Math.floor(s/60)}m`;
+    if (s < 86400) return `${Math.floor(s/3600)}h`; return `${Math.floor(s/86400)}d`;
+  };
+  return (
+    <div onClick={e => { e.stopPropagation(); onNav?.('post', { id: post.id }); }}
+      style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', marginTop: 10, marginBottom: 4, cursor: 'pointer', background: 'var(--bg)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <Avatar src={p?.avatar_url} name={p?.full_name} size={22} />
+        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{p?.full_name}</span>
+        <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{p?.handle}</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>· {ago(post.created_at)}</span>
+      </div>
+      {post.title && <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ink)', marginBottom: 4 }}>{post.title}</div>}
+      {post.content && <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</div>}
+      {post.image_url && <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: 8, marginTop: 8, maxHeight: 180, objectFit: 'cover' }} />}
+    </div>
+  );
+}
+
+// ── OG link preview ───────────────────────────────────────────────────────────
+const _ogCache: Record<string, any> = {};
+function OgPreviewCard({ url }: { url: string }) {
+  const [og, setOg] = React.useState<any>(_ogCache[url] ?? null);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    if (_ogCache[url]) { setOg(_ogCache[url]); return; }
+    fetch(`/api/og?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => { if (d.title) { _ogCache[url] = d; setOg(d); } else setFailed(true); })
+      .catch(() => setFailed(true));
+  }, [url]);
+  if (failed || !og) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+      style={{ display: 'block', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginTop: 10, marginBottom: 4, textDecoration: 'none', color: 'inherit', background: 'var(--bg)' }}>
+      {og.image && <img src={og.image} alt="" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }} />}
+      <div style={{ padding: '10px 14px' }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{og.siteName}</div>
+        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', lineHeight: 1.4, marginBottom: og.description ? 4 : 0 }}>{og.title}</div>
+        {og.description && <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{og.description}</div>}
+      </div>
+    </a>
+  );
+}
+
+// ── @mention hover card for home feed ────────────────────────────────────────
+const _profileCache: Record<string, any> = {};
+function HomeMentionSpan({ handle, onNav }: { handle: string; onNav: any }) {
+  const [hovered, setHovered] = React.useState(false);
+  const [profile, setProfile] = React.useState<any>(_profileCache[handle] ?? null);
+  const [loading, setLoading] = React.useState(false);
+  const [notFound, setNotFound] = React.useState(false);
+  const [pos, setPos] = React.useState({ top: 0, left: 0 });
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onEnter = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      // Clamp so card stays within viewport
+      const left = Math.min(r.left, window.innerWidth - 240);
+      setPos({ top: r.bottom + 6, left: Math.max(8, left) });
+    }
+    timer.current = setTimeout(() => {
+      setHovered(true);
+      if (!profile && !notFound) {
+        setLoading(true);
+        import('@/lib/supabase').then(({ supabase }) =>
+          supabase.from('profiles').select('id, handle, full_name, avatar_url, followers_count, following_count').eq('handle', handle).maybeSingle()
+            .then(({ data }: any) => {
+              setLoading(false);
+              if (data) { _profileCache[handle] = data; setProfile(data); }
+              else setNotFound(true);
+            }).catch(() => { setLoading(false); setNotFound(true); })
+        );
+      }
+    }, 200);
+  };
+  const onLeave = () => { if (timer.current) clearTimeout(timer.current); setHovered(false); };
+
+  return (
+    <>
+      <span ref={ref} onMouseEnter={onEnter} onMouseLeave={onLeave}
+        onClick={e => { e.stopPropagation(); onNav?.('profile', { handle }); }}
+        style={{ color: 'var(--sky)', fontWeight: 600, cursor: 'pointer' }}>@{handle}</span>
+      {hovered && !notFound && typeof document !== 'undefined' &&
+        createPortal(
+          <div onMouseEnter={() => setHovered(true)} onMouseLeave={onLeave}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, boxShadow: '0 8px 28px rgba(0,0,0,.18)', overflow: 'hidden', minWidth: 220 }}>
+            {loading || !profile ? (
+              <div style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--line)', flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ height: 12, width: '60%', borderRadius: 6, background: 'var(--line)', marginBottom: 6 }} />
+                    <div style={{ height: 10, width: '40%', borderRadius: 6, background: 'var(--line)' }} />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <Avatar src={profile.avatar_url} name={profile.full_name} size={40} />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{profile.full_name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile.handle}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--ink-2)' }}>
+                  <span><b style={{ color: 'var(--ink)', fontFamily: 'JetBrains Mono' }}>{profile.followers_count ?? 0}</b> followers</span>
+                  <span><b style={{ color: 'var(--ink)', fontFamily: 'JetBrains Mono' }}>{profile.following_count ?? 0}</b> following</span>
+                </div>
+              </div>
+            )}
+          </div>,
+          document.body
+        )
+      }
+    </>
+  );
+}
+
 // =============== Real feed card (DB posts) ===============
-function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav: any; onRefresh: () => void; onHideUser?: (userId: string) => void }) {
+function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared }: { post: any; onNav: any; onRefresh: () => void; onHideUser?: (userId: string) => void; onStoryShared?: () => void }) {
   const app = useApp();
   const profile = post.profile;
   const original = post.original;
@@ -626,8 +757,17 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
   const isOwnPost = !!app.user?.id && (post.user_id === app.user.id || post.profile?.handle === app.user.handle);
   const [showShare, setShowShare] = React.useState(false);
   const [showBookmark, setShowBookmark] = React.useState(false);
+  const [showRepostMenu, setShowRepostMenu] = React.useState(false);
   const [lightbox, setLightbox] = React.useState<string | null>(null);
   const [showMenu, setShowMenu] = React.useState(false);
+  const repostRef = React.useRef<HTMLSpanElement>(null);
+
+  React.useEffect(() => {
+    if (!showRepostMenu) return;
+    const handler = (e: MouseEvent) => { if (repostRef.current && !repostRef.current.contains(e.target as Node)) setShowRepostMenu(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showRepostMenu]);
   const [showReport, setShowReport] = React.useState(false);
   const [reportReason, setReportReason] = React.useState('');
   const [reportSubmitted, setReportSubmitted] = React.useState(false);
@@ -731,7 +871,19 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
   };
 
   const [liveContent, setLiveContent] = React.useState<string>(post.content ?? '');
-  const displayContent = post.is_repost && original ? original.content : liveContent;
+  const quotePost = post.quote_post ?? (post.is_repost && original ? null : null);
+  const rawContent = post.is_repost && original ? original.content : liveContent;
+  // Strip any Honua post URL that corresponds to the quoted post
+  const honuaPostUrlRe = /https?:\/\/\S+\/post\/[a-f0-9-]{36}\S*/gi;
+  const displayContent = quotePost
+    ? rawContent.replace(honuaPostUrlRe, '').replace(/\n{3,}/g, '\n\n').trim()
+    : rawContent;
+  // Extract external URLs for OG preview (skip Honua URLs when quote is shown)
+  const allUrls = (rawContent.match(/https?:\/\/[^\s]+/g) ?? []) as string[];
+  const externalUrls = allUrls.filter(u => {
+    if (/\/post\/[a-f0-9-]{36}/.test(u) && quotePost) return false;
+    try { const host = new URL(u).hostname; return !host.includes('supabase') && !host.includes('localhost'); } catch { return false; }
+  }).slice(0, 1); // max 1 OG preview
   const displayImage = post.is_repost && original ? original.image_url : post.image_url;
   const displayProfile = profile;
   const tags: string[] = post.tags ?? [];
@@ -852,10 +1004,10 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
         <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
           {displayContent.split('\n').map((line: string, li: number, arr: string[]) => (
             <React.Fragment key={li}>
-              {line.split(/(\s+)/).map((word: string, i: number) => {
-                const match = word.match(/^(#\w+)(.*)/);
-                if (match) return <React.Fragment key={i}><span onClick={stop(() => onNav?.('explore', { tag: match[1].slice(1) }))} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
-                return word;
+              {line.split(/(@\w+|#\w+)/).map((part: string, i: number) => {
+                if (/^@\w+$/.test(part)) return <HomeMentionSpan key={i} handle={part.slice(1)} onNav={onNav} />;
+                if (/^#\w+$/.test(part)) return <span key={i} onClick={stop(() => onNav?.('explore', { tag: part.slice(1) }))} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{part}</span>;
+                return <React.Fragment key={i}>{part}</React.Fragment>;
               })}
               {li < arr.length - 1 && <br />}
             </React.Fragment>
@@ -867,11 +1019,27 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
       {displayImage && (
         <img src={displayImage} alt="" onClick={stop(() => setLightbox(displayImage))} style={{ width: '100%', borderRadius: 12, marginBottom: 12, objectFit: 'cover', maxHeight: 340, cursor: 'zoom-in' }} />
       )}
+      {quotePost && <HomeQuoteCard post={quotePost} onNav={onNav} />}
+      {!quotePost && externalUrls.map(u => <OgPreviewCard key={u} url={u} />)}
 
       <footer onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
         <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
         <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
-        <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
+        <span ref={repostRef} style={{ position: 'relative', display: 'inline-flex' }}>
+          <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => setShowRepostMenu(o => !o)} />
+          {showRepostMenu && (
+            <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.14)', zIndex: 50, minWidth: 170, overflow: 'hidden' }}>
+              <button onClick={e => { e.stopPropagation(); app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted!', icon: 'repost' }); setShowRepostMenu(false); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--ink-2)', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}>
+                <Icon name="repost" size={15} /> Repost
+              </button>
+              <button onClick={e => { e.stopPropagation(); setShowRepostMenu(false); app.openModal?.('compose', { quotePostId: post.id }); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--ink-2)', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}>
+                <Icon name="pencil" size={15} /> Quote post
+              </button>
+            </div>
+          )}
+        </span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
           <ActionBtn icon="bookmark" active={app.save?.has(post.id)} onClick={() => setShowBookmark(true)} />
           <ActionBtn icon="share" onClick={() => setShowShare(true)} />
@@ -891,6 +1059,20 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser }: { post: any; onNav
           url={typeof window !== 'undefined' ? window.location.origin + '/post/' + post.id : '/post/' + post.id}
           text={post.content ? post.content.slice(0, 100) : 'Check this out on Honua'}
           onClose={() => setShowShare(false)}
+          onShareToStory={app.user?.id ? () => {
+            console.log('[share-to-story] starting, user:', app.user!.id, 'post:', post.id);
+            import('@/lib/stories').then(({ createStory }) => {
+              console.log('[share-to-story] module loaded, calling createStory');
+              return createStory({ userId: app.user!.id, type: 'post', postId: post.id });
+            }).then(() => {
+              console.log('[share-to-story] success, calling toast');
+              (window as any).__honuaToast?.({ msg: 'Added to your story', icon: 'sparkles', kind: 'success' });
+              onStoryShared?.();
+            }).catch((err: any) => {
+              console.log('[share-to-story] error:', err?.message || err);
+              (window as any).__honuaToast?.({ msg: 'Failed to share story', icon: 'wifiOff', kind: 'error' });
+            });
+          } : undefined}
         />
       )}
     </article>

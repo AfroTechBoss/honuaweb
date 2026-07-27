@@ -109,7 +109,7 @@ function SellLanding({ onStart }) {
   return (
     <div>
       {/* Hero */}
-      <div style={{ padding: '64px 56px 48px', background: 'linear-gradient(160deg, var(--green-tint), transparent 70%)', borderBottom: '1px solid var(--line)' }}>
+      <div className="sell-hero" style={{ padding: '64px 56px 48px', background: 'linear-gradient(160deg, var(--green-tint), transparent 70%)', borderBottom: '1px solid var(--line)' }}>
         <div style={{ maxWidth: 900 }}>
           <span className="chip chip-green" style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>HONUA FOR SELLERS</span>
           <h1 className="font-display" style={{ fontSize: 56, fontWeight: 600, letterSpacing: '-0.04em', lineHeight: 1.02, margin: '20px 0 0', maxWidth: '16ch' }}>
@@ -127,9 +127,9 @@ function SellLanding({ onStart }) {
         </div>
       </div>
 
-      <div style={{ padding: '44px 56px 64px', maxWidth: 1100 }}>
+      <div className="sell-content" style={{ padding: '44px 56px 64px', maxWidth: 1100 }}>
         {/* Value props */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div className="three-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {props.map(([ic, t, d]) => (
             <div key={t} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 24 }}>
               <span style={{ width: 42, height: 42, borderRadius: 12, display: 'grid', placeItems: 'center', background: 'var(--green-tint)', color: 'var(--green)' }}>
@@ -143,7 +143,7 @@ function SellLanding({ onStart }) {
 
         {/* How it works */}
         <h2 className="font-display" style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.025em', margin: '48px 0 18px' }}>How it works</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div className="three-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {steps.map(([t, d], i) => (
             <div key={t} style={{ position: 'relative', padding: '24px 22px', borderRadius: 18, border: '1px solid var(--line)', background: 'var(--surface)' }}>
               <span className="font-display" style={{ fontSize: 13, fontFamily: 'JetBrains Mono', color: 'var(--green)', fontWeight: 600 }}>STEP {i + 1}</span>

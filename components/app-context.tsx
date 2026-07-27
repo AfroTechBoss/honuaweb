@@ -190,6 +190,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return id;
   }, [dismissToast]);
 
+  // Expose toast globally so async callbacks outside React can trigger toasts
+  useEffect(() => {
+    (window as any).__honuaToast = toast;
+    return () => { (window as any).__honuaToast = undefined; };
+  }, [toast]);
+
   // ---- modals ----
   const [modal, setModal] = useState<any>(null);
   const openModal = useCallback((type: string, data?: any) => setModal({ type, data }), []);
@@ -411,9 +417,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })
       .subscribe();
 
-    // Polling fallback: re-check unread count every 20s so notifications show
-    // even if the Realtime subscription for notifications isn't active yet.
+    // Polling fallback: re-check unread count every 20s.
+    // Skip when the tab is hidden to avoid burst-violation when it comes back.
     const poll = setInterval(async () => {
+      if (document.visibilityState === 'hidden') return;
       const count = await getUnreadCount(userId);
       setUnreadNotifs(count);
     }, 20_000);

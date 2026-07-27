@@ -55,7 +55,7 @@ export async function getBookmarks(userId: string, collectionId?: string) {
   const postIds = [...new Set(bmarks.map((b: any) => b.post_id))];
   const { data: posts } = await supabase
     .from("posts")
-    .select("*, profile:profiles!user_id(id, handle, full_name, avatar_url, verified)")
+    .select("*, profile:profiles!user_id(id, handle, full_name, avatar_url, verified), community:communities(id, name, slug)")
     .in("id", postIds);
 
   const postMap = Object.fromEntries((posts ?? []).map((p: any) => [p.id, p]));

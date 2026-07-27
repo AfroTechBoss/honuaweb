@@ -558,7 +558,8 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="carbon" onNav={onNav} />
-      <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
+      <main style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
+        <div className="carbon-inner" style={{ padding: '24px 32px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
             <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CARBON MARKET · LIVE</div>
@@ -572,7 +573,7 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
         </div>
 
         {/* Stat strip */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '20px 0 18px' }}>
+        <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '20px 0 18px' }}>
           {[
             ['SPOT PRICE · tCO₂', '$24.10', '+1.8%'],
             ['VOLUME · 24h', '2,840 t', '+12%'],
@@ -605,7 +606,8 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
         </div>
 
         {/* Table */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+        <div className="carbon-table-scroll" style={{ overflowX: 'auto' }}>
+        <div className="carbon-credits-table" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', minWidth: 720 }}>
           <div style={{
             display: 'grid', gridTemplateColumns: '2.4fr 1fr 1fr 1fr 1fr 1fr 1fr 110px',
             padding: '12px 18px', background: 'var(--bg-2)', borderBottom: '1px solid var(--line)',
@@ -650,8 +652,9 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
           ))}
           {shown.length === 0 && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No credits match this filter.</div>}
         </div>
+        </div>
 
-        <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 }}>
+        <div className="two-col-grid" style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 }}>
           <div style={{
             background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)',
             padding: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18,
@@ -680,6 +683,7 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
               <button className="btn" style={{ background: '#fff', color: '#0a0d0b' }} onClick={() => app.openModal?.('celebrate', { title: 'Impact NFT minted', sub: 'Your soulbound 2026 token is on-chain. It updates as your verified offsets grow.' })}>Mint 2026</button>
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>

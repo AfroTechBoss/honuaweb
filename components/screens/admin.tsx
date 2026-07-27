@@ -6,7 +6,7 @@ import { AdminProducts, AdminUsers, AdminSellers, AdminActivity } from "./admin-
 import { useAdminUser } from "@/components/admin-auth";
 
 // =====================================================================
-// Desktop Admin Console â€” platform owner / moderator workspace
+// Desktop Admin Console — platform owner / moderator workspace
 // Own shell (left rail + topbar), six sections.
 // =====================================================================
 
@@ -22,6 +22,7 @@ const ADMIN_NAV_GROUPS = [
     label: 'Management',
     items: [
       ['moderation', 'Moderation', 'flame'],
+      ['community-reports', 'Community Reports', 'users'],
       ['appeals', 'Appeals', 'flag'],
       ['challenges', 'Challenges', 'award'],
       ['products', 'Products', 'bag'],
@@ -43,22 +44,22 @@ const ADMIN_NAV_GROUPS = [
 
 // ---- Mock payout requests ----
 const MOCK_PAYOUTS = [
-  { id: 'pw001', seller: 'Loom & Linen', handle: 'loomlinen', amount: 1240.50, available: 1800.00, requestedAt: '2h ago', status: 'pending', destination: 'GTBank â€¢â€¢4521', trustScore: 92, openDisputes: 0, accountAge: '8 months' },
-  { id: 'pw002', seller: 'Volt Garage', handle: 'voltgarage', amount: 580.00, available: 580.00, requestedAt: '5h ago', status: 'pending', destination: 'Stripe â€¢â€¢7834', trustScore: 88, openDisputes: 0, accountAge: '5 months' },
-  { id: 'pw003', seller: 'Rootbound', handle: 'rootbound', amount: 3100.00, available: 3100.00, requestedAt: '1d ago', status: 'pending', destination: 'Wise â€¢â€¢2290', trustScore: 74, openDisputes: 1, accountAge: '2 months' },
-  { id: 'pw004', seller: 'Pelagic Goods', handle: 'pelagic', amount: 420.00, available: 680.00, requestedAt: '2d ago', status: 'approved', destination: 'GTBank â€¢â€¢9912', trustScore: 95, openDisputes: 0, accountAge: '14 months' },
-  { id: 'pw005', seller: 'Terra Bloom', handle: 'terrabloom', amount: 2200.00, available: 2200.00, requestedAt: '3d ago', status: 'rejected', destination: 'Stripe â€¢â€¢1103', trustScore: 61, openDisputes: 2, accountAge: '3 weeks', rejectReason: 'Open disputes must be resolved before withdrawal.' },
-  { id: 'pw006', seller: 'Safi Studio', handle: 'safistudio', amount: 890.00, available: 890.00, requestedAt: '4d ago', status: 'on_hold', destination: 'Payoneer â€¢â€¢6647', trustScore: 70, openDisputes: 0, accountAge: '6 months' },
+  { id: 'pw001', seller: 'Loom & Linen', handle: 'loomlinen', amount: 1240.50, available: 1800.00, requestedAt: '2h ago', status: 'pending', destination: 'GTBank ••4521', trustScore: 92, openDisputes: 0, accountAge: '8 months' },
+  { id: 'pw002', seller: 'Volt Garage', handle: 'voltgarage', amount: 580.00, available: 580.00, requestedAt: '5h ago', status: 'pending', destination: 'Stripe ••7834', trustScore: 88, openDisputes: 0, accountAge: '5 months' },
+  { id: 'pw003', seller: 'Rootbound', handle: 'rootbound', amount: 3100.00, available: 3100.00, requestedAt: '1d ago', status: 'pending', destination: 'Wise ••2290', trustScore: 74, openDisputes: 1, accountAge: '2 months' },
+  { id: 'pw004', seller: 'Pelagic Goods', handle: 'pelagic', amount: 420.00, available: 680.00, requestedAt: '2d ago', status: 'approved', destination: 'GTBank ••9912', trustScore: 95, openDisputes: 0, accountAge: '14 months' },
+  { id: 'pw005', seller: 'Terra Bloom', handle: 'terrabloom', amount: 2200.00, available: 2200.00, requestedAt: '3d ago', status: 'rejected', destination: 'Stripe ••1103', trustScore: 61, openDisputes: 2, accountAge: '3 weeks', rejectReason: 'Open disputes must be resolved before withdrawal.' },
+  { id: 'pw006', seller: 'Safi Studio', handle: 'safistudio', amount: 890.00, available: 890.00, requestedAt: '4d ago', status: 'on_hold', destination: 'Payoneer ••6647', trustScore: 70, openDisputes: 0, accountAge: '6 months' },
 ];
 
 const ADMIN_NAV = ADMIN_NAV_GROUPS.flatMap(g => g.items);
 
 // ---- Mock appeals ----
 const MOCK_APPEALS = [
-  { id: 'ap001', type: 'Post removal', entity: '"Organic Cotton Wrap Dress"', user: 'sophiamade', userName: 'Sophia Adeyemi', submittedAt: '1h ago', status: 'open', originalAction: 'Post removed for misleading sustainability claims', userReason: 'My product is certified GOTS â€” every claim is accurate and documented. I can provide the certificate number.' },
+  { id: 'ap001', type: 'Post removal', entity: '"Organic Cotton Wrap Dress"', user: 'sophiamade', userName: 'Sophia Adeyemi', submittedAt: '1h ago', status: 'open', originalAction: 'Post removed for misleading sustainability claims', userReason: 'My product is certified GOTS — every claim is accurate and documented. I can provide the certificate number.' },
   { id: 'ap002', type: 'Account suspension', entity: '@voltgarage', user: 'voltgarage', userName: 'Volt Garage', submittedAt: '4h ago', status: 'open', originalAction: 'Suspended for spam behaviour', userReason: 'I was posting product launch updates, not spam. My followers opted in and I have engagement metrics to prove it.' },
-  { id: 'ap003', type: 'Seller rejection', entity: 'Green Roots Co.', user: 'greenroots', userName: 'Ama Osei', submittedAt: '7h ago', status: 'open', originalAction: 'Application rejected â€” insufficient certification', userReason: "I've uploaded my Fair Trade certificate directly to my profile. Please review the updated documents and reconsider." },
-  { id: 'ap004', type: 'Post removal', entity: '"Bamboo Desk Set"', user: 'tidyterra', userName: 'Tidy Terra', submittedAt: '1d ago', status: 'upheld', originalAction: 'Removed â€” prohibited item category', userReason: 'This is FSC-certified bamboo, not a prohibited material.', resolution: 'Reviewed: products in this category require FSC certification uploaded at listing time â€” not retroactively. Decision upheld.', resolvedBy: 'admin@honua.co', resolvedAt: '20h ago' },
+  { id: 'ap003', type: 'Seller rejection', entity: 'Green Roots Co.', user: 'greenroots', userName: 'Ama Osei', submittedAt: '7h ago', status: 'open', originalAction: 'Application rejected — insufficient certification', userReason: "I've uploaded my Fair Trade certificate directly to my profile. Please review the updated documents and reconsider." },
+  { id: 'ap004', type: 'Post removal', entity: '"Bamboo Desk Set"', user: 'tidyterra', userName: 'Tidy Terra', submittedAt: '1d ago', status: 'upheld', originalAction: 'Removed — prohibited item category', userReason: 'This is FSC-certified bamboo, not a prohibited material.', resolution: 'Reviewed: products in this category require FSC certification uploaded at listing time — not retroactively. Decision upheld.', resolvedBy: 'admin@honua.co', resolvedAt: '20h ago' },
   { id: 'ap005', type: 'Account suspension', entity: '@rootbound', user: 'rootbound', userName: 'Rootbound', submittedAt: '2d ago', status: 'overturned', originalAction: 'Suspended following harassment report', userReason: 'The report was filed by a competing seller. I have screenshots showing they initiated contact and fabricated the incident.', resolution: 'After full review the original suspension was issued in error. Account reinstated and reporter flagged for bad-faith reporting.', resolvedBy: 'admin@honua.co', resolvedAt: '1d ago' },
 ];
 
@@ -66,7 +67,7 @@ const MOCK_APPEALS = [
 const MOCK_ADMIN_TEAM_INIT = [
   { id: 'r1', name: 'Chidi Okafor', email: 'chidi@honua.co', role: 'owner', since: 'Jan 2024' },
   { id: 'r2', name: 'Amara Singh', email: 'amara@honua.co', role: 'admin', since: 'Mar 2024' },
-  { id: 'r3', name: 'Lena MÃ¼ller', email: 'lena@honua.co', role: 'moderator', since: 'Jun 2024' },
+  { id: 'r3', name: 'Lena Müller', email: 'lena@honua.co', role: 'moderator', since: 'Jun 2024' },
   { id: 'r4', name: 'Kwame Asante', email: 'kwame@honua.co', role: 'analyst', since: 'Sep 2024' },
 ];
 
@@ -77,7 +78,7 @@ const NOTIFICATION_TEMPLATES = [
   { id: 'content.post.removed', name: 'Post Removed', subject: 'A post has been removed', body: 'Hi {{user.name}},\n\nYour post "{{post_title}}" was removed for: {{violation_reason}}.\n\nYou may request a reconsideration within 14 days.\n\nHonua Trust & Safety' },
   { id: 'appeal.decision.approved', name: 'Appeal Overturned', subject: 'Your appeal has been approved', body: 'Hi {{user.name}},\n\nWe reviewed your appeal regarding {{entity}} and have overturned our earlier decision.\n\n{{resolution_note}}\n\nThank you for reaching out.\n\nHonua Trust & Safety' },
   { id: 'appeal.decision.denied', name: 'Appeal Upheld', subject: 'Update on your appeal', body: 'Hi {{user.name}},\n\nWe reviewed your appeal regarding {{entity}} and have upheld our earlier decision.\n\n{{resolution_note}}\n\nHonua Trust & Safety' },
-  { id: 'seller.application.approved', name: 'Seller Approved', subject: 'Welcome to Honua as a seller!', body: 'Hi {{user.name}},\n\nYour seller application has been approved. You can now list products on Honua.\n\nKeep your sustainability certifications current â€” we review these periodically.\n\nWelcome aboard!\n\nThe Honua Team' },
+  { id: 'seller.application.approved', name: 'Seller Approved', subject: 'Welcome to Honua as a seller!', body: 'Hi {{user.name}},\n\nYour seller application has been approved. You can now list products on Honua.\n\nKeep your sustainability certifications current — we review these periodically.\n\nWelcome aboard!\n\nThe Honua Team' },
   { id: 'seller.application.rejected', name: 'Seller Rejected', subject: 'Update on your seller application', body: 'Hi {{user.name}},\n\nAfter reviewing your application we are unable to approve it at this time.\n\nReason: {{rejection_reason}}\n\nYou may reapply once the issue is addressed.\n\nThe Honua Team' },
   { id: 'seller.certification.expiry', name: 'Cert Expiry Warning', subject: 'Your sustainability certification is expiring soon', body: 'Hi {{user.name}},\n\nYour {{cert_name}} certification expires on {{expiry_date}}. Please upload a renewed certificate before then to avoid a listing hold.\n\nThe Honua Team' },
   { id: 'admin.custom_message', name: 'Custom Message', subject: '', body: '' },
@@ -113,8 +114,22 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
       </div>
     </div>
   );
-  const [section, setSection] = React.useState('overview');
+  const getHashSection = () => {
+    const h = typeof window !== 'undefined' ? window.location.hash.slice(1) : '';
+    return ADMIN_NAV.some(n => n[0] === h) ? h : 'overview';
+  };
+  const [section, setSection] = React.useState(getHashSection);
   const [collapsed, setCollapsed] = React.useState(false);
+
+  // keep URL hash in sync so refresh restores position
+  React.useEffect(() => {
+    window.location.hash = section;
+  }, [section]);
+  React.useEffect(() => {
+    const onHash = () => setSection(getHashSection());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // ----- live, mutable platform data (session only) -----
   const [reports, setReports] = React.useState(MOCK_ADMIN.reports);
@@ -141,6 +156,17 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   }, []);
 
   React.useEffect(() => { loadChallenges(); }, [loadChallenges]);
+
+  // realtime: refresh challenges when any row changes
+  React.useEffect(() => {
+    let channel: any;
+    import('@/lib/supabase').then(({ supabase }) => {
+      channel = supabase.channel('admin-challenges')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges' }, () => loadChallenges())
+        .subscribe();
+    });
+    return () => { channel?.unsubscribe(); };
+  }, [loadChallenges]);
 
   const approveChallenge = async (id: string) => {
     const { supabase } = await import('@/lib/supabase');
@@ -225,7 +251,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
     const u = users.find(x => x.id === id);
     setUsers(us => us.map(x => x.id === id ? { ...x, role } : x));
     log('changed role to ' + role, '@' + (u?.handle || ''), 'award');
-    app.toast?.({ msg: 'Role updated', sub: '@' + u?.handle + ' â†’ ' + role, kind: 'success', icon: 'award' });
+    app.toast?.({ msg: 'Role updated', sub: '@' + u?.handle + ' → ' + role, kind: 'success', icon: 'award' });
   };
 
   // payout actions
@@ -234,7 +260,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
     const payout = payouts.find(p => p.id === id);
     const verb = status === 'approved' ? 'approved payout' : status === 'rejected' ? 'rejected payout' : 'placed payout on hold';
     log(verb, payout?.seller || '', status === 'approved' ? 'coin' : status === 'rejected' ? 'close' : 'lock');
-    app.toast?.({ msg: status === 'approved' ? 'Payout approved' : status === 'rejected' ? 'Payout rejected' : 'Payout on hold', sub: payout?.seller + ' Â· ' + sMoney(payout?.amount ?? 0), kind: status === 'approved' ? 'success' : undefined, icon: status === 'approved' ? 'coin' : status === 'rejected' ? 'close' : 'lock' });
+    app.toast?.({ msg: status === 'approved' ? 'Payout approved' : status === 'rejected' ? 'Payout rejected' : 'Payout on hold', sub: payout?.seller + ' · ' + sMoney(payout?.amount ?? 0), kind: status === 'approved' ? 'success' : undefined, icon: status === 'approved' ? 'coin' : status === 'rejected' ? 'close' : 'lock' });
   };
 
   // appeals actions
@@ -251,7 +277,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
     const m = adminTeam.find(x => x.id === id);
     setAdminTeam(t => t.map(x => x.id === id ? { ...x, role } : x));
     log('changed role to ' + role, m?.name || '', 'award');
-    app.toast?.({ msg: 'Role updated', sub: (m?.name || '') + ' â†’ ' + role, kind: 'success', icon: 'award' });
+    app.toast?.({ msg: 'Role updated', sub: (m?.name || '') + ' → ' + role, kind: 'success', icon: 'award' });
   };
 
   const openCount = reports.filter(r => r.status === 'open').length;
@@ -436,6 +462,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
         <div style={{ padding: '24px 28px 60px' }}>
           {section === 'overview' && <AdminOverview reports={reports} users={users} products={products} audit={audit} appeals={appeals} pendingChallenges={pendingChallenges.length} onSection={setSection} />}
           {section === 'moderation' && <AdminModeration reports={reports} onResolve={resolveReport} onSuspend={suspendFromReport} />}
+          {section === 'community-reports' && <AdminCommunityReports />}
           {section === 'appeals' && <AdminAppeals appeals={appeals} onResolve={resolveAppeal} />}
           {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
           {section === 'products' && <AdminProducts products={products} onStatus={setProductStatus} />}
@@ -467,7 +494,7 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         <SStat label="Members" value={s.members.toLocaleString()} icon="users" trend={s.membersTrend} sub="vs last month" />
         <SStat label="Active sellers" value={s.sellers} icon="leaf" trend={s.sellersTrend} sub="vs last month" />
-        <SStat label="GMV Â· 30d" value={sMoney(s.gmv, 0)} icon="coin" trend={s.gmvTrend} accent="var(--sun)" />
+        <SStat label="GMV · 30d" value={sMoney(s.gmv, 0)} icon="coin" trend={s.gmvTrend} accent="var(--sun)" />
         <SStat label="Daily active" value={s.dau.toLocaleString()} icon="bolt" trend={s.dauTrend} accent="var(--sky)" />
       </div>
 
@@ -479,7 +506,7 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
               <div style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>Gross marketplace volume</div>
               <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 2 }}>{sMoney(s.gmv, 0)}</div>
             </div>
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>â†‘ {s.gmvTrend}%</span>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>↑ {s.gmvTrend}%</span>
           </div>
           <div style={{ marginTop: 14 }}><SSpark data={MOCK_ADMIN.gmvSeries} color="var(--green)" w={620} h={120} /></div>
         </div>
@@ -499,13 +526,13 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
       {/* member growth + recent activity */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Member growth Â· 30 days</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Member growth · 30 days</div>
           <div style={{ marginTop: 14 }}><SSpark data={MOCK_ADMIN.memberSeries} color="var(--sky)" w={420} h={90} /></div>
         </div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>Recent activity</span>
-            <button onClick={() => onSection('activity')} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>View log â†’</button>
+            <button onClick={() => onSection('activity')} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>View log →</button>
           </div>
           <div style={{ display: 'grid', gap: 2 }}>
             {audit.slice(0, 5).map(a => <AuditLine key={a.id} a={a} compact />)}
@@ -557,7 +584,7 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[['open', 'Open'], ['escalated', 'Escalated'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed'], ['all', 'All']].map(([k, l]) => (
           <button key={k} onClick={() => { setFilter(k); setSel(null); }} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>
-            {l} {k === 'open' && <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}>Â· {reports.filter(r => r.status === 'open').length}</span>}
+            {l} {k === 'open' && <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}>· {reports.filter(r => r.status === 'open').length}</span>}
           </button>
         ))}
       </div>
@@ -580,13 +607,13 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
                 </div>
                 <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: '-0.01em' }}>{r.target}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Avatar name={r.authorName} size={18} /> @{r.author} Â· {r.reporters} report{r.reporters > 1 ? 's' : ''}
+                  <Avatar name={r.authorName} size={18} /> @{r.author} · {r.reporters} report{r.reporters > 1 ? 's' : ''}
                   {r.status !== 'open' && <SBadge status={r.status} size="sm" />}
                 </div>
               </button>
             );
           })}
-          {filtered.length === 0 && <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14, border: '1px dashed var(--line-2)', borderRadius: 16 }}>Nothing here â€” queue is clear</div>}
+          {filtered.length === 0 && <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14, border: '1px dashed var(--line-2)', borderRadius: 16 }}>Nothing here — queue is clear</div>}
         </div>
 
         {/* detail */}
@@ -596,7 +623,7 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
               <span style={{ width: 36, height: 36, borderRadius: 10, background: sTint('var(--clay)', 12), color: 'var(--clay)', display: 'grid', placeItems: 'center' }}><Icon name="flame" size={18} /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{selR.reason}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{selR.type} Â· {selR.reporters} reporter{selR.reporters > 1 ? 's' : ''} Â· {selR.time}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{selR.type} · {selR.reporters} reporter{selR.reporters > 1 ? 's' : ''} · {selR.time}</div>
               </div>
               <SBadge status={selR.status} />
             </div>
@@ -642,13 +669,13 @@ function AdminAnalytics() {
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <SStat label="Page views Â· 7d" value="84.2K" icon="bolt" trend={12} accent="var(--sky)" />
+        <SStat label="Page views · 7d" value="84.2K" icon="bolt" trend={12} accent="var(--sky)" />
         <SStat label="Avg. session" value="4m 38s" icon="clock" trend={5} />
-        <SStat label="Retention Â· 30d" value="61%" icon="users" trend={3} accent="var(--green)" />
+        <SStat label="Retention · 30d" value="61%" icon="users" trend={3} accent="var(--green)" />
         <SStat label="Conversion" value="3.4%" icon="leaf" trend={-1} accent="var(--sun)" />
       </div>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Traffic Â· 30 days</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Traffic · 30 days</div>
         <SSpark data={MOCK_ADMIN.memberSeries} color="var(--sky)" w={900} h={120} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -713,7 +740,7 @@ function AdminPayouts({ payouts, onAction }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         <SStat label="Pending requests" value={payouts.filter(p => p.status === 'pending').length} icon="clock" accent="var(--sun)" sub="awaiting review" />
         <SStat label="Pending volume" value={sMoney(totalPending, 0)} icon="coin" accent="var(--sun)" sub="to be disbursed" />
-        <SStat label="Approved Â· 7d" value={payouts.filter(p => p.status === 'approved').length} icon="check" accent="var(--green)" sub={sMoney(totalApproved, 0)} />
+        <SStat label="Approved · 7d" value={payouts.filter(p => p.status === 'approved').length} icon="check" accent="var(--green)" sub={sMoney(totalApproved, 0)} />
         <SStat label="On hold" value={payouts.filter(p => p.status === 'on_hold').length} icon="lock" accent="var(--ink-3)" sub="under review" />
       </div>
 
@@ -722,7 +749,7 @@ function AdminPayouts({ payouts, onAction }) {
         {[['pending', 'Pending'], ['approved', 'Approved'], ['on_hold', 'On Hold'], ['rejected', 'Rejected'], ['all', 'All']].map(([k, l]) => (
           <button key={k} onClick={() => { setFilter(k); setSel(null); }} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>
             {l}{k === 'pending' && payouts.filter(p => p.status === 'pending').length > 0 && (
-              <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}> Â· {payouts.filter(p => p.status === 'pending').length}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}> · {payouts.filter(p => p.status === 'pending').length}</span>
             )}
           </button>
         ))}
@@ -772,7 +799,7 @@ function AdminPayouts({ payouts, onAction }) {
               <Avatar name={selP.seller} size={44} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{selP.seller}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{selP.handle} Â· {selP.accountAge} old</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{selP.handle} · {selP.accountAge} old</div>
               </div>
               <span style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: sTint(statusColor[selP.status], 14), color: statusColor[selP.status], fontFamily: 'JetBrains Mono' }}>
                 {statusLabel[selP.status]}
@@ -825,7 +852,7 @@ function AdminPayouts({ payouts, onAction }) {
                     </div>
                   )}
                   <button className="btn btn-green" onClick={() => onAction(selP.id, 'approved')} style={{ justifyContent: 'center', padding: '12px' }}>
-                    <Icon name="check" size={15} /> Approve Â· {sMoney(selP.amount, 0)}
+                    <Icon name="check" size={15} /> Approve · {sMoney(selP.amount, 0)}
                   </button>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-ghost" onClick={() => onAction(selP.id, 'on_hold')} style={{ flex: 1, justifyContent: 'center', color: 'var(--ink-3)' }}>
@@ -844,7 +871,7 @@ function AdminPayouts({ payouts, onAction }) {
                     This payout is on hold. Review and approve or reject.
                   </div>
                   <button className="btn btn-green" onClick={() => onAction(selP.id, 'approved')} style={{ justifyContent: 'center', padding: '12px' }}>
-                    <Icon name="check" size={15} /> Approve Â· {sMoney(selP.amount, 0)}
+                    <Icon name="check" size={15} /> Approve · {sMoney(selP.amount, 0)}
                   </button>
                   <button className="btn btn-ghost" onClick={() => { setRejectModal(selP.id); setRejectReason(''); }} style={{ justifyContent: 'center', color: 'var(--clay)', borderColor: sTint('var(--clay)', 30) }}>
                     <Icon name="close" size={14} /> Reject
@@ -1220,7 +1247,7 @@ function AdminAppeals({ appeals, onResolve }) {
         {[['open', 'Open'], ['overturned', 'Overturned'], ['upheld', 'Upheld'], ['all', 'All']].map(([k, l]) => (
           <button key={k} onClick={() => { setFilter(k); setSel(null); }} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>
             {l}{k === 'open' && appeals.filter(a => a.status === 'open').length > 0 && (
-              <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}> Â· {appeals.filter(a => a.status === 'open').length}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', opacity: .7 }}> · {appeals.filter(a => a.status === 'open').length}</span>
             )}
           </button>
         ))}
@@ -1262,7 +1289,7 @@ function AdminAppeals({ appeals, onResolve }) {
               <Avatar name={selA.userName} size={40} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{selA.userName}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{selA.user} Â· {selA.type}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{selA.user} · {selA.type}</div>
               </div>
               {selA.status !== 'open' && (
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 7, background: selA.status === 'overturned' ? sTint('var(--green)', 14) : sTint('var(--clay)', 14), color: selA.status === 'overturned' ? 'var(--green)' : 'var(--clay)', fontFamily: 'JetBrains Mono' }}>
@@ -1284,7 +1311,7 @@ function AdminAppeals({ appeals, onResolve }) {
                   <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.05em', marginBottom: 6 }}>RESOLUTION</div>
                   <div style={{ padding: '11px 14px', borderRadius: 10, background: sTint('var(--green)', 8), border: '1px solid ' + sTint('var(--green)', 20), fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>
                     {selA.resolution}
-                    <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{selA.resolvedBy} Â· {selA.resolvedAt}</div>
+                    <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{selA.resolvedBy} · {selA.resolvedAt}</div>
                   </div>
                 </div>
               )}
@@ -1362,7 +1389,7 @@ function AdminNotifications({ log }) {
     const channelLabel = channel === 'both' ? 'email + in-app' : channel;
     setSent(s => [{ id: 'n' + Date.now(), template: selectedTemplate.name, target: targetLabel, sentAt: 'just now', channel: channelLabel, sentBy: 'admin@honua.co' }, ...s]);
     log('sent notification "' + subject + '"', targetLabel, 'bell');
-    app.toast?.({ msg: 'Notification sent', sub: targetLabel + ' Â· ' + channelLabel, kind: 'success', icon: 'check' });
+    app.toast?.({ msg: 'Notification sent', sub: targetLabel + ' · ' + channelLabel, kind: 'success', icon: 'check' });
     setSubject('');
     setBody('');
   };
@@ -1514,7 +1541,7 @@ function AdminRoles({ team, onChangeRole }) {
 
   const PermCell = ({ val }) => {
     if (val === true) return <span style={{ color: 'var(--green)', fontSize: 13 }}>âœ“</span>;
-    if (val === false) return <span style={{ color: 'var(--line-2)', fontSize: 13 }}>â€”</span>;
+    if (val === false) return <span style={{ color: 'var(--line-2)', fontSize: 13 }}>—</span>;
     return <span style={{ fontSize: 11, color: 'var(--sky)', fontFamily: 'JetBrains Mono', background: sTint('var(--sky)', 12), padding: '2px 6px', borderRadius: 5 }}>{val}</span>;
   };
 
@@ -1534,7 +1561,7 @@ function AdminRoles({ team, onChangeRole }) {
             <Avatar name={m.name} size={38} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{m.email} Â· since {m.since}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{m.email} · since {m.since}</div>
             </div>
             {editId === m.id ? (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -1581,6 +1608,191 @@ function AdminRoles({ team, onChangeRole }) {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// COMMUNITY REPORTS (admin view — all community + escalated comment reports)
+// =====================================================================
+function AdminCommunityReports() {
+  const [reports, setReports] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filter, setFilter] = React.useState<string>('pending');
+  const [sel, setSel] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    const { supabase } = await import('@/lib/supabase');
+    const { data } = await supabase
+      .from('community_reports')
+      .select('*, community:community_id(name, slug), reporter:reporter_id(full_name, handle, avatar_url), comment:comment_id(content, profiles!comments_user_id_fkey(full_name, handle))')
+      .order('created_at', { ascending: false });
+    setReports(data ?? []);
+    setLoading(false);
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  // realtime: refresh community_reports on any change
+  React.useEffect(() => {
+    let channel: any;
+    import('@/lib/supabase').then(({ supabase }) => {
+      channel = supabase.channel('admin-community-reports')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'community_reports' }, () => load())
+        .subscribe();
+    });
+    return () => { channel?.unsubscribe(); };
+  }, [load]);
+
+  const act = async (id: string, status: string, note?: string) => {
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('community_reports').update({ status, admin_note: note ?? null, admin_actioned_at: new Date().toISOString() }).eq('id', id);
+    setReports(rs => rs.map(r => r.id === id ? { ...r, status } : r));
+    setSel(null);
+  };
+
+  const statusColor: Record<string, string> = { pending: 'var(--sun)', owner_actioned: 'var(--sky)', escalated: 'var(--clay)', admin_resolved: 'var(--green)', dismissed: 'var(--ink-3)' };
+  const FILTERS = [['pending', 'Pending'], ['escalated', 'Escalated'], ['owner_actioned', 'Owner actioned'], ['admin_resolved', 'Resolved'], ['all', 'All']];
+  const filtered = filter === 'all' ? reports : reports.filter(r => r.status === filter);
+  const selR = filtered.find(r => r.id === sel) ?? filtered[0] ?? null;
+
+  const pendingCount = reports.filter(r => r.status === 'pending').length;
+  const escalatedCount = reports.filter(r => r.status === 'escalated').length;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.05em', marginBottom: 4 }}>COMMUNITY REPORTS</div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>Community &amp; reply reports</h2>
+        <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>Community-level reports go straight to admin. Reply reports go to the community owner first — escalated ones land here too.</div>
+        <div style={{ display: 'flex', gap: 16, marginTop: 14 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 18px', fontSize: 13 }}>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 20, fontWeight: 700, color: pendingCount > 0 ? 'var(--sun)' : 'var(--ink-3)' }}>{pendingCount}</span>
+            <span style={{ color: 'var(--ink-3)', marginLeft: 8 }}>pending</span>
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 18px', fontSize: 13 }}>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 20, fontWeight: 700, color: escalatedCount > 0 ? 'var(--clay)' : 'var(--ink-3)' }}>{escalatedCount}</span>
+            <span style={{ color: 'var(--ink-3)', marginLeft: 8 }}>escalated</span>
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 18px', fontSize: 13 }}>
+            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 20, fontWeight: 700, color: 'var(--ink-2)' }}>{reports.length}</span>
+            <span style={{ color: 'var(--ink-3)', marginLeft: 8 }}>total</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {FILTERS.map(([k, l]) => (
+          <button key={k} onClick={() => { setFilter(k); setSel(null); }} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>
+            {l}
+            {(k === 'pending' && pendingCount > 0) && <span style={{ marginLeft: 4, fontFamily: 'JetBrains Mono', opacity: .7 }}>· {pendingCount}</span>}
+            {(k === 'escalated' && escalatedCount > 0) && <span style={{ marginLeft: 4, fontFamily: 'JetBrains Mono', color: 'var(--clay)', opacity: .9 }}>· {escalatedCount}</span>}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ color: 'var(--ink-3)', padding: 40, textAlign: 'center' }}>Loading reports…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ padding: 60, textAlign: 'center', color: 'var(--ink-4)', border: '1px dashed var(--line)', borderRadius: 16 }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🛡️</div>
+          <div style={{ fontSize: 14 }}>No {filter === 'all' ? '' : filter} reports</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 16, alignItems: 'start' }}>
+          {/* Queue */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filtered.map((r: any) => {
+              const on = r.id === selR?.id;
+              const community = r.community as any;
+              const reporter = r.reporter as any;
+              const ago = (() => { const s = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 1000); return s < 3600 ? `${Math.floor(s/60)}m ago` : s < 86400 ? `${Math.floor(s/3600)}h ago` : `${Math.floor(s/86400)}d ago`; })();
+              return (
+                <button key={r.id} onClick={() => setSel(r.id)} style={{ display: 'block', textAlign: 'left', width: '100%', cursor: 'pointer', padding: 16, borderRadius: 16, border: '1px solid ' + (on ? 'var(--green)' : 'var(--line)'), background: on ? 'var(--green-tint)' : 'var(--surface)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[r.status] ?? 'var(--ink-3)', flexShrink: 0 }} />
+                    <span className="chip" style={{ fontSize: 10, fontFamily: 'JetBrains Mono', padding: '2px 7px', background: r.type === 'community' ? 'var(--green-tint)' : 'var(--sky-tint)', color: r.type === 'community' ? 'var(--green)' : 'var(--sky)' }}>{r.type}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--clay)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.reason}</span>
+                    <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', flexShrink: 0 }}>{ago}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{community?.name ?? '—'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Avatar name={reporter?.full_name} size={16} />
+                    @{reporter?.handle ?? '?'}
+                    {r.status !== 'pending' && <span style={{ marginLeft: 4, fontSize: 10, padding: '1px 6px', borderRadius: 5, background: (statusColor[r.status] ?? 'var(--ink-3)') + '20', color: statusColor[r.status] ?? 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{r.status.replace('_', ' ')}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Detail */}
+          {selR && (() => {
+            const community = selR.community as any;
+            const reporter = selR.reporter as any;
+            const comment = selR.comment as any;
+            const commentProfile = comment?.profiles as any;
+            return (
+              <div style={{ position: 'sticky', top: 88, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, overflow: 'hidden' }}>
+                <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 36, height: 36, borderRadius: 10, background: sTint('var(--clay)', 12), color: 'var(--clay)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="flag" size={18} /></span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{selR.reason}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
+                      {selR.type} · {community?.name} · {(() => { const s = Math.floor((Date.now() - new Date(selR.created_at).getTime()) / 1000); return s < 3600 ? `${Math.floor(s/60)}m ago` : s < 86400 ? `${Math.floor(s/3600)}h ago` : `${Math.floor(s/86400)}d ago`; })()}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 8, background: (statusColor[selR.status] ?? 'var(--ink-3)') + '18', color: statusColor[selR.status] ?? 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>
+                    {selR.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <div style={{ padding: 20 }}>
+                  {comment?.content ? (
+                    <>
+                      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.05em', marginBottom: 6 }}>REPORTED REPLY</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginBottom: 4 }}>@{commentProfile?.handle ?? '?'}</div>
+                      <div style={{ padding: 14, borderRadius: 12, background: 'var(--bg)', borderLeft: '3px solid var(--clay)', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55, fontStyle: 'italic', marginBottom: 14 }}>{comment.content}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.05em', marginBottom: 6 }}>REPORTED COMMUNITY</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>{community?.name}</div>
+                    </>
+                  )}
+                  {selR.note && <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic', padding: '10px 14px', background: 'var(--bg)', borderRadius: 10, marginBottom: 14 }}>"{selR.note}"</div>}
+                  {selR.owner_action && (
+                    <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--bg)', fontSize: 13, color: 'var(--ink-3)', marginBottom: 14 }}>
+                      <span style={{ fontWeight: 600, color: 'var(--ink-2)' }}>Owner action:</span> {selR.owner_action}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)', marginBottom: 18 }}>
+                    <Avatar name={reporter?.full_name} size={32} src={reporter?.avatar_url} />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{reporter?.full_name ?? 'User'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{reporter?.handle}</div>
+                    </div>
+                    <span className="chip" style={{ marginLeft: 'auto', fontSize: 11 }}>reporter</span>
+                  </div>
+                  {(selR.status === 'pending' || selR.status === 'escalated') ? (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <button className="btn btn-green" onClick={() => act(selR.id, 'admin_resolved')} style={{ justifyContent: 'center', padding: 12 }}><Icon name="check" size={15} /> Resolve — no action needed</button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-ghost" onClick={() => act(selR.id, 'admin_resolved', 'Content removed by admin')} style={{ flex: 1, justifyContent: 'center', color: 'var(--clay)', borderColor: sTint('var(--clay)', 30) }}><Icon name="trash" size={14} /> Remove content</button>
+                        <button className="btn btn-ghost" onClick={() => act(selR.id, 'dismissed')} style={{ flex: 1, justifyContent: 'center' }}>Dismiss</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: 14, borderRadius: 12, background: 'var(--bg)', fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>
+                      Status: <strong style={{ color: 'var(--ink-2)' }}>{selR.status.replace('_', ' ')}</strong>
+                      {selR.admin_note && <div style={{ marginTop: 6, fontStyle: 'italic' }}>"{selR.admin_note}"</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }

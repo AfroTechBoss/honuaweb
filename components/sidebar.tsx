@@ -183,7 +183,8 @@ export function MobileNav() {
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [confirmLogout, setConfirmLogout] = React.useState(false);
 
-  if (!app.authed) return null;
+  const HIDE_NAV = ['/admin', '/login', '/signup', '/terms', '/seller-policy', '/proposition', '/checkout', '/orders', '/support', '/report', '/returns'];
+  if (!app.authed || HIDE_NAV.some(p => pathname.startsWith(p))) return null;
 
   const pathKey = pathname === "/" ? "home"
     : pathname.startsWith("/explore") ? "explore"
@@ -194,6 +195,14 @@ export function MobileNav() {
     : pathname.startsWith("/profile") ? "profile"
     : pathname.startsWith("/bookmarks") ? "bookmarks"
     : pathname.startsWith("/settings") ? "settings"
+    : pathname.startsWith("/search") ? "search"
+    : pathname.startsWith("/impact") ? "impact"
+    : pathname.startsWith("/map") ? "map"
+    : pathname.startsWith("/carbon") ? "carbon"
+    : pathname.startsWith("/orders") ? "orders"
+    : pathname.startsWith("/challenges") ? "tasks"
+    : pathname.startsWith("/sell") ? "sell"
+    : pathname.startsWith("/seller") ? "seller"
     : "";
 
   const nav = (key: string) => { setMoreOpen(false); app.nav?.(key); };
@@ -211,6 +220,11 @@ export function MobileNav() {
     ["Bookmarks", "bookmark", "bookmarks"],
     ["My Profile", "user", "profile"],
     ["Impact", "leaf", "impact"],
+    ["Action Map", "map", "map"],
+    ["Carbon Market", "globe", "carbon"],
+    ["Challenges", "flame", "tasks"],
+    ["Search", "search", "search"],
+    ["Orders", "package", "orders"],
     ["Settings", "settings", "settings"],
   ];
 

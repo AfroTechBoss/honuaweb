@@ -675,6 +675,21 @@ input, textarea, select { font-family: inherit; }
   .bookmark-sidebar { display: none !important; }
   .bookmark-mobile-collections { display: flex !important; }
   .bookmark-grid { grid-template-columns: 1fr !important; }
+
+  /* Settings field: stack label above value on mobile */
+  .settings-field-row { grid-template-columns: 1fr !important; gap: 4px !important; }
+
+  /* Sell page: reduce padding on mobile */
+  .sell-hero { padding: 32px 20px 28px !important; }
+  .sell-hero h1 { font-size: 36px !important; }
+  .sell-content { padding: 24px 20px 48px !important; }
+
+  /* Carbon page: reduce padding, make table scrollable */
+  .carbon-inner { padding: 16px !important; }
+  .carbon-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; margin: 0 -16px; padding: 0 16px; }
+  .carbon-credits-table { min-width: 720px !important; }
+  /* Carbon table: ensure bottom grid stacks */
+  .carbon-bottom-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Tablet tweaks */

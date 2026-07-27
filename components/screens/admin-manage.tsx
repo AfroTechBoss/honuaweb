@@ -39,34 +39,37 @@ export function AdminProducts({ products, onStatus }) {
         <div style={{ display: 'grid', gridTemplateColumns: '2.4fr 1.4fr 1fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>
           <span>PRODUCT</span><span>SELLER</span><span>STATUS</span><span style={{ textAlign: 'right' }}>FLAGS</span><span></span>
         </div>
-        {filtered.map(p => (
-          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2.4fr 1.4fr 1fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-              <span style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', color: 'var(--ink-4)' }}><Icon name="bag" size={16} /></span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{sMoney(p.price, 0)} · {p.category}</div>
+        {filtered.map(p => {
+          const removed = p.status === 'removed';
+          return (
+            <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2.4fr 1.4fr 1fr 0.8fr auto', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', alignItems: 'center', opacity: removed ? 0.45 : 1, background: removed ? 'repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(0,0,0,.02) 8px, rgba(0,0,0,.02) 16px)' : undefined }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                <span style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0, background: removed ? 'var(--line)' : 'var(--bg-2)', display: 'grid', placeItems: 'center', color: 'var(--ink-4)', filter: removed ? 'grayscale(1)' : undefined }}><Icon name="bag" size={16} /></span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: removed ? 'line-through' : undefined, color: removed ? 'var(--ink-4)' : undefined }}>{p.title}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{sMoney(p.price, 0)} · {p.category}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <Avatar name={p.seller} size={24} />
+                <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.seller}</span>
+              </div>
+              <SBadge status={p.status} size="sm" />
+              <span className="tabular" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: p.flags > 0 ? 'var(--clay)' : 'var(--ink-4)' }}>{p.flags || '—'}</span>
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                {!removed ? (
+                  <>
+                    {p.status === 'flagged' && <IconBtn icon="check" title="Approve" onClick={() => onStatus(p.id, 'live')} tone="var(--green)" />}
+                    {p.status === 'live' && <IconBtn icon="flame" title="Flag" onClick={() => onStatus(p.id, 'flagged')} tone="var(--sun)" />}
+                    <IconBtn icon="trash" title="Remove (soft)" onClick={() => onStatus(p.id, 'removed')} tone="var(--clay)" />
+                  </>
+                ) : (
+                  <IconBtn icon="repost" title="Restore listing" onClick={() => onStatus(p.id, 'live')} tone="var(--green)" />
+                )}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <Avatar name={p.seller} size={24} />
-              <span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.seller}</span>
-            </div>
-            <SBadge status={p.status} size="sm" />
-            <span className="tabular" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: p.flags > 0 ? 'var(--clay)' : 'var(--ink-4)' }}>{p.flags || '—'}</span>
-            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-              {p.status !== 'removed' ? (
-                <>
-                  {p.status === 'flagged' && <IconBtn icon="check" title="Approve / restore" onClick={() => onStatus(p.id, 'live')} tone="var(--green)" />}
-                  {p.status === 'live' && <IconBtn icon="flame" title="Flag" onClick={() => onStatus(p.id, 'flagged')} tone="var(--sun)" />}
-                  <IconBtn icon="trash" title="Remove" onClick={() => onStatus(p.id, 'removed')} tone="var(--clay)" />
-                </>
-              ) : (
-                <IconBtn icon="repost" title="Restore" onClick={() => onStatus(p.id, 'live')} tone="var(--green)" />
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {filtered.length === 0 && <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14 }}>No products match.</div>}
       </div>
     </div>

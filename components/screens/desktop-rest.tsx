@@ -88,6 +88,302 @@ const COMMUNITY_META: Record<string, { desc: string; tags: string[]; resources: 
   },
 };
 
+// ── @mention + #hashtag renderer ─────────────────────────────────────────────
+const profileHoverCache: Record<string, any> = {};
+
+function MentionHoverCard({ handle, onNav }: { handle: string; onNav: any }) {
+  const [profile, setProfile] = React.useState<any>(profileHoverCache[handle] ?? null);
+  React.useEffect(() => {
+    if (profile) return;
+    import('@/lib/supabase').then(({ supabase }) =>
+      supabase.from('profiles').select('id, handle, full_name, avatar_url, followers_count, following_count').eq('handle', handle).maybeSingle()
+        .then(({ data }: any) => { if (data) { profileHoverCache[handle] = data; setProfile(data); } })
+    );
+  }, [handle]);
+  if (!profile) return <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--ink-3)' }}>Loading…</div>;
+  return (
+    <div style={{ padding: '14px 16px', minWidth: 220 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <Avatar src={profile.avatar_url} name={profile.full_name} size={40} />
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)' }}>{profile.full_name}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile.handle}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--ink-2)' }}>
+        <span><b style={{ color: 'var(--ink)', fontFamily: 'JetBrains Mono' }}>{profile.followers_count ?? 0}</b> followers</span>
+        <span><b style={{ color: 'var(--ink)', fontFamily: 'JetBrains Mono' }}>{profile.following_count ?? 0}</b> following</span>
+      </div>
+    </div>
+  );
+}
+
+function MentionSpan({ handle, onNav }: { handle: string; onNav: any }) {
+  const [hovered, setHovered] = React.useState(false);
+  const [pos, setPos] = React.useState({ top: 0, left: 0 });
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onEnter = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({ top: r.bottom + window.scrollY + 6, left: r.left + window.scrollX });
+    }
+    timerRef.current = setTimeout(() => setHovered(true), 200);
+  };
+  const onLeave = () => { if (timerRef.current) clearTimeout(timerRef.current); setHovered(false); };
+
+  return (
+    <>
+      <span ref={ref} onMouseEnter={onEnter} onMouseLeave={onLeave}
+        onClick={e => { e.stopPropagation(); onNav?.('profile', { handle }); }}
+        style={{ color: 'var(--sky)', fontWeight: 600, cursor: 'pointer' }}>@{handle}</span>
+      {hovered && typeof document !== 'undefined' && document.body &&
+        React.createPortal(
+          <div onMouseEnter={() => setHovered(true)} onMouseLeave={onLeave}
+            style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, boxShadow: '0 8px 28px rgba(0,0,0,.18)', overflow: 'hidden' }}>
+            <MentionHoverCard handle={handle} onNav={onNav} />
+          </div>,
+          document.body
+        )
+      }
+    </>
+  );
+}
+
+function renderContent(text: string, onNav: any): React.ReactNode {
+  if (!text) return null;
+  const parts = text.split(/(@\w+|#\w+)/g);
+  return parts.map((part, i) => {
+    if (/^@\w+$/.test(part)) return <MentionSpan key={i} handle={part.slice(1)} onNav={onNav} />;
+    if (/^#\w+$/.test(part)) return <span key={i} style={{ color: 'var(--sky)', fontWeight: 500 }}>{part}</span>;
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+}
+
+// ── Quote card (shown in feed and inside composer preview) ────────────────────
+function QuoteCard({ post, onNav, compact = false }: { post: any; post_id?: string; onNav: any; compact?: boolean }) {
+  const profile = post.profiles ?? post.profile;
+  const ago = (() => { const s = Math.floor((Date.now() - new Date(post.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m ago` : s < 86400 ? `${Math.floor(s/3600)}h ago` : `${Math.floor(s/86400)}d ago`; })();
+  return (
+    <div onClick={e => { e.stopPropagation(); onNav?.('post', { id: post.id }); }}
+      style={{ border: '1px solid var(--line)', borderRadius: 12, padding: compact ? '10px 12px' : '12px 14px', cursor: 'pointer', background: 'var(--bg)', marginTop: compact ? 0 : 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+        <Avatar src={profile?.avatar_url} name={profile?.full_name} size={20} />
+        <span style={{ fontSize: 12, fontWeight: 600 }}>{profile?.full_name}</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {ago}</span>
+      </div>
+      {post.title && <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{post.title}</p>}
+      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden' }}>{post.content}</p>
+      {post.image_url && <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: 8, maxHeight: 120, objectFit: 'cover', marginTop: 8 }} />}
+    </div>
+  );
+}
+
+function CommunityPostCard({ p, community, onNav, onReport }: { p: any; community: any; onNav: any; onReport: (p: any) => void }) {
+  const app = useApp();
+  const profile = p.profiles as any;
+  const kind = p.post_kind || p.post_type || 'post';
+  const kindColors: Record<string, string> = { tip: 'var(--green)', question: 'var(--sky)', win: '#f59e0b', discussion: 'var(--ink-2)', post: 'var(--ink-3)' };
+  const kc = kindColors[kind] || 'var(--ink-3)';
+  const ago = (() => { const s = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m` : s < 86400 ? `${Math.floor(s/3600)}h` : `${Math.floor(s/86400)}d`; })();
+  const liked = app.like?.has(p.id);
+  const [likeCount, setLikeCount] = React.useState(p.likes_count ?? 0);
+  const [commentOpen, setCommentOpen] = React.useState(false);
+  const [comments, setComments] = React.useState<any[]>([]);
+  const [commentsLoaded, setCommentsLoaded] = React.useState(false);
+  const [replyText, setReplyText] = React.useState('');
+  const [replyImageFile, setReplyImageFile] = React.useState<File | null>(null);
+  const [replyImagePreview, setReplyImagePreview] = React.useState<string | null>(null);
+  const replyImgRef = React.useRef<HTMLInputElement>(null);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [bookmarkOpen, setBookmarkOpen] = React.useState(false);
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const [bookmarked, setBookmarked] = React.useState(false);
+  const shareRef = React.useRef<HTMLDivElement>(null);
+  const bookmarkRef = React.useRef<HTMLDivElement>(null);
+  const moreRef = React.useRef<HTMLDivElement>(null);
+  const collections: any[] = app.collections ?? [];
+
+  // close popovers on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false);
+      if (bookmarkRef.current && !bookmarkRef.current.contains(e.target as Node)) setBookmarkOpen(false);
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // check if already bookmarked
+  React.useEffect(() => {
+    if (!app.user?.id) return;
+    import('@/lib/bookmarks').then(({ getBookmarkedPostIds }) =>
+      getBookmarkedPostIds(app.user!.id).then(ids => setBookmarked(ids.includes(p.id)))
+    );
+  }, [p.id, app.user?.id]);
+
+  const handleLike = () => {
+    if (!app.user?.id) return;
+    const wasLiked = app.like?.has(p.id);
+    app.like?.toggle(p.id);
+    setLikeCount((c: number) => c + (wasLiked ? -1 : 1));
+  };
+
+  const toggleComments = async () => {
+    setCommentOpen(o => !o);
+    if (!commentsLoaded) {
+      const { supabase } = await import('@/lib/supabase');
+      const { data } = await supabase.from('comments').select('*, profiles!comments_user_id_fkey(full_name, handle, avatar_url)').eq('post_id', p.id).order('created_at', { ascending: true });
+      setComments(data ?? []);
+      setCommentsLoaded(true);
+    }
+  };
+
+  const submitReply = async () => {
+    if (!replyText.trim() && !replyImageFile) return;
+    if (!app.user?.id) return;
+    const { supabase } = await import('@/lib/supabase');
+    let image_url: string | null = null;
+    if (replyImageFile) {
+      const { uploadFile } = await import('@/lib/storage');
+      image_url = await uploadFile('comments', app.user.id, replyImageFile);
+    }
+    const { data } = await supabase.from('comments').insert({ post_id: p.id, user_id: app.user.id, content: replyText.trim(), image_url }).select('*, profiles!comments_user_id_fkey(full_name, handle, avatar_url)').single();
+    if (data) { setComments(c => [...c, data]); setReplyText(''); setReplyImageFile(null); setReplyImagePreview(null); }
+  };
+
+  const bookmarkToCollection = async (collectionId?: string) => {
+    if (!app.user?.id) return;
+    const { addBookmark, removeBookmark } = await import('@/lib/bookmarks');
+    if (bookmarked && !collectionId) { await removeBookmark(app.user.id, p.id); setBookmarked(false); app.toast?.({ msg: 'Bookmark removed', icon: 'bookmark' }); }
+    else { await addBookmark(app.user.id, p.id, collectionId); setBookmarked(true); app.toast?.({ msg: collectionId ? 'Added to collection!' : 'Bookmarked!', icon: 'bookmark', kind: 'success' }); }
+    setBookmarkOpen(false);
+  };
+
+  const postUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/communities/post/${encodeURIComponent(community.slug || community.name)}/${p.id}`;
+  const truncatedContent = (() => { const words = (p.content ?? '').split(/\s+/); return words.length > 50 ? words.slice(0, 50).join(' ') + '…' : p.content; })();
+
+  const popoverStyle: React.CSSProperties = { position: 'absolute', bottom: '100%', right: 0, marginBottom: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 50, minWidth: 180, overflow: 'hidden' };
+  const popItemStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--ink-2)', background: 'none', border: 'none', width: '100%', textAlign: 'left' };
+
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', marginBottom: 10, overflow: 'visible' }}>
+      {/* Card body — clickable to navigate */}
+      <div className="row-hover" onClick={() => onNav?.('post', { id: p.id, slug: community.slug || community.name })} style={{ padding: 16, cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          {kind !== 'post' && <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase' }}>{kind}</span>}
+          <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{profile ? `@${profile.handle}` : 'unknown'} · {ago}</span>
+          <span style={{ flex: 1 }} />
+          {/* More menu */}
+          <div ref={moreRef} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setMoreOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: '2px 6px', borderRadius: 6, fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center' }}>···</button>
+            {moreOpen && (
+              <div style={popoverStyle}>
+                <button style={popItemStyle} onClick={() => { navigator.clipboard.writeText(postUrl); app.toast?.({ msg: 'Link copied!', icon: 'check', kind: 'success' }); setMoreOpen(false); }}><Icon name="share" size={14} /> Copy link</button>
+                <button style={{ ...popItemStyle, color: 'var(--clay)' }} onClick={() => { setMoreOpen(false); onReport(p); }}><Icon name="flag" size={14} /> Report post</button>
+              </div>
+            )}
+          </div>
+        </div>
+        {p.title && <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.4 }}>{p.title}</p>}
+        <p style={{ margin: '0 0 10px', fontSize: 14, lineHeight: 1.55, color: p.title ? 'var(--ink-2)' : 'var(--ink)' }}>{renderContent(truncatedContent, onNav)}</p>
+        {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', borderRadius: 10, marginBottom: 10, maxHeight: 300, objectFit: 'cover' }} />}
+        {p.quote_post && <QuoteCard post={p.quote_post} onNav={onNav} />}
+      </div>
+
+      {/* Action bar */}
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4, fontSize: 12, color: 'var(--ink-3)', alignItems: 'center', padding: '0 12px 12px', position: 'relative' }}>
+        <ActionBtn icon="heart" count={likeCount} active={liked} activeColor="var(--clay)" onClick={handleLike} />
+        <ActionBtn icon="comment" count={p.comments_count} onClick={toggleComments} />
+        <span style={{ flex: 1 }} />
+        {/* Share popover */}
+        <div ref={shareRef} style={{ position: 'relative' }}>
+          <button onClick={() => setShareOpen(o => !o)} title="Share" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 6, display: 'inline-flex', alignItems: 'center', borderRadius: 8 }}>
+            <Icon name="share" size={14} />
+          </button>
+          {shareOpen && (
+            <div style={popoverStyle}>
+              <button style={popItemStyle} onClick={() => { navigator.clipboard.writeText(postUrl); app.toast?.({ msg: 'Link copied!', icon: 'check', kind: 'success' }); setShareOpen(false); }}><Icon name="share" size={14} /> Copy link</button>
+              {app.user?.id && (
+                <button style={popItemStyle} onClick={async () => { setShareOpen(false); try { const { createStory } = await import('@/lib/stories'); await createStory({ userId: app.user!.id, type: 'post', postId: p.id }); app.toast?.({ msg: 'Added to your story', icon: 'sparkles', kind: 'success' }); } catch { app.toast?.({ msg: 'Failed to share story', icon: 'wifiOff', kind: 'error' }); } }}><Icon name="sparkles" size={14} /> Share to story</button>
+              )}
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <button style={popItemStyle} onClick={() => { navigator.share?.({ title: p.title || p.content?.slice(0, 60), url: postUrl }); setShareOpen(false); }}><Icon name="external" size={14} /> Share via…</button>
+              )}
+            </div>
+          )}
+        </div>
+        {/* Bookmark popover */}
+        <div ref={bookmarkRef} style={{ position: 'relative' }}>
+          <button onClick={() => setBookmarkOpen(o => !o)} title="Bookmark" style={{ background: 'none', border: 'none', cursor: 'pointer', color: bookmarked ? 'var(--green)' : 'var(--ink-3)', padding: 6, display: 'inline-flex', alignItems: 'center', borderRadius: 8 }}>
+            <Icon name="bookmark" size={14} />
+          </button>
+          {bookmarkOpen && (
+            <div style={popoverStyle}>
+              <button style={popItemStyle} onClick={() => bookmarkToCollection()}>{bookmarked ? '✕ Remove bookmark' : '🔖 Save to bookmarks'}</button>
+              {collections.length > 0 && <div style={{ borderTop: '1px solid var(--line)', padding: '6px 0' }}>
+                <div style={{ padding: '4px 14px 6px', fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', letterSpacing: '.04em' }}>COLLECTIONS</div>
+                {collections.map((c: any) => (
+                  <button key={c.id} style={popItemStyle} onClick={() => bookmarkToCollection(c.id)}>📁 {c.name}</button>
+                ))}
+              </div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Inline comment drop-down */}
+      {commentOpen && (
+        <div style={{ borderTop: '1px solid var(--line)', padding: '12px 16px 14px', background: 'var(--bg)' }}>
+          {!commentsLoaded ? (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13 }}>Loading…</div>
+          ) : comments.length === 0 ? (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13 }}>No replies yet. Be first!</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+              {comments.map((c: any) => {
+                const cp = c.profiles as any;
+                return (
+                  <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <Avatar src={cp?.avatar_url} name={cp?.full_name} size={26} />
+                    <div style={{ background: 'var(--surface)', borderRadius: 10, padding: '7px 10px', flex: 1 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{cp?.full_name ?? 'Unknown'} <span style={{ color: 'var(--ink-3)', fontWeight: 400, fontFamily: 'JetBrains Mono' }}>@{cp?.handle}</span></div>
+                      {c.content && <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)' }}>{renderContent(c.content, onNav)}</div>}
+                      {c.image_url && <img src={c.image_url} alt="" style={{ width: '100%', borderRadius: 8, maxHeight: 160, objectFit: 'cover', marginTop: 6 }} />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {app.user && (
+            <div>
+              {replyImagePreview && (
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <img src={replyImagePreview} style={{ width: '100%', borderRadius: 8, maxHeight: 140, objectFit: 'cover' }} />
+                  <button onClick={() => { setReplyImageFile(null); setReplyImagePreview(null); }} style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,.55)', border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff', fontSize: 12 }}>✕</button>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Avatar src={app.profile?.avatar_url} name={app.profile?.full_name} size={26} />
+                <textarea value={replyText} onChange={e => setReplyText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(); } }}
+                  placeholder="Write a reply…" className="fld" style={{ flex: 1, resize: 'none', fontSize: 13, minHeight: 38, padding: '8px 10px' }} rows={1} />
+                <input ref={replyImgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setReplyImageFile(f); setReplyImagePreview(URL.createObjectURL(f)); } }} />
+                <button onClick={() => replyImgRef.current?.click()} title="Attach image" style={{ background: replyImageFile ? 'var(--green-tint)' : 'transparent', border: 'none', borderRadius: 8, padding: 6, cursor: 'pointer', color: replyImageFile ? 'var(--green)' : 'var(--ink-3)', flexShrink: 0 }}>
+                  <Icon name="image" size={16} />
+                </button>
+                <button onClick={submitReply} disabled={!replyText.trim() && !replyImageFile} className="btn btn-primary" style={{ fontSize: 12, padding: '7px 14px', flexShrink: 0 }}>Reply</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { community: any; onNav?: any; onToggleJoin?: (c: any) => void }) {
   const app = useApp();
   const [community, setCommunity] = React.useState(communityProp);
@@ -99,11 +395,13 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
   const going = app.community?.has(community.name + '-event');
 
   const [migrationPending, setMigrationPending] = React.useState(false);
+  const [reportOpen, setReportOpen] = React.useState(false);
+  const isOwner = community.createdBy === app.user?.id || community.created_by === app.user?.id;
 
   const fetchPosts = React.useCallback(async (supabase: any) => {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles!posts_user_id_fkey(full_name, handle, avatar_url)')
+      .select('id, title, content, created_at, post_type, post_kind, image_url, likes_count, comments_count, profiles!posts_user_id_fkey(full_name, handle, avatar_url)')
       .eq('community_id', community.id)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -180,16 +478,18 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
           <div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 14, alignItems: 'center', justifyContent: 'space-between' }}>
               <div className="pill-nav">
-                {['Recent', 'Top', 'Q&A', 'Resources'].map(t => (
+                {['Recent', 'Top', 'Q&A', 'Resources', ...(isOwner ? ['Reports'] : [])].map(t => (
                   <button key={t} className={feedTab === t ? 'active' : ''} onClick={() => setFeedTab(t)}>{t}</button>
                 ))}
               </div>
-              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '7px 12px', flexShrink: 0 }} onClick={() => app.openModal?.('compose', { community: community.name, communityId: community.id })}>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '7px 12px', flexShrink: 0 }} onClick={() => app.openModal?.('compose', { community: community.name, communityId: community.id, communityAvatar: community.avatarUrl })}>
                 <Icon name="plus" size={13} /> Post
               </button>
             </div>
 
-            {migrationPending ? (
+            {feedTab === 'Reports' && isOwner ? (
+              <CommunityReportsPanel communityId={community.id} ownerId={app.user?.id} />
+            ) : migrationPending ? (
               <div style={{ padding: '24px 20px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 14, fontSize: 13, color: '#92400e', lineHeight: 1.6 }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>⚠️ Database migration needed</div>
                 <div style={{ marginBottom: 10 }}>Community posts require two SQL migrations to be run in <strong>Supabase Dashboard → SQL Editor</strong>.</div>
@@ -204,29 +504,9 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
             ) : filtered.length === 0 ? (
               <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No posts yet. Be the first to post!</div>
             ) : (
-              filtered.map((p) => {
-                const profile = p.profiles as any;
-                const kind = p.post_kind || p.post_type || 'post';
-                const kindColors: Record<string, string> = { tip: 'var(--green)', question: 'var(--sky)', win: '#f59e0b', discussion: 'var(--ink-2)', post: 'var(--ink-3)' };
-                const kc = kindColors[kind] || 'var(--ink-3)';
-                const ago = (() => { const s = Math.floor((Date.now() - new Date(p.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m` : s < 86400 ? `${Math.floor(s/3600)}h` : `${Math.floor(s/86400)}d`; })();
-                return (
-                  <div key={p.id} className="row-hover" onClick={() => onNav?.('post', { id: p.id, slug: community.slug || community.name })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 10, cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                      {kind !== 'post' && <span style={{ background: kc + '20', color: kc, padding: '2px 8px', borderRadius: 6, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase' }}>{kind}</span>}
-                      <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
-                        {profile ? `@${profile.handle}` : 'unknown'} · {ago}
-                      </span>
-                    </div>
-                    <p style={{ margin: '0 0 10px', fontSize: 14, lineHeight: 1.55, color: 'var(--ink)' }}>{p.content}</p>
-                    {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', borderRadius: 10, marginBottom: 10, maxHeight: 300, objectFit: 'cover' }} />}
-                    <div style={{ display: 'flex', gap: 18, fontSize: 12, color: 'var(--ink-3)' }}>
-                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="heart" size={13} /> {p.likes_count ?? 0}</span>
-                      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="comment" size={13} /> {p.comments_count ?? 0}</span>
-                    </div>
-                  </div>
-                );
-              })
+              filtered.map((p) => (
+                <CommunityPostCard key={p.id} p={p} community={community} onNav={onNav} onReport={(post) => setReportOpen({ type: 'comment', commentId: post.id, communityId: community.id })} />
+              ))
             )}
           </div>
 
@@ -238,7 +518,15 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
                 <Stat n={community.members} l="Members" />
                 <Stat n={String(realPosts.reduce((s, p) => s + (p.comments_count ?? 0), 0))} l="Replies" />
               </div>
+              {!isOwner && (
+                <button onClick={() => setReportOpen(true)} style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 12, padding: 0 }}>
+                  <Icon name="flag" size={13} /> Report community
+                </button>
+              )}
             </div>
+            {reportOpen && community.id && (
+              <ReportModal type="community" targetId={community.id} communityId={community.id} onClose={() => setReportOpen(false)} />
+            )}
             {meta.resources.length > 0 && (
               <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
                 <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
@@ -261,23 +549,440 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
   );
 }
 
-// Standalone community post detail page: /communities/post/[slug]/[id]
+// ── Report modal (community or comment) ──────────────────────────────────
+const REPORT_REASONS_COMMUNITY = ['Spam or self-promotion', 'Hate speech or discrimination', 'Misinformation', 'Harassment or bullying', 'Inappropriate content', 'Other'];
+const REPORT_REASONS_COMMENT   = ['Spam', 'Harassment or bullying', 'Hate speech', 'Misinformation', 'Off-topic', 'Other'];
+
+function ReportModal({ type, targetId, communityId, onClose }: { type: 'community' | 'comment'; targetId: string; communityId?: string; onClose: () => void }) {
+  const app = useApp();
+  const reasons = type === 'community' ? REPORT_REASONS_COMMUNITY : REPORT_REASONS_COMMENT;
+  const [reason, setReason] = React.useState('');
+  const [note, setNote] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+  const [done, setDone] = React.useState(false);
+
+  const submit = async () => {
+    if (!reason || !app.user?.id) return;
+    setSubmitting(true);
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('community_reports').insert({
+      type,
+      reason,
+      note: note.trim() || null,
+      community_id: communityId ?? null,
+      comment_id: type === 'comment' ? targetId : null,
+      reporter_id: app.user.id,
+    });
+    setDone(true);
+    setSubmitting(false);
+    setTimeout(onClose, 1600);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 420, boxShadow: '0 24px 64px rgba(0,0,0,.25)', margin: '0 16px' }}>
+        {done ? (
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>✅</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>Report submitted</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>
+              {type === 'community' ? 'Our team will review this community.' : 'The community owner has been notified.'}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Report {type === 'community' ? 'this community' : 'this reply'}</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 18 }}>
+              {type === 'community' ? 'Reports go to our admin team for review.' : 'The community owner will review this first. They can escalate to admin if needed.'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+              {reasons.map(r => (
+                <button key={r} onClick={() => setReason(r)} style={{ textAlign: 'left', padding: '10px 14px', borderRadius: 10, border: '1px solid', borderColor: reason === r ? 'var(--green)' : 'var(--line)', background: reason === r ? 'var(--green-tint)' : 'transparent', color: reason === r ? 'var(--green)' : 'var(--ink-2)', fontSize: 14, cursor: 'pointer', fontWeight: reason === r ? 600 : 400, transition: 'all .12s' }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add context (optional)…" className="fld" style={{ width: '100%', minHeight: 72, resize: 'vertical', marginBottom: 14 }} />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+              <button className="btn btn-green" onClick={submit} disabled={!reason || submitting} style={{ flex: 1, justifyContent: 'center', opacity: reason ? 1 : .5 }}>
+                {submitting ? 'Sending…' : 'Submit report'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Community owner reports panel ─────────────────────────────────────────
+function CommunityReportsPanel({ communityId, ownerId }: { communityId: string; ownerId: string }) {
+  const app = useApp();
+  const [reports, setReports] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filter, setFilter] = React.useState<'pending' | 'owner_actioned' | 'escalated' | 'all'>('pending');
+
+  const load = React.useCallback(async () => {
+    const { supabase } = await import('@/lib/supabase');
+    const { data } = await supabase
+      .from('community_reports')
+      .select('*, reporter:reporter_id(full_name, handle, avatar_url), comment:comment_id(content, user_id, profiles!comments_user_id_fkey(full_name, handle))')
+      .eq('community_id', communityId)
+      .order('created_at', { ascending: false });
+    setReports(data ?? []);
+    setLoading(false);
+  }, [communityId]);
+
+  React.useEffect(() => { if (app.user?.id === ownerId) load(); }, [load, app.user?.id, ownerId]);
+
+  const act = async (id: string, action: 'deleted' | 'warned' | 'dismissed' | 'escalated') => {
+    const { supabase } = await import('@/lib/supabase');
+    const newStatus = action === 'escalated' ? 'escalated' : 'owner_actioned';
+    await supabase.from('community_reports').update({ owner_action: action, status: newStatus, owner_actioned_at: new Date().toISOString() }).eq('id', id);
+    setReports(rs => rs.map(r => r.id === id ? { ...r, owner_action: action, status: newStatus } : r));
+    app.toast?.({ msg: action === 'escalated' ? 'Escalated to admin' : `Marked as ${action}`, icon: 'check', kind: 'success' });
+  };
+
+  if (app.user?.id !== ownerId) return null;
+
+  const filtered = filter === 'all' ? reports : reports.filter(r => r.status === filter);
+  const statusColor: Record<string, string> = { pending: 'var(--sun)', owner_actioned: 'var(--green)', escalated: 'var(--clay)', admin_resolved: 'var(--ink-3)', dismissed: 'var(--ink-3)' };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {(['pending', 'owner_actioned', 'escalated', 'all'] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={'chip' + (filter === f ? ' chip-green' : '')} style={{ cursor: 'pointer', fontSize: 12 }}>
+            {f === 'owner_actioned' ? 'Actioned' : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === 'pending' && reports.filter(r => r.status === 'pending').length > 0 && (
+              <span style={{ marginLeft: 4, background: 'var(--clay)', color: '#fff', borderRadius: 10, padding: '0 5px', fontSize: 10, fontFamily: 'JetBrains Mono' }}>
+                {reports.filter(r => r.status === 'pending').length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ color: 'var(--ink-3)', fontSize: 14, padding: 20 }}>Loading reports…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ink-3)' }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🛡️</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>No {filter === 'all' ? '' : filter} reports</div>
+        </div>
+      ) : filtered.map((r: any) => {
+        const comment = r.comment as any;
+        const commentProfile = comment?.profiles as any;
+        const reporter = r.reporter as any;
+        const ago = (() => { const s = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 1000); return s < 3600 ? `${Math.floor(s/60)}m ago` : s < 86400 ? `${Math.floor(s/3600)}h ago` : `${Math.floor(s/86400)}d ago`; })();
+        return (
+          <div key={r.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 18, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor[r.status] ?? 'var(--ink-3)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--clay)', flex: 1 }}>{r.reason}</span>
+              <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{ago}</span>
+            </div>
+            {comment?.content && (
+              <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55, borderLeft: '3px solid var(--line)', marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginBottom: 4 }}>@{commentProfile?.handle ?? '?'}</div>
+                {comment.content}
+              </div>
+            )}
+            {r.note && <div style={{ fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic', marginBottom: 10 }}>"{r.note}"</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: r.status === 'pending' ? 12 : 0 }}>
+              <Avatar src={reporter?.avatar_url} name={reporter?.full_name} size={20} />
+              <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>Reported by @{reporter?.handle}</span>
+              <span style={{ marginLeft: 'auto' }}>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: (statusColor[r.status] ?? 'var(--ink-3)') + '18', color: statusColor[r.status] ?? 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontWeight: 600 }}>
+                  {r.status.replace('_', ' ')}
+                </span>
+              </span>
+            </div>
+            {r.status === 'pending' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px', color: 'var(--clay)', borderColor: 'var(--clay)20' }} onClick={() => act(r.id, 'deleted')}>Remove reply</button>
+                <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => act(r.id, 'warned')}>Warn author</button>
+                <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => act(r.id, 'dismissed')}>Dismiss</button>
+                <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 12px', color: 'var(--ink-3)' }} onClick={() => act(r.id, 'escalated')}>↑ Escalate to admin</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Dedicated community post detail — distinct from the global post page
 export function CommunityPostDetail({ slug, postId, onNav }: { slug: string; postId: string; onNav: any }) {
-  const [PostDetail, setPostDetail] = React.useState<React.ComponentType<any> | null>(null);
+  const app = useApp();
+  const [post, setPost] = React.useState<any>(null);
+  const [community, setCommunity] = React.useState<any>(null);
+  const [comments, setComments] = React.useState<any[]>([]);
+  const [reply, setReply] = React.useState('');
+  const [posting, setPosting] = React.useState(false);
+  const [liked, setLiked] = React.useState(false);
+  const [likeCount, setLikeCount] = React.useState(0);
+  const [bookmarked, setBookmarked] = React.useState(false);
+  const [reportTarget, setReportTarget] = React.useState<{ commentId: string; communityId: string } | null>(null);
+
+  // Load post + community
   React.useEffect(() => {
-    import('@/components/screens/profile').then(m => setPostDetail(() => m.DesktopPostDetail));
-  }, []);
+    if (!postId) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const [{ data: p }, { data: c }] = await Promise.all([
+        supabase.from('posts').select('*, profiles!posts_user_id_fkey(full_name, handle, avatar_url)').eq('id', postId).single(),
+        supabase.from('communities').select('id, name, slug, cover_url, avatar_url, category').or(`slug.eq.${slug},name.eq.${decodeURIComponent(slug)}`).maybeSingle(),
+      ]);
+      if (p) {
+        setPost(p); setLikeCount(p.likes_count ?? 0);
+        if (app.user?.id) {
+          const { getBookmarkedPostIds } = await import('@/lib/bookmarks');
+          const ids = await getBookmarkedPostIds(app.user.id);
+          setBookmarked(ids.includes(p.id));
+        }
+      }
+      if (c) setCommunity(c);
+    });
+  }, [postId, slug]);
+
+  // Load + subscribe to comments
+  const loadComments = React.useCallback(async (supabase: any) => {
+    const { data } = await supabase.from('comments')
+      .select('*, profiles!comments_user_id_fkey(full_name, handle, avatar_url)')
+      .eq('post_id', postId).order('created_at', { ascending: true });
+    setComments(data ?? []);
+  }, [postId]);
+
+  React.useEffect(() => {
+    if (!postId) return;
+    let ch: any;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      await loadComments(supabase);
+      ch = supabase.channel(`cp-comments-${postId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: `post_id=eq.${postId}` },
+          () => loadComments(supabase))
+        .subscribe();
+    });
+    return () => { ch?.unsubscribe?.(); };
+  }, [postId, loadComments]);
+
+  const submitReply = async () => {
+    if (!reply.trim() || !app.user?.id) return;
+    setPosting(true);
+    const text = reply.trim();
+    setReply('');
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('comments').insert({ post_id: postId, user_id: app.user.id, content: text });
+    setPosting(false);
+  };
+
+  const toggleLike = async () => {
+    if (!app.user?.id) return;
+    const { supabase } = await import('@/lib/supabase');
+    if (liked) {
+      setLiked(false); setLikeCount(n => n - 1);
+      await supabase.from('post_likes').delete().match({ post_id: postId, user_id: app.user.id });
+    } else {
+      setLiked(true); setLikeCount(n => n + 1);
+      await supabase.from('post_likes').insert({ post_id: postId, user_id: app.user.id });
+    }
+  };
+
+  const profile = post?.profiles as any;
+  const kindColors: Record<string, string> = { tip: 'var(--green)', question: 'var(--sky)', win: '#f59e0b', discussion: 'var(--ink-2)' };
+  const kind = post?.post_kind;
+  const ago = post ? (() => { const s = Math.floor((Date.now() - new Date(post.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m ago` : s < 86400 ? `${Math.floor(s/3600)}h ago` : `${Math.floor(s/86400)}d ago`; })() : '';
+
+  const loading = !post;
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
-      <DesktopSidebar active="forum" onNav={onNav} />
-      <div style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
-        <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px 16px 0' }}>
-          <button onClick={() => onNav?.('communities', { slug })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', fontSize: 13, fontWeight: 600, marginBottom: 4, padding: 0 }}>
-            ← Back to community
-          </button>
+      <style>{`
+        @keyframes cpSkelPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+        .cp-skel { background:var(--line); border-radius:6px; animation:cpSkelPulse 1.5s ease-in-out infinite; }
+        .cp-sidebar { display:flex; }
+        .cp-main { flex:1; overflow:auto; height:100%; }
+        .cp-banner { position:relative; height:72px; }
+        .cp-content { max-width:680px; margin:0 auto; padding:28px 20px 80px; }
+        @media(max-width:680px){
+          .cp-sidebar { display:none; }
+          .cp-banner { height:90px; }
+          .cp-content { padding:16px 12px 100px; }
+          .cp-post-card { padding:16px 14px 14px !important; border-radius:14px !important; }
+          .cp-reply-box { padding:12px !important; border-radius:12px !important; }
+          .cp-reply-box textarea { min-height:60px !important; }
+          .cp-comment-row { gap:8px !important; }
+        }
+      `}</style>
+      <div className="cp-sidebar"><DesktopSidebar active="forum" onNav={onNav} /></div>
+      <main className="cp-main no-scrollbar">
+        {/* Community banner strip — shown while loading too (skeleton) or real */}
+        <div className="cp-banner" style={{ background: (!loading && community?.cover_url) ? `url(${community.cover_url}) center/cover` : 'var(--green)' }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.45)' }} />
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 14 }}>
+            {loading ? (
+              <>
+                <div className="cp-skel" style={{ width: 120, height: 32, borderRadius: 8 }} />
+                <div className="cp-skel" style={{ width: 80, height: 14, borderRadius: 4, opacity: .6 }} />
+              </>
+            ) : community ? (
+              <>
+                <button onClick={() => onNav?.('communities', { slug })} style={{ background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 500, backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ← {community.name}
+                </button>
+                <span style={{ color: 'rgba(255,255,255,.6)', fontSize: 12 }}>·</span>
+                <span style={{ color: 'rgba(255,255,255,.8)', fontSize: 12, fontFamily: 'JetBrains Mono' }}>Community post</span>
+              </>
+            ) : null}
+          </div>
         </div>
-        {PostDetail && <PostDetail onNav={onNav} params={{ id: postId }} />}
-      </div>
+
+        <div className="cp-content">
+          {loading ? (
+            /* ── Skeleton ─────────────────────────────────── */
+            <>
+              {/* Post card skeleton */}
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '24px 24px 20px', marginBottom: 16 }}>
+                <div className="cp-skel" style={{ width: 56, height: 20, marginBottom: 18 }} />
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 18 }}>
+                  <div className="cp-skel" style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0 }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div className="cp-skel" style={{ width: '38%', height: 14 }} />
+                    <div className="cp-skel" style={{ width: '22%', height: 11 }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+                  <div className="cp-skel" style={{ width: '95%', height: 14 }} />
+                  <div className="cp-skel" style={{ width: '88%', height: 14 }} />
+                  <div className="cp-skel" style={{ width: '72%', height: 14 }} />
+                </div>
+                <div style={{ display: 'flex', gap: 20, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+                  <div className="cp-skel" style={{ width: 48, height: 14 }} />
+                  <div className="cp-skel" style={{ width: 60, height: 14 }} />
+                </div>
+              </div>
+              {/* Reply box skeleton */}
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <div className="cp-skel" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div className="cp-skel" style={{ width: '100%', height: 72, borderRadius: 8 }} />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <div className="cp-skel" style={{ width: 64, height: 32, borderRadius: 8 }} />
+                  </div>
+                </div>
+              </div>
+              {/* Comment rows skeleton */}
+              <div className="cp-skel" style={{ width: 60, height: 11, marginBottom: 14 }} />
+              {[1, 2, 3].map(i => (
+                <div key={i} style={{ display: 'flex', gap: 12, padding: '16px 0', borderTop: '1px solid var(--line)' }}>
+                  <div className="cp-skel" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="cp-skel" style={{ width: `${28 + i * 6}%`, height: 13 }} />
+                      <div className="cp-skel" style={{ width: '16%', height: 11 }} />
+                    </div>
+                    <div className="cp-skel" style={{ width: `${70 + i * 5}%`, height: 13 }} />
+                    {i === 2 && <div className="cp-skel" style={{ width: '55%', height: 13 }} />}
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {/* Post */}
+              <div className="cp-post-card" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: '24px 24px 20px', marginBottom: 16 }}>
+                {/* Kind badge */}
+                {kind && <span style={{ background: (kindColors[kind] ?? 'var(--ink-3)') + '20', color: kindColors[kind] ?? 'var(--ink-3)', padding: '3px 10px', borderRadius: 6, fontSize: 11, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase', display: 'inline-block', marginBottom: 14 }}>{kind}</span>}
+
+                {/* Author */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <Avatar src={profile?.avatar_url} name={profile?.full_name} size={44} />
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{profile?.full_name ?? 'Unknown'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {ago}</div>
+                  </div>
+                </div>
+
+                {/* Content */}
+                {post.title && <h1 style={{ margin: '0 0 12px', fontSize: 22, fontWeight: 700, lineHeight: 1.3, color: 'var(--ink)', letterSpacing: '-0.01em' }}>{post.title}</h1>}
+                <p style={{ margin: '0 0 16px', fontSize: 16, lineHeight: 1.65, color: post.title ? 'var(--ink-2)' : 'var(--ink)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{post.content}</p>
+                {post.image_url && <img src={post.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 16, maxHeight: 400, objectFit: 'cover' }} />}
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: 20, paddingTop: 14, borderTop: '1px solid var(--line)', fontSize: 14, color: 'var(--ink-3)', alignItems: 'center' }}>
+                  <button onClick={toggleLike} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: liked ? 'var(--clay)' : 'var(--ink-3)', fontSize: 14, fontWeight: liked ? 600 : 400, padding: 0 }}>
+                    <Icon name="heart" size={17} /> {likeCount}
+                  </button>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="comment" size={17} /> {comments.length} {comments.length === 1 ? 'reply' : 'replies'}
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <button onClick={() => { const url = `${window.location.origin}/communities/post/${encodeURIComponent(slug)}/${postId}`; navigator.clipboard.writeText(url); app.toast?.({ msg: 'Link copied!', icon: 'check', kind: 'success' }); }} title="Copy link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, padding: 0 }}>
+                    <Icon name="share" size={16} /> Share
+                  </button>
+                  <button onClick={async () => { const { addBookmark, removeBookmark } = await import('@/lib/bookmarks'); if (!app.user?.id) return; if (bookmarked) { await removeBookmark(app.user.id, postId); setBookmarked(false); app.toast?.({ msg: 'Removed from bookmarks', icon: 'bookmark' }); } else { await addBookmark(app.user.id, postId); setBookmarked(true); app.toast?.({ msg: 'Bookmarked!', icon: 'bookmark', kind: 'success' }); } }} title="Bookmark" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: bookmarked ? 'var(--green)' : 'var(--ink-3)', fontSize: 13, fontWeight: bookmarked ? 600 : 400, padding: 0 }}>
+                    <Icon name="bookmark" size={16} /> {bookmarked ? 'Saved' : 'Save'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Reply box */}
+              <div className="cp-reply-box" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={36} />
+                <div style={{ flex: 1 }}>
+                  <textarea value={reply} onChange={e => setReply(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitReply(); }}
+                    placeholder="Share your thoughts in this community…"
+                    className="fld" style={{ width: '100%', minHeight: 72, resize: 'vertical', marginBottom: 10 }} />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-green" onClick={submitReply} disabled={!reply.trim() || posting} style={{ opacity: reply.trim() ? 1 : .5 }}>
+                      {posting ? 'Posting…' : 'Reply'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.06em', marginBottom: 12 }}>
+                {comments.length} {comments.length === 1 ? 'REPLY' : 'REPLIES'}
+              </div>
+              {comments.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ink-3)', fontSize: 14 }}>No replies yet. Start the conversation.</div>
+              ) : comments.map((c: any) => {
+                const cp = c.profiles as any;
+                const cage = (() => { const s = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s/60)}m` : s < 86400 ? `${Math.floor(s/3600)}h` : `${Math.floor(s/86400)}d`; })();
+                return (
+                  <div key={c.id} className="cp-comment-row" style={{ display: 'flex', gap: 12, padding: '16px 0', borderTop: '1px solid var(--line)' }}>
+                    <Avatar src={cp?.avatar_url} name={cp?.full_name} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{cp?.full_name ?? 'Member'}</span>
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{cp?.handle} · {cage}</span>
+                        {app.user?.id && c.user_id !== app.user.id && (
+                          <button onClick={() => setReportTarget({ commentId: c.id, communityId: community?.id ?? '' })} title="Report reply" style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'inline-flex', opacity: .6 }}>
+                            <Icon name="flag" size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>{c.content}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+        {reportTarget && (
+          <ReportModal
+            type="comment"
+            targetId={reportTarget.commentId}
+            communityId={reportTarget.communityId}
+            onClose={() => setReportTarget(null)}
+          />
+        )}
+      </main>
     </div>
   );
 }
@@ -711,9 +1416,49 @@ function BookmarkPostCard({ post, onNav }: { post: any; onNav: any }) {
   const app = useApp();
   const profile = post.profile;
   const liked = app.like?.has(post.id);
+  const community = post.community as any;
+  const isCommunityPost = !!community;
+  const kind = post.post_kind;
+  const kindColors: Record<string, string> = { tip: 'var(--green)', question: 'var(--sky)', win: '#f59e0b', discussion: 'var(--ink-2)' };
   const timeAgo = (ts: string) => { const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s`; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`; };
+  const handleClick = () => isCommunityPost
+    ? onNav?.('post', { id: post.id, slug: community.slug || community.name })
+    : onNav?.('post', { id: post.id });
+
+  if (isCommunityPost) {
+    return (
+      <div onClick={handleClick} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', borderLeft: '3px solid var(--green)' }}>
+        {/* Community header strip */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 0', marginBottom: 10 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 5, background: 'var(--green)', flexShrink: 0 }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', fontFamily: 'JetBrains Mono', letterSpacing: '.04em', textTransform: 'uppercase' }}>{community.name}</span>
+          {kind && <span style={{ background: (kindColors[kind] ?? 'var(--ink-3)') + '18', color: kindColors[kind] ?? 'var(--ink-3)', padding: '1px 7px', borderRadius: 5, fontSize: 10, fontFamily: 'JetBrains Mono', fontWeight: 700, textTransform: 'uppercase', marginLeft: 'auto' }}>{kind}</span>}
+        </div>
+        <div style={{ padding: '0 16px 14px' }}>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 8 }}>
+            <Avatar src={profile?.avatar_url} name={profile?.full_name} size={28} verified={profile?.verified} />
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{profile?.full_name}</div>
+              <div style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</div>
+            </div>
+          </div>
+          {post.content && <p style={{ margin: '0 0 10px', fontSize: 13, lineHeight: 1.55, color: 'var(--ink-2)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>}
+          {post.image_url && <img src={post.image_url} style={{ width: '100%', borderRadius: 8, objectFit: 'cover', maxHeight: 140, marginBottom: 10 }} />}
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--ink-3)', alignItems: 'center' }}>
+            <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
+            <ActionBtn icon="comment" count={post.comments_count} onClick={handleClick} />
+            <span style={{ flex: 1 }} />
+            <button onClick={() => { const s = community.slug || community.name; const url = `${window.location.origin}/communities/post/${encodeURIComponent(s)}/${post.id}`; navigator.clipboard.writeText(url); app.toast?.({ msg: 'Link copied!', icon: 'check', kind: 'success' }); }} title="Share" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'inline-flex' }}>
+              <Icon name="share" size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div onClick={() => onNav?.('post', { id: post.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, cursor: 'pointer' }}>
+    <div onClick={handleClick} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, cursor: 'pointer' }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
         <Avatar src={profile?.avatar_url} name={profile?.full_name} size={32} verified={profile?.verified} />
         <div>
@@ -725,7 +1470,7 @@ function BookmarkPostCard({ post, onNav }: { post: any; onNav: any }) {
       {post.image_url && <img src={post.image_url} style={{ width: '100%', borderRadius: 10, objectFit: 'cover', maxHeight: 180, marginBottom: 10 }} />}
       <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--ink-3)' }}>
         <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
-        <ActionBtn icon="comment" count={post.comments_count} onClick={() => onNav?.('post', { id: post.id })} />
+        <ActionBtn icon="comment" count={post.comments_count} onClick={handleClick} />
       </div>
     </div>
   );
@@ -1256,12 +2001,13 @@ export function Section({ title, sub, children }: { title: string; sub?: string;
 
 export function Field({ label, v, multiline }: { label: string; v: React.ReactNode; multiline?: boolean }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 16, alignItems: 'flex-start', padding: '10px 0' }}>
+    <div className="settings-field-row" style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 16, alignItems: 'flex-start', padding: '10px 0' }}>
       <label style={{ fontSize: 13, color: 'var(--ink-3)', paddingTop: 8 }}>{label}</label>
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--line)',
         borderRadius: 10, padding: '8px 12px', fontSize: 14,
-        minHeight: multiline ? 72 : 'auto',
+        minHeight: multiline ? 72 : 'auto', minWidth: 0,
+        wordBreak: 'break-word', overflowWrap: 'break-word',
       }}>{v}</div>
     </div>
   );
@@ -1296,6 +2042,159 @@ const HASHTAG_POOL = [
 ];
 
 // --- Compose post ---
+// ── Community-specific composer (title + body + kind) ─────────────────────
+export function MCommunityCompose({ close, data }: { close: () => void; data?: { community?: string; communityId?: string; communityAvatar?: string } }) {
+  const app = useApp();
+  const [title, setTitle] = React.useState('');
+  const [body, setBody] = React.useState('');
+  const [postKind, setPostKind] = React.useState<string | null>(null);
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const [publishing, setPublishing] = React.useState(false);
+  const [quotedPost, setQuotedPost] = React.useState<any>(null);
+  const imgRef = React.useRef<HTMLInputElement>(null);
+  const titleRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => { setTimeout(() => titleRef.current?.focus(), 60); }, []);
+
+  const handleBodyPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    const postUrlMatch = pasted.match(/\/post\/([0-9a-f-]{36})|\/communities\/post\/[^/]+\/([0-9a-f-]{36})/);
+    if (postUrlMatch) {
+      const postId = postUrlMatch[1] ?? postUrlMatch[2];
+      const { supabase } = await import('@/lib/supabase');
+      const { data: post } = await supabase.from('posts').select('*, profiles!posts_user_id_fkey(full_name, handle, avatar_url)').eq('id', postId).single();
+      if (post) { setQuotedPost(post); e.preventDefault(); }
+    }
+  };
+
+  const publish = async () => {
+    if (!title.trim() || !app.user?.id) return;
+    setPublishing(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      let image_url: string | null = null;
+      if (imageFile) {
+        const { uploadFile } = await import('@/lib/storage');
+        image_url = await uploadFile('posts', app.user.id, imageFile);
+      }
+      const payload: Record<string, any> = {
+        user_id: app.user.id,
+        title: title.trim(),
+        content: body.trim() || title.trim(),
+        image_url,
+        community_id: data?.communityId,
+        ...(postKind ? { post_kind: postKind } : {}),
+        ...(quotedPost ? { quote_post_id: quotedPost.id } : {}),
+      };
+      let result = await supabase.from('posts').insert(payload).select('id').single();
+      if ((result as any).error) {
+        const { post_kind: _pk, ...noKind } = payload;
+        result = await supabase.from('posts').insert(noKind).select('id').single();
+      }
+      if ((result as any).error) throw (result as any).error;
+      app.toast?.({ kind: 'success', msg: 'Posted to community!', icon: 'check' });
+      close();
+    } catch (err: any) {
+      app.toast?.({ kind: 'error', msg: 'Failed to publish', sub: err.message, icon: 'bolt' });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const kindMeta = [
+    { kind: 'tip',        label: '💡 Tip',        color: 'var(--green)', desc: 'Share something useful' },
+    { kind: 'question',   label: '❓ Question',    color: 'var(--sky)',   desc: 'Ask the community' },
+    { kind: 'win',        label: '🏆 Win',         color: '#f59e0b',      desc: 'Celebrate progress' },
+    { kind: 'discussion', label: '💬 Discussion',  color: 'var(--ink-2)', desc: 'Start a conversation' },
+  ];
+
+  return (
+    <Modal onClose={close} width={580}>
+      {/* Community header */}
+      <div style={{ background: 'var(--green)', padding: '18px 24px 16px', borderRadius: '16px 16px 0 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          {data?.communityAvatar
+            ? <img src={data.communityAvatar} alt="" style={{ width: 28, height: 28, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+            : <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,.2)', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{(data?.community ?? 'C').charAt(0).toUpperCase()}</div>
+          }
+          <div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', fontFamily: 'JetBrains Mono', letterSpacing: '.05em' }}>POSTING TO</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{data?.community ?? 'Community'}</div>
+          </div>
+          <button onClick={close} style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 8, width: 30, height: 30, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff', fontSize: 16 }}>✕</button>
+        </div>
+      </div>
+
+      <div style={{ padding: '20px 24px 0' }}>
+        {/* Post kind — required feel */}
+        <div style={{ marginBottom: 18 }}>
+          <span className="fld-label" style={{ marginBottom: 8, display: 'block' }}>Post type <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional)</span></span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {kindMeta.map(({ kind, label, color, desc }) => (
+              <button key={kind} onClick={() => setPostKind(postKind === kind ? null : kind)}
+                style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 12, border: '1.5px solid', borderColor: postKind === kind ? color : 'var(--line)', background: postKind === kind ? color + '14' : 'var(--surface)', cursor: 'pointer', transition: 'all .12s' }}>
+                <div style={{ fontSize: 16, marginBottom: 3 }}>{label.split(' ')[0]}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: postKind === kind ? color : 'var(--ink-2)' }}>{label.split(' ').slice(1).join(' ')}</div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Title — required */}
+        <div style={{ marginBottom: 12 }}>
+          <span className="fld-label">Title <span style={{ color: 'var(--clay)', fontSize: 11 }}>required</span></span>
+          <input ref={titleRef} value={title} onChange={e => setTitle(e.target.value)} maxLength={120}
+            placeholder="Give your post a clear, descriptive title…"
+            className="fld" style={{ width: '100%', fontSize: 16, fontWeight: 600 }} />
+          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 4 }}>{title.length}/120</div>
+        </div>
+
+        {/* Body — optional */}
+        <div style={{ marginBottom: 14 }}>
+          <span className="fld-label">Content <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(optional — expand for full detail)</span></span>
+          <textarea value={body} onChange={e => setBody(e.target.value)} onPaste={handleBodyPaste}
+            placeholder="Share more context, details, links, or images… Paste a Honua post link to quote it."
+            className="fld" style={{ width: '100%', minHeight: 100, resize: 'vertical' }} />
+        </div>
+
+        {/* Quoted post preview */}
+        {quotedPost && (
+          <div style={{ position: 'relative', marginBottom: 14 }}>
+            <QuoteCard post={quotedPost} onNav={() => {}} compact />
+            <button onClick={() => setQuotedPost(null)} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff', fontSize: 11 }}>✕</button>
+          </div>
+        )}
+
+        {/* Image */}
+        {imagePreview && (
+          <div style={{ marginBottom: 14, position: 'relative' }}>
+            <img src={imagePreview} style={{ width: '100%', borderRadius: 10, maxHeight: 200, objectFit: 'cover' }} />
+            <button onClick={() => { setImageFile(null); setImagePreview(null); }} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff' }}>✕</button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid var(--line)', marginBottom: 4 }}>
+          <button onClick={() => imgRef.current?.click()} title="Attach image" style={{ background: imageFile ? 'var(--green-tint)' : 'transparent', border: 'none', borderRadius: 8, padding: 7, cursor: 'pointer', color: imageFile ? 'var(--green)' : 'var(--ink-3)' }}>
+            <Icon name="image" size={18} />
+          </button>
+          <input ref={imgRef} type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); } }} style={{ display: 'none' }} />
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>Title shows as headline on the card</span>
+        </div>
+      </div>
+
+      <ModalFoot>
+        <button className="btn btn-ghost" onClick={close} disabled={publishing}>Cancel</button>
+        <button className="btn btn-green" onClick={publish} disabled={!title.trim() || publishing} style={{ opacity: title.trim() ? 1 : .5 }}>
+          {publishing ? 'Publishing…' : 'Post to community'}
+        </button>
+      </ModalFoot>
+    </Modal>
+  );
+}
+
 export function MCompose({ close, data }: { close: () => void; data?: { community?: string; communityId?: string } }) {
   const app = useApp();
   const [text, setText] = React.useState('');
@@ -1303,7 +2202,20 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
   const [postKind, setPostKind] = React.useState<string | null>(null);
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const [quotedPost, setQuotedPost] = React.useState<any>(null);
+  const [quoteLoading, setQuoteLoading] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
+
+  // Pre-load quoted post if opened from "Quote post" repost menu
+  React.useEffect(() => {
+    const qid = (data as any)?.quotePostId;
+    if (!qid || quotedPost) return;
+    setQuoteLoading(true);
+    import('@/lib/supabase').then(({ supabase }) =>
+      supabase.from('posts').select('*, profiles!posts_user_id_fkey(full_name, handle, avatar_url)').eq('id', qid).single()
+        .then(({ data: p }: any) => { if (p) setQuotedPost(p); setQuoteLoading(false); })
+    );
+  }, []);
   // Hashtag autocomplete
   const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([]);
   const [activeSuggestion, setActiveSuggestion] = React.useState(0);
@@ -1440,6 +2352,20 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
     if (e.key === 'Escape')    { setTagSuggestions([]); }
   };
 
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    const postUrlMatch = pasted.match(/\/post\/([0-9a-f-]{36})|\/communities\/post\/[^/]+\/([0-9a-f-]{36})/);
+    if (postUrlMatch) {
+      const postId = postUrlMatch[1] ?? postUrlMatch[2];
+      setQuoteLoading(true);
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const { data } = await supabase.from('posts').select('*, profiles!posts_user_id_fkey(full_name, handle, avatar_url)').eq('id', postId).single();
+        if (data) { setQuotedPost(data); e.preventDefault(); }
+      } finally { setQuoteLoading(false); }
+    }
+  };
+
   const publish = async () => {
     if (!text.trim() || !app.user?.id) return;
     setPublishing(true);
@@ -1460,6 +2386,7 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
         post_type: cat.toLowerCase(),
         ...(postKind ? { post_kind: postKind } : {}),
         ...(data?.communityId ? { community_id: data.communityId } : {}),
+        ...(quotedPost ? { quote_post_id: quotedPost.id } : {}),
       };
       // Try full payload; progressively strip optional columns that may not exist yet.
       // community_id is ALWAYS kept — it's essential for community posts.
@@ -1514,7 +2441,8 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
             <textarea ref={taRef} className="fld" autoFocus value={text}
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
-              placeholder="What did you do for the planet today? Use #hashtags and @mentions."
+              onPaste={handlePaste}
+              placeholder="What did you do for the planet today? Use #hashtags and @mentions. Paste a Honua post link to quote it."
               style={{ minHeight: 110, width: '100%' }}
             />
             {showDropdown && (
@@ -1558,6 +2486,13 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
             )}
           </div>
         </div>
+        {quoteLoading && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-3)' }}>Loading quoted post…</div>}
+        {quotedPost && (
+          <div style={{ marginTop: 10, position: 'relative' }}>
+            <QuoteCard post={quotedPost} onNav={() => {}} compact />
+            <button onClick={() => setQuotedPost(null)} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#fff', fontSize: 11 }}>✕</button>
+          </div>
+        )}
         {imagePreview && (
           <div style={{ marginTop: 12, position: 'relative' }}>
             <img src={imagePreview} style={{ width: '100%', borderRadius: 10, maxHeight: 220, objectFit: 'cover' }} />
@@ -2320,7 +3255,7 @@ export function MDeleteAccount2({ close }) {
 // =============== Dispatcher ===============
 export function ModalContent({ type, data, close }) {
   const map = {
-    compose: MCompose, logaction: MLogAction, export: MExport, startproject: MStartProject,
+    compose: data?.communityId ? MCommunityCompose : MCompose, logaction: MLogAction, export: MExport, startproject: MStartProject,
     createchallenge: MCreateChallenge, createcommunity: MCreateCommunity, editcommunity: MEditCommunity, newcollection: MNewCollection, editprofile: MEditProfile,
     tip: MTip, autooffset: MAutoOffset, offsetyear: MOffsetYear,
     deleteaccount: MDeleteAccount, deleteaccount2: MDeleteAccount2,

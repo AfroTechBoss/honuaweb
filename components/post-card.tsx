@@ -154,8 +154,17 @@ export function PostCard({ post, dense = false }) {
   const [lightbox, setLightbox] = React.useState<string | null>(null);
   const [showShare, setShowShare] = React.useState(false);
   const [showBookmark, setShowBookmark] = React.useState(false);
+  const [showRepostMenu, setShowRepostMenu] = React.useState(false);
+  const repostRef = React.useRef<HTMLSpanElement>(null);
   const open = () => app.nav?.('post', { id: post.id });
   const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
+
+  React.useEffect(() => {
+    if (!showRepostMenu) return;
+    const handler = (e: MouseEvent) => { if (repostRef.current && !repostRef.current.contains(e.target as Node)) setShowRepostMenu(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showRepostMenu]);
   return (
     <article onClick={open} className="post-card" style={{
       background: 'var(--surface)', borderRadius: 16,
@@ -229,7 +238,21 @@ export function PostCard({ post, dense = false }) {
       }}>
         <ActionBtn icon="heart" count={post.likes + (liked ? 1 : 0)} active={liked} activeColor="var(--clay)" onClick={stop(() => app.like.toggle(post.id))} />
         <ActionBtn icon="comment" count={post.comments} onClick={stop(open)} />
-        <ActionBtn icon="repost" count={post.reposts + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={stop(() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); })} />
+        <span ref={repostRef} style={{ position: 'relative', display: 'inline-flex' }}>
+          <ActionBtn icon="repost" count={post.reposts + (app.repost?.has(post.id) ? 1 : 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={stop(() => setShowRepostMenu(o => !o))} />
+          {showRepostMenu && (
+            <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.14)', zIndex: 50, minWidth: 170, overflow: 'hidden' }}>
+              <button onClick={stop(() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted!', icon: 'repost' }); setShowRepostMenu(false); })}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--ink-2)', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}>
+                <Icon name="repost" size={15} /> Repost
+              </button>
+              <button onClick={stop(() => { setShowRepostMenu(false); const url = `${window.location.origin}/post/${post.id}`; app.openModal?.('compose', { quoteUrl: url, quotePostId: post.id }); })}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--ink-2)', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}>
+                <Icon name="pencil" size={15} /> Quote post
+              </button>
+            </div>
+          )}
+        </span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
           <ActionBtn icon="bookmark" active={saved} onClick={stop(() => setShowBookmark(true))} />
           <ActionBtn icon="share" onClick={stop(() => setShowShare(true))} />
@@ -340,7 +363,7 @@ const SHARE_PLATFORMS: { name: string; bg: string; fg: string; path: string; str
   { name: 'Email', bg: 'var(--surface)', fg: 'var(--ink)', path: 'M2 4h20v16H2zM2 7l10 7 10-7', stroke: true, href: (url, text) => `mailto:?subject=${encodeURIComponent(text)}&body=${encodeURIComponent(url)}` },
 ];
 
-export function ShareSheet({ url, text, onClose }: { url: string; text: string; onClose: () => void }) {
+export function ShareSheet({ url, text, onClose, onShareToStory }: { url: string; text: string; onClose: () => void; onShareToStory?: () => void }) {
   const [copied, setCopied] = React.useState(false);
 
   const copyLink = () => {
@@ -375,6 +398,20 @@ export function ShareSheet({ url, text, onClose }: { url: string; text: string; 
             cursor: 'pointer', flexShrink: 0, fontFamily: 'Satoshi', transition: 'background .2s',
           }}>{copied ? 'Copied!' : 'Copy link'}</button>
         </div>
+
+        {/* Share to story */}
+        {onShareToStory && (
+          <button onClick={() => { onShareToStory(); onClose(); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '11px 14px', marginBottom: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--ink)', fontFamily: 'Satoshi' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#34c759,#00c7be)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Share to your story</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400, marginTop: 1 }}>Post this to your Honua story</div>
+            </div>
+          </button>
+        )}
 
         {/* Platform grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
