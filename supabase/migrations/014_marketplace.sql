@@ -60,11 +60,31 @@ select * from (values
   ('Compost starter kit',     'Soily',    3400, 'Soil',         'Outdoors', 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&q=80', 'Everything you need to start composting at home, including a season of coaching.', 4.9, 204, false, null),
   ('The repair kit',          'Fix-it Collective', 8400, 'Repairable', 'Home', null, '92 tools, one foldable case. Every purchase funds a community repair café for a month.', 4.9, 214, true, 12000)
 ) as v(name, brand, price_cents, tag, category, image_url, description, rating, review_count, featured, compare_at_cents)
-where not exists (select 1 from products);
+-- seed unless valid catalogue rows already exist (rows from a leftover table
+-- that lack name/price don't count)
+where not exists (select 1 from products where name is not null and price_cents is not null);
 
 -- ---- Orders ----
 -- Client-generated text ids (e.g. ORD-2K4F9A)
 create table if not exists orders (id text primary key);
+
+-- If a leftover orders table used uuid ids, convert to text so the app's
+-- client-generated ids ('ORD-XXXXXX') can be inserted.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'orders'
+      and column_name = 'id' and data_type = 'uuid'
+  ) then
+    begin
+      alter table public.orders alter column id drop default;
+      alter table public.orders alter column id type text using id::text;
+    exception when others then
+      raise exception 'orders.id is uuid and could not be converted to text (%). If the old orders table is unused, run: drop table if exists orders cascade; then re-run this migration.', sqlerrm;
+    end;
+  end if;
+end $$;
 
 alter table orders add column if not exists user_id        uuid references public.profiles(id) on delete cascade;
 alter table orders add column if not exists items          jsonb not null default '[]'::jsonb;
@@ -97,7 +117,8 @@ create table if not exists product_reviews (id uuid primary key default gen_rand
 
 alter table product_reviews add column if not exists product_id uuid references products(id) on delete cascade;
 alter table product_reviews add column if not exists user_id    uuid references public.profiles(id) on delete cascade;
-alter table product_reviews add column if not exists order_id   text references orders(id) on delete set null;
+-- plain text, no FK: order ids are client-generated and the link is informational
+alter table product_reviews add column if not exists order_id   text;
 alter table product_reviews add column if not exists stars      int;
 alter table product_reviews add column if not exists body       text;
 alter table product_reviews add column if not exists created_at timestamptz not null default now();

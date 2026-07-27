@@ -41,7 +41,8 @@ export async function getProducts(): Promise<Product[]> {
       .eq('status', 'live')
       .order('created_at', { ascending: true });
     if (error || !data) return [];
-    return data.map(mapProduct);
+    // Ignore junk rows from any leftover pre-migration table
+    return data.filter((r: any) => r.name && r.price_cents != null).map(mapProduct);
   } catch { return []; }
 }
 
