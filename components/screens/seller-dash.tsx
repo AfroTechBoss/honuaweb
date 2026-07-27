@@ -29,7 +29,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
   const approved = app.state?.sellerStatus === 'approved';
   const [tab, setTab] = React.useState('overview');
   const [products, setProducts] = React.useState(MOCK_SELLER.products);
-  const [orders, setOrders] = React.useState(MOCK_SELLER.orders);
+  const [orders, setOrders] = React.useState<any[]>(MOCK_SELLER.orders);
   const [editing, setEditing] = React.useState(null); // product being edited / 'new'
   // Real mode: signed-in sellers manage actual marketplace listings
   const dbMode = !!app.user?.id;
@@ -41,10 +41,32 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
     setProducts(mine);
   }, [app.user?.id]);
 
+  const reloadOrders = React.useCallback(async () => {
+    if (!app.user?.id) return;
+    const { getSellerOrders } = await import('@/lib/market');
+    setOrders(await getSellerOrders(app.user.id));
+  }, [app.user?.id]);
+
   React.useEffect(() => {
-    if (approved && dbMode) reloadProducts();
+    if (approved && dbMode) { reloadProducts(); reloadOrders(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approved, dbMode, reloadProducts]);
+  }, [approved, dbMode, reloadProducts, reloadOrders]);
+
+  // Realtime: new sales pop in while the dashboard is open
+  React.useEffect(() => {
+    if (!approved || !dbMode || !app.user?.id) return;
+    let channel: any;
+    import('@/lib/supabase').then(({ supabase }) => {
+      channel = supabase.channel('seller-orders-' + app.user.id)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_items', filter: `seller_id=eq.${app.user.id}` }, () => {
+          reloadOrders();
+          app.toast?.({ msg: 'New order! 🎉', sub: 'A customer just bought from your shop.', kind: 'success', icon: 'cart' });
+        })
+        .subscribe();
+    });
+    return () => { channel?.unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approved, dbMode, app.user?.id]);
 
   if (!approved) return <DashGate onNav={onNav} status={app.state?.sellerStatus} />;
 
@@ -83,10 +105,18 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
       }
     }
   };
-  const advanceOrder = (id) => {
+  const advanceOrder = async (id) => {
     const flow = { processing: 'confirmed', confirmed: 'shipped', shipped: 'delivered' };
-    setOrders(list => list.map(o => o.id === id && flow[o.status] ? { ...o, status: flow[o.status] } : o));
-    app.toast?.({ msg: 'Order updated', sub: id, kind: 'success', icon: 'cart' });
+    const target = orders.find((o: any) => o.id === id);
+    const next = target ? flow[target.status] : null;
+    if (!next) return;
+    setOrders(list => list.map(o => o.id === id ? { ...o, status: next } : o));
+    if (dbMode && target?._db) {
+      const { advanceOrderItem } = await import('@/lib/market');
+      const ok = await advanceOrderItem(id, next);
+      if (!ok) { app.toast?.({ msg: 'Could not update order', kind: 'error', icon: 'close' }); reloadOrders(); return; }
+    }
+    app.toast?.({ msg: 'Order updated', sub: `${target?.orderNo ?? id} → ${next}`, kind: 'success', icon: 'cart' });
   };
 
   return (
@@ -419,7 +449,7 @@ function OrdersTab({ orders, onAdvance }) {
         </div>
         {filtered.map(o => (
           <div key={o.id} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1.3fr 0.6fr 1fr 1fr 130px', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
-            <span style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{o.id}</span>
+            <span style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{o.orderNo ?? o.id}</span>
             <span style={{ fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.product}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}><Avatar name={o.buyer} size={26} /><span style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.buyer}</span></span>
             <span className="tabular" style={{ fontSize: 13 }}>{o.qty}</span>

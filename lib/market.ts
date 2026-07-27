@@ -116,6 +116,9 @@ export async function deleteSellerProduct(id: string, sellerId: string): Promise
 }
 
 // ---- Orders ----
+const parseCentsStr = (price: any) => Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) || 0;
+const isUuid = (v: any) => /^[0-9a-f-]{36}$/.test(String(v));
+
 export async function createDbOrder(userId: string, order: {
   id: string; items: any[]; subtotal: number; shipping: number; total: number;
   email?: string; address?: any;
@@ -131,6 +134,69 @@ export async function createDbOrder(userId: string, order: {
       email: order.email ?? null,
       address: order.address ?? null,
     });
+    if (error) return false;
+
+    // Line items (migration 020) — carry seller_id so sellers can fulfil.
+    // Failure here is non-fatal: the order itself is already recorded.
+    try {
+      const productIds = order.items.map((i: any) => i.id).filter(isUuid);
+      let sellerByProduct: Record<string, { seller_id: string | null; image_url: string | null }> = {};
+      if (productIds.length) {
+        const { data: prods } = await supabase.from('products').select('id, seller_id, image_url').in('id', productIds);
+        for (const p of prods ?? []) sellerByProduct[p.id] = { seller_id: p.seller_id, image_url: p.image_url };
+      }
+      const rows = order.items.map((i: any) => ({
+        order_id: order.id,
+        buyer_id: userId,
+        product_id: isUuid(i.id) ? i.id : null,
+        seller_id: isUuid(i.id) ? sellerByProduct[i.id]?.seller_id ?? null : null,
+        name: i.name,
+        price_cents: parseCentsStr(i.price),
+        quantity: i.quantity || 1,
+        image_url: i.imgUrl ?? (isUuid(i.id) ? sellerByProduct[i.id]?.image_url ?? null : null),
+      }));
+      if (rows.length) await supabase.from('order_items').insert(rows);
+    } catch {}
+    return true;
+  } catch { return false; }
+}
+
+// ---- Seller-side orders (line items sold by this seller) ----
+export async function getSellerOrders(sellerId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('order_items')
+      .select('*, buyer:profiles!order_items_buyer_id_fkey(full_name, handle)')
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error || !data) return [];
+    const rel = (ts: string) => {
+      const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+      if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      return `${Math.floor(s / 86400)}d ago`;
+    };
+    return data.map((r: any) => ({
+      id: r.id,                                       // item id (used to advance)
+      orderNo: r.order_id,                            // shown in the table
+      product: r.name,
+      buyer: r.buyer?.full_name ?? 'A member',
+      handle: r.buyer?.handle ?? '—',
+      qty: r.quantity ?? 1,
+      total: ((r.price_cents ?? 0) * (r.quantity ?? 1)) / 100,
+      status: r.status ?? 'processing',
+      payment: 'paid',
+      date: r.created_at ? rel(r.created_at) : '',
+      dateFull: r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
+      _db: true,
+    }));
+  } catch { return []; }
+}
+
+export async function advanceOrderItem(itemId: string, status: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('order_items').update({ status }).eq('id', itemId);
     return !error;
   } catch { return false; }
 }
