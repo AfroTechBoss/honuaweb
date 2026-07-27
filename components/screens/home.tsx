@@ -527,6 +527,52 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
     return () => { channel?.unsubscribe(); };
   }, [tab, app.user?.id]);
 
+  // ---- Impact verification: logs linked to feed posts + my vouches ----
+  const [impactLogs, setImpactLogs] = React.useState<Record<string, any>>({});
+  const [myVouches, setMyVouches] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    const ids = dbPosts.map(p => p.id);
+    if (!ids.length) { setImpactLogs({}); return; }
+    import('@/lib/impact').then(async ({ getLogsForPosts, getMyVouches }) => {
+      const logs = await getLogsForPosts(ids);
+      setImpactLogs(logs);
+      const logIds = Object.values(logs).map((l: any) => l.id).filter(Boolean) as string[];
+      if (app.user?.id && logIds.length) setMyVouches(await getMyVouches(app.user.id, logIds));
+    }).catch(() => {});
+  }, [dbPosts, app.user?.id]);
+
+  const handleVouch = React.useCallback(async (log: any) => {
+    if (!app.user?.id) { app.toast?.({ msg: 'Sign in to vouch', icon: 'user' }); return; }
+    const vouched = myVouches.includes(log.id);
+    // Optimistic
+    setMyVouches(v => vouched ? v.filter(x => x !== log.id) : [...v, log.id]);
+    setImpactLogs(prev => ({ ...prev, [log.post_id]: { ...log, vouch_count: Math.max(0, (log.vouch_count ?? 0) + (vouched ? -1 : 1)) } }));
+    const { vouchForLog, unvouchLog } = await import('@/lib/impact');
+    const ok = vouched ? await unvouchLog(app.user.id, log.id) : await vouchForLog(app.user.id, log.id);
+    if (!ok) {
+      // Roll back
+      setMyVouches(v => vouched ? [...v, log.id] : v.filter(x => x !== log.id));
+      setImpactLogs(prev => ({ ...prev, [log.post_id]: log }));
+      return;
+    }
+    // Re-read the authoritative row (trigger may have flipped it to verified)
+    const { supabase } = await import('@/lib/supabase');
+    const { data: fresh } = await supabase.from('impact_logs')
+      .select('id, user_id, action, category, co2_saved_kg, points, status, vouch_count, post_id, proof_url')
+      .eq('id', log.id).single();
+    if (fresh?.post_id) {
+      setImpactLogs(prev => ({ ...prev, [fresh.post_id]: fresh }));
+      if (fresh.status === 'verified' && log.status !== 'verified') {
+        app.toast?.({ msg: 'Action verified! 🌱', sub: 'The community confirmed this impact.', kind: 'success', icon: 'check' });
+      }
+    }
+    // Notify the log owner
+    if (!vouched && log.user_id && log.user_id !== app.user.id) {
+      const { createNotification } = await import('@/lib/notifications');
+      createNotification({ userId: log.user_id, actorId: app.user.id, type: 'vouch', postId: log.post_id, body: 'vouched for your impact action' });
+    }
+  }, [app.user?.id, myVouches]);
+
   // Filter out posts from muted users, users I blocked, and users who blocked me
   const muted: string[] = app.mutedUsers ?? [];
   const blocked: string[] = app.blockedUsers ?? [];
@@ -580,7 +626,11 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           ) : feed.length > 0 ? (
             <>
               {feed.map(p => dbPosts.length > 0
-                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onStoryShared={loadStories} onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
+                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onStoryShared={loadStories}
+                    impactLog={impactLogs[p.id]}
+                    vouched={impactLogs[p.id] ? myVouches.includes(impactLogs[p.id].id) : false}
+                    onVouch={handleVouch}
+                    onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
                 : <PostCard key={p.id} post={p} />
               )}
             </>
@@ -748,8 +798,47 @@ function HomeMentionSpan({ handle, onNav }: { handle: string; onNav: any }) {
   );
 }
 
+// =============== Impact vouch bar (verification loop) ===============
+const VOUCHES_TO_VERIFY = 3;
+export function ImpactVouchBar({ log, vouched, isOwn, onVouch }: { log: any; vouched: boolean; isOwn: boolean; onVouch: (log: any) => void }) {
+  const verified = log.status === 'verified';
+  const count = log.vouch_count ?? 0;
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 12px', padding: '10px 14px',
+      borderRadius: 12, background: verified ? 'var(--green-tint)' : 'var(--bg-2)',
+      border: `1px solid ${verified ? 'var(--green-3)' : 'var(--line)'}`,
+    }}>
+      <div style={{ width: 32, height: 32, borderRadius: 9, background: verified ? 'var(--green)' : 'var(--surface)', border: verified ? 'none' : '1px solid var(--line)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+        <Icon name="leaf" size={16} color={verified ? '#fff' : 'var(--green)'} stroke={2} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+          {Number(log.co2_saved_kg ?? 0)} kg CO₂ · {log.category}
+        </div>
+        <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', letterSpacing: '.04em', color: verified ? 'var(--green)' : 'var(--ink-3)', marginTop: 2 }}>
+          {verified
+            ? `COMMUNITY VERIFIED · ${count} VOUCH${count === 1 ? '' : 'ES'}`
+            : `${count}/${VOUCHES_TO_VERIFY} VOUCHES TO VERIFY`}
+        </div>
+      </div>
+      {verified ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: 'var(--green)' }}>
+          <Icon name="check" size={14} stroke={2.6} /> Verified
+        </span>
+      ) : isOwn ? (
+        <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>awaiting vouches</span>
+      ) : (
+        <button className={vouched ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => onVouch(log)} style={{ padding: '6px 14px', fontSize: 12.5 }}>
+          {vouched ? 'Vouched ✓' : 'Vouch'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // =============== Real feed card (DB posts) ===============
-function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared }: { post: any; onNav: any; onRefresh: () => void; onHideUser?: (userId: string) => void; onStoryShared?: () => void }) {
+function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impactLog, vouched, onVouch }: { post: any; onNav: any; onRefresh: () => void; onHideUser?: (userId: string) => void; onStoryShared?: () => void; impactLog?: any; vouched?: boolean; onVouch?: (log: any) => void }) {
   const app = useApp();
   const profile = post.profile;
   const original = post.original;
@@ -1021,6 +1110,10 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared }: { p
       )}
       {quotePost && <HomeQuoteCard post={quotePost} onNav={onNav} />}
       {!quotePost && externalUrls.map(u => <OgPreviewCard key={u} url={u} />)}
+
+      {impactLog && onVouch && (
+        <ImpactVouchBar log={impactLog} vouched={!!vouched} isOwn={isOwnPost} onVouch={onVouch} />
+      )}
 
       <footer onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 24, color: 'var(--ink-3)' }}>
         <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />

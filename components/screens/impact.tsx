@@ -56,7 +56,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
   const [loading, setLoading] = React.useState(true);
   const [chartDays, setChartDays] = React.useState(30);
 
-  React.useEffect(() => {
+  const reload = React.useCallback(() => {
     if (!app.user?.id) { setLoading(false); return; }
     getAllLogs(app.user.id).then(data => {
       setLogs(data);
@@ -64,7 +64,17 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
     }).catch(() => setLoading(false));
   }, [app.user?.id]);
 
+  React.useEffect(() => { reload(); }, [reload]);
+
+  // Refresh immediately when an action is logged from the modal
+  React.useEffect(() => {
+    window.addEventListener('honua:impact-logged', reload);
+    return () => window.removeEventListener('honua:impact-logged', reload);
+  }, [reload]);
+
   const totalCo2 = logs.reduce((s, l) => s + Number(l.co2_saved_kg ?? 0), 0);
+  const verifiedCo2 = logs.filter(l => l.status === 'verified').reduce((s, l) => s + Number(l.co2_saved_kg ?? 0), 0);
+  const pendingCount = logs.filter(l => l.status === 'pending').length;
   const totalPts = logs.reduce((s, l) => s + Number(l.points ?? 0), 0);
   const streak = computeStreak(logs);
   const chartData = groupByDateCategory(logs, chartDays);
@@ -105,7 +115,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
 
         {/* KPI cards */}
         <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
-          <KpiCard label="CO₂ avoided" value={totalCo2 >= 1000 ? (totalCo2 / 1000).toFixed(2) : Math.round(totalCo2).toString()} unit={totalCo2 >= 1000 ? 't' : 'kg'} delta={isVerified ? '✓ Verified impact' : `${Math.max(0, Math.round(500 - totalCo2))} kg to verified`} color="var(--green)" icon="leaf" big />
+          <KpiCard label="CO₂ avoided" value={totalCo2 >= 1000 ? (totalCo2 / 1000).toFixed(2) : Math.round(totalCo2).toString()} unit={totalCo2 >= 1000 ? 't' : 'kg'} delta={verifiedCo2 > 0 ? `✓ ${Math.round(verifiedCo2)} kg community-verified${pendingCount ? ` · ${pendingCount} pending` : ''}` : pendingCount ? `${pendingCount} action${pendingCount === 1 ? '' : 's'} awaiting vouches` : isVerified ? '✓ Verified impact' : 'share actions to get them verified'} color="var(--green)" icon="leaf" big />
           <KpiCard label="Green points" value={formatCount(totalPts)} unit="GP" delta={`${logs.length} action${logs.length === 1 ? '' : 's'} logged`} color="var(--green-2)" icon="award" />
           <KpiCard label="Current streak" value={streak.toString()} unit={streak === 1 ? 'day' : 'days'} delta={streak >= 30 ? '2× multiplier active!' : `${30 - streak} days to 2×`} color="var(--sky)" icon="flame" />
           <KpiCard label="Impact level" value={(Math.floor(totalPts / 200) + 1).toString()} unit="" delta={`${totalPts % 200} / 200 GP to next`} color="var(--sun)" icon="bolt" />
@@ -206,7 +216,11 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 500, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.action}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{log.logged_at ? timeAgo(log.logged_at) : ''} · {log.category}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {log.logged_at ? timeAgo(log.logged_at) : ''} · {log.category}
+                    {log.status === 'verified' && <span style={{ color: 'var(--green)', fontWeight: 700 }}>✓ verified</span>}
+                    {log.status === 'pending' && <span style={{ color: 'var(--sun)', fontWeight: 700 }}>{log.vouch_count ?? 0}/3 vouches</span>}
+                  </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--green)' }}>+{log.points} GP</div>

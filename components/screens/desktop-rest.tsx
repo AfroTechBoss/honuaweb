@@ -2542,29 +2542,98 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
 // --- Log an action ---
 export function MLogAction({ close }) {
   const app = useApp();
-  const opts = [['leaf', 'Transport', '+24 GP'], ['plant', 'Food', '+12 GP'], ['bolt', 'Energy', '+200 GP'], ['droplet', 'Water', '+80 GP'], ['repost', 'Waste', '+60 GP'], ['globe', 'Advocacy', '+40 GP']];
+  // icon, category (must match ACTION_IMPACTS in lib/impact.ts)
+  const opts: [string, string][] = [
+    ['leaf', 'Transport'], ['plant', 'Food'], ['bolt', 'Energy'],
+    ['repost', 'Waste'], ['droplet', 'Ocean'], ['sparkles', 'Lifestyle'],
+  ];
   const [sel, setSel] = React.useState(0);
   const [desc, setDesc] = React.useState('');
+  const [proofFile, setProofFile] = React.useState<File | null>(null);
+  const [proofPreview, setProofPreview] = React.useState<string | null>(null);
+  const [shareToFeed, setShareToFeed] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [impacts, setImpacts] = React.useState<Record<string, { co2: number; pts: number }>>({});
+  React.useEffect(() => {
+    import('@/lib/impact').then(({ ACTION_IMPACTS }) => setImpacts(ACTION_IMPACTS));
+  }, []);
+  const cat = opts[sel][1];
+  const impact = impacts[cat] ?? { co2: 0, pts: 0 };
+
+  const handleLog = async () => {
+    if (!desc.trim()) return;
+    if (!app.user?.id) { close(); app.toast({ msg: 'Sign in to log actions', icon: 'user' }); return; }
+    setSaving(true);
+    try {
+      const { createImpactAction, VOUCH_THRESHOLD } = await import('@/lib/impact');
+      const { log, error } = await createImpactAction(app.user.id, {
+        action: desc.trim(), category: cat, co2: impact.co2, pts: impact.pts,
+        description: desc.trim(), proofFile, shareToFeed, userName: app.user?.name,
+      });
+      if (!log) throw new Error(error || 'insert failed');
+      window.dispatchEvent(new Event('honua:impact-logged'));
+      close();
+      const willVerify = proofFile || shareToFeed;
+      app.openModal('celebrate', {
+        title: `Action logged · +${impact.pts} GP`,
+        sub: willVerify
+          ? `${impact.co2} kg CO₂ recorded. It counts as verified once ${VOUCH_THRESHOLD} community members vouch for it.`
+          : `${impact.co2} kg CO₂ recorded on your ledger. Add proof next time to get it community-verified.`,
+      });
+    } catch (e: any) {
+      app.toast({ msg: 'Could not log action', sub: e?.message, kind: 'error', icon: 'close' });
+    } finally { setSaving(false); }
+  };
+
   return (
     <Modal onClose={close} width={540}>
-      <ModalHead icon="plus" title="Log an action" sub="Record a sustainable action to earn points and grow your streak." onClose={close} />
+      <ModalHead icon="plus" title="Log an action" sub="Record a sustainable action — the community verifies it." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
         <span className="fld-label">Category</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
-          {opts.map(([ic, l, gp], i) => (
-            <button key={l} onClick={() => setSel(i)} className={'opt-row ' + (sel === i ? 'sel' : '')} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-              <span style={{ color: sel === i ? 'var(--green)' : 'var(--ink-3)' }}><Icon name={ic} size={18} stroke={2} /></span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{l}</span>
-              <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>{gp}</span>
-            </button>
-          ))}
+          {opts.map(([ic, l], i) => {
+            const im = impacts[l] ?? { co2: 0, pts: 0 };
+            return (
+              <button key={l} onClick={() => setSel(i)} className={'opt-row ' + (sel === i ? 'sel' : '')} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                <span style={{ color: sel === i ? 'var(--green)' : 'var(--ink-3)' }}><Icon name={ic} size={18} stroke={2} /></span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{l}</span>
+                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>+{im.pts} GP · {im.co2} kg</span>
+              </button>
+            );
+          })}
         </div>
         <span className="fld-label">What did you do?</span>
-        <input className="fld" autoFocus value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Biked to work instead of driving (8 km)" />
+        <input className="fld" autoFocus value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Biked to work instead of driving (8 km)" style={{ marginBottom: 14 }} />
+
+        <span className="fld-label">Proof <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(photo — optional, but needed for verification)</span></span>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) { setProofFile(f); setProofPreview(URL.createObjectURL(f)); }
+        }} />
+        <div onClick={() => fileRef.current?.click()} style={{
+          height: proofPreview ? 120 : 64, borderRadius: 12, marginBottom: 14, cursor: 'pointer',
+          border: `2px dashed ${proofFile ? 'var(--green)' : 'var(--line-2)'}`,
+          background: proofFile ? 'var(--green-tint)' : 'var(--bg-2)',
+          display: 'grid', placeItems: 'center', overflow: 'hidden', position: 'relative', transition: 'all .2s',
+        }}>
+          {proofPreview
+            ? <img src={proofPreview} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--ink-3)', fontSize: 13, fontWeight: 600 }}>
+                <Icon name="image" size={16} /> Add a photo of the action
+              </span>}
+        </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 4 }}>
+          <input type="checkbox" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} style={{ accentColor: 'var(--green)', width: 16, height: 16 }} />
+          <span style={{ fontSize: 13.5, color: 'var(--ink-2)' }}>Share to feed so the community can vouch for it</span>
+        </label>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: `Action logged · ${opts[sel][2]}`, sub: `Nice work. That's another entry in your verified impact ledger — streak now at 13 days.` }); }}>Log action</button>
+        <button className="btn btn-green" onClick={handleLog} disabled={!desc.trim() || saving} style={{ opacity: desc.trim() && !saving ? 1 : .5 }}>
+          {saving ? 'Logging…' : `Log action · +${impact.pts} GP`}
+        </button>
       </ModalFoot>
     </Modal>
   );

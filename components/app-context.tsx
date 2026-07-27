@@ -388,6 +388,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             follow: 'started following you',
             message: 'sent you a message',
             repost: 'reposted your post',
+            vouch: 'vouched for your impact action',
           };
           const label = actionLabel[type] ?? body;
           toast({

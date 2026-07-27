@@ -2,7 +2,7 @@ import { supabase } from "./supabase";
 
 export type NotifType =
   | "like" | "follow" | "comment" | "reply" | "mention"
-  | "community_invite" | "badge" | "level_up";
+  | "community_invite" | "badge" | "level_up" | "vouch";
 
 export async function createNotification({
   userId, actorId, type, postId, body, badgeName, communityId,
