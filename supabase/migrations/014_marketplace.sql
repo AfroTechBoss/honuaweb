@@ -69,8 +69,10 @@ where not exists (select 1 from products where name is not null and price_cents 
 create table if not exists orders (id text primary key);
 
 -- If a leftover orders table used uuid ids, convert to text so the app's
--- client-generated ids ('ORD-XXXXXX') can be inserted.
+-- client-generated ids ('ORD-XXXXXX') can be inserted. Old policies on the
+-- table block the type change, so drop them first — ours are recreated below.
 do $$
+declare pol record;
 begin
   if exists (
     select 1 from information_schema.columns
@@ -78,6 +80,12 @@ begin
       and column_name = 'id' and data_type = 'uuid'
   ) then
     begin
+      for pol in
+        select policyname from pg_policies
+        where schemaname = 'public' and tablename = 'orders'
+      loop
+        execute format('drop policy if exists %I on public.orders', pol.policyname);
+      end loop;
       alter table public.orders alter column id drop default;
       alter table public.orders alter column id type text using id::text;
     exception when others then
