@@ -702,14 +702,14 @@ function HomeMentionSpan({ handle, onNav }: { handle: string; onNav: any }) {
       setHovered(true);
       if (!profile && !notFound) {
         setLoading(true);
-        import('@/lib/supabase').then(({ supabase }) =>
-          supabase.from('profiles').select('id, handle, full_name, avatar_url, followers_count, following_count').eq('handle', handle).maybeSingle()
-            .then(({ data }: any) => {
-              setLoading(false);
-              if (data) { _profileCache[handle] = data; setProfile(data); }
-              else setNotFound(true);
-            }).catch(() => { setLoading(false); setNotFound(true); })
-        );
+        import('@/lib/supabase').then(async ({ supabase }) => {
+          try {
+            const { data } = await supabase.from('profiles').select('id, handle, full_name, avatar_url, followers_count, following_count').eq('handle', handle).maybeSingle();
+            setLoading(false);
+            if (data) { _profileCache[handle] = data; setProfile(data); }
+            else setNotFound(true);
+          } catch { setLoading(false); setNotFound(true); }
+        });
       }
     }, 200);
   };
@@ -1558,7 +1558,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           {MOCK.communities.slice(0, 3).map(c => {
             const joined = app.community?.has(c.name);
             return (
-            <div key={c.name} onClick={() => onNav?.('communities', { slug: c.slug || c.name })} className="post-card" style={{
+            <div key={c.name} onClick={() => onNav?.('communities', { slug: (c as any).slug || c.name })} className="post-card" style={{
               background: 'var(--surface)', borderRadius: 16,
               border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer',
             }}>

@@ -27,7 +27,7 @@ export function AdminPrivyProvider({ children }: { children: React.ReactNode }) 
       config={{
         loginMethods: ["email"],
         appearance: { theme: "dark", accentColor: "#22c55e" },
-        embeddedWallets: { createOnLogin: "off" },
+        embeddedWallets: { ethereum: { createOnLogin: "off" }, solana: { createOnLogin: "off" } },
       }}
     >
       {children}

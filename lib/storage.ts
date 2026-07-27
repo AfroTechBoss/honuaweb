@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 // Path format: {bucket}/{userId}/{filename}
 // Supabase Storage serves these from its global CDN automatically.
 export async function uploadFile(
-  bucket: "avatars" | "covers" | "posts" | "projects",
+  bucket: "avatars" | "covers" | "posts" | "projects" | "comments",
   userId: string,
   file: File
 ): Promise<string> {

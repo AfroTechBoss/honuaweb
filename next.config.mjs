@@ -6,7 +6,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
-  typescript: { ignoreBuildErrors: true },
+  // tsc is clean as of the fable branch — keep it that way
+  typescript: { ignoreBuildErrors: false },
   eslint: { ignoreDuringBuilds: true },
   webpack: (config) => {
     config.resolve.extensionAlias = {

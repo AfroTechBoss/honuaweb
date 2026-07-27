@@ -16,8 +16,8 @@ const Sub = ({ title, children }: { title: string; children: React.ReactNode }) 
   </div>
 );
 
-const P = ({ children }: { children: React.ReactNode }) => (
-  <p style={{ margin: "0 0 12px" }}>{children}</p>
+const P = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
+  <p style={{ margin: "0 0 12px", ...style }}>{children}</p>
 );
 
 const UL = ({ items }: { items: string[] }) => (

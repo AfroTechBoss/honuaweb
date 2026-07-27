@@ -70,7 +70,7 @@ const Table = ({ headers, rows }: { headers: string[]; rows: React.ReactNode[][]
   </div>
 );
 
-const Badge = ({ color, children }: { color: "green" | "amber" | "red" }) => {
+const Badge = ({ color, children }: { color: "green" | "amber" | "red"; children?: React.ReactNode }) => {
   const colors = {
     green: { bg: "rgba(16,124,48,0.1)", text: "var(--green-2, #1a6035)" },
     amber: { bg: "rgba(184,154,90,0.15)", text: "var(--accent, #8a6a20)" },
