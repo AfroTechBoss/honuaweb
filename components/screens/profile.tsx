@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
 import { ALL_PRODUCTS } from "@/components/screens/product-detail";
 import { loadOrders } from "@/components/screens/orders";
+import { ImpactVouchBar, useImpactVouches, PostImpactVouch } from "@/components/impact-vouch";
 
 function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
   const [profile, setProfile] = React.useState<any>(null);
@@ -88,6 +89,10 @@ export function DesktopProfile({ onNav, params }) {
   const ownPosts = posts.filter(p => !p.is_repost);
   const reposts = posts.filter(p => p.is_repost);
   const mediaPosts = posts.filter(p => p.image_url);
+
+  // Impact verification state for the timeline
+  const timelinePostIds = React.useMemo(() => posts.map((p: any) => p.id), [posts]);
+  const impactVouches = useImpactVouches(timelinePostIds);
 
   const joinedDate = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -265,12 +270,12 @@ export function DesktopProfile({ onNav, params }) {
               {tab === 'posts' && (
                 ownPosts.length === 0
                   ? <EmptyTab icon="" msg={isOwn ? "You haven't posted yet. Share your first action!" : "No posts yet."} />
-                  : ownPosts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} />)
+                  : ownPosts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} impact={impactVouches} />)
               )}
               {tab === 'reposts' && (
                 reposts.length === 0
                   ? <EmptyTab icon="" msg="No reposts yet." />
-                  : reposts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} isRepost />)
+                  : reposts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} isRepost impact={impactVouches} />)
               )}
               {tab === 'projects' && (
                 projects.length === 0
@@ -567,7 +572,7 @@ function PostMoreMenu({ profile, postId, isOwn = false, postContent = '', postCr
   );
 }
 
-function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any; isRepost?: boolean }) {
+function RealPostCard({ post, onNav, isRepost = false, impact }: { post: any; onNav: any; isRepost?: boolean; impact?: { logs: Record<string, any>; mine: string[]; vouch: (log: any) => void } }) {
   const app = useApp();
   const profile = post.profile;
   const isOwnPost = !!app.user?.id && (post.user_id === app.user.id || profile?.handle === app.user.handle);
@@ -610,6 +615,14 @@ function RealPostCard({ post, onNav, isRepost = false }: { post: any; onNav: any
           })()}
           {(isRepost ? original?.image_url : post.image_url) && (
             <img src={isRepost ? original.image_url : post.image_url} style={{ width: '100%', borderRadius: 12, marginBottom: 10, objectFit: 'cover', maxHeight: 320 }} />
+          )}
+          {impact?.logs?.[post.id] && (
+            <ImpactVouchBar
+              log={impact.logs[post.id]}
+              vouched={impact.mine.includes(impact.logs[post.id].id)}
+              isOwn={isOwnPost}
+              onVouch={impact.vouch}
+            />
           )}
           <div onClick={stop} style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--ink-3)' }}>
             <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like?.toggle(post.id)} />
@@ -832,26 +845,34 @@ export function DesktopPostDetail({ onNav, params }) {
                 style={{ width: '100%', borderRadius: 12, marginBottom: 16, objectFit: 'cover', maxHeight: 420, cursor: 'zoom-in' }}
               />
             )}
-            <div className="post-detail-stats" style={{
-              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
-              marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12,
-            }}>
-              <div>
-                <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>VERIFIED IMPACT</div>
-                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>−1.4 t</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>CO₂ /yr · oracle-verified May 19</div>
+            {/* Demo posts keep the illustrative stat strip; real posts show the
+                actual community-verification state of their linked impact log. */}
+            {isMock ? (
+              <div className="post-detail-stats" style={{
+                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
+                marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12,
+              }}>
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>VERIFIED IMPACT</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>−1.4 t</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>CO₂ /yr · oracle-verified May 19</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>ENERGY SAVED</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>3.2 MWh</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>vs 2024 baseline</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>$ SAVED</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>$3,012</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>annual co-op savings</div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>ENERGY SAVED</div>
-                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>3.2 MWh</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>vs 2024 baseline</div>
+            ) : (
+              <div style={{ marginTop: 18 }}>
+                <PostImpactVouch postId={post.id} isOwn={dbPost?.user_id === app.user?.id} />
               </div>
-              <div>
-                <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>$ SAVED</div>
-                <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>$3,012</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>annual co-op savings</div>
-              </div>
-            </div>
+            )}
             <footer style={{ display: 'flex', gap: 28, marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
               <ActionBtn icon="heart" count={(isMock ? (post as any).likes : (post.likes_count ?? 0)) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
               <ActionBtn icon="comment" count={isMock ? (post as any).comments : (liveCommentCount ?? post.comments_count ?? 0)} onClick={() => document.getElementById('pd-reply')?.focus()} />
