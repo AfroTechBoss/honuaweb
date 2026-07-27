@@ -134,7 +134,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   // ----- live, mutable platform data (session only) -----
   const [reports, setReports] = React.useState(MOCK_ADMIN.reports);
   const [products, setProducts] = React.useState(MOCK_ADMIN.products);
-  const [users, setUsers] = React.useState(MOCK_ADMIN.users);
+  const [users, setUsers] = React.useState<any[]>(MOCK_ADMIN.users);
   const [audit, setAudit] = React.useState(MOCK_ADMIN.audit);
   const [payouts, setPayouts] = React.useState(MOCK_PAYOUTS);
   const [appeals, setAppeals] = React.useState(MOCK_APPEALS);
@@ -156,6 +156,31 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   }, []);
 
   React.useEffect(() => { loadChallenges(); }, [loadChallenges]);
+
+  // Real members from Supabase merged ahead of the demo roster
+  React.useEffect(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase.from('profiles')
+        .select('id, handle, full_name, location, role, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!data?.length) return;
+      const real = data.map((p: any) => ({
+        id: p.id,
+        name: p.full_name ?? p.handle ?? 'Member',
+        handle: p.handle ?? '—',
+        city: p.location ?? '—',
+        role: p.role === 'admin' ? 'Admin' : p.role === 'moderator' ? 'Moderator' : 'Member',
+        status: 'active',
+        impact: '—',
+        posts: '—',
+        reports: 0,
+        joined: p.created_at ? new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—',
+        _db: true,
+      }));
+      setUsers(prev => [...real, ...prev.filter((u: any) => !u._db)]);
+    }).catch(() => {});
+  }, []);
 
   // realtime: refresh challenges when any row changes
   React.useEffect(() => {
@@ -250,6 +275,13 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const setUserRole = (id, role) => {
     const u = users.find(x => x.id === id);
     setUsers(us => us.map(x => x.id === id ? { ...x, role } : x));
+    // Persist for real members (profiles.role only supports user/moderator/admin)
+    if (u?._db && ['Member', 'Moderator', 'Admin'].includes(role)) {
+      const dbRole = role === 'Admin' ? 'admin' : role === 'Moderator' ? 'moderator' : 'user';
+      import('@/lib/supabase').then(({ supabase }) =>
+        supabase.from('profiles').update({ role: dbRole }).eq('id', id)
+      ).catch(() => {});
+    }
     log('changed role to ' + role, '@' + (u?.handle || ''), 'award');
     app.toast?.({ msg: 'Role updated', sub: '@' + u?.handle + ' → ' + role, kind: 'success', icon: 'award' });
   };

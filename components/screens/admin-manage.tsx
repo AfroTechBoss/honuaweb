@@ -221,11 +221,53 @@ export function AdminSellers({ onNav }) {
     practices: ['As submitted'], certs: [], status: 'pending', isUser: true,
   } : null;
   const [queue, setQueue] = React.useState(MOCK_APPLICATIONS);
+  const [dbQueue, setDbQueue] = React.useState<any[]>([]);
   const [sel, setSel] = React.useState<string | null>(null);
-  const all = userApp ? [userApp, ...queue] : queue;
+
+  // Real applications from Supabase
+  const loadQueue = React.useCallback(() => {
+    import('@/lib/market').then(({ getPendingSellerApplications }) => getPendingSellerApplications()).then(rows => {
+      setDbQueue(rows.map((r: any) => ({
+        id: r.id,
+        shop: r.shop_name,
+        applicant: r.profile?.full_name ?? 'Member',
+        handle: r.profile?.handle ?? r.shop_handle ?? '—',
+        categories: r.categories?.length ? r.categories : ['—'],
+        type: r.offering_type ?? 'Physical goods',
+        country: r.country ?? '—',
+        submitted: r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
+        impact: r.impact_story ?? '—',
+        practices: r.practices ?? [],
+        certs: r.certs ?? [],
+        status: 'pending',
+        userId: r.user_id,
+        _db: true,
+      })));
+    }).catch(() => {});
+  }, []);
+  React.useEffect(() => { loadQueue(); }, [loadQueue]);
+
+  // Real DB applications first, then the current user's local one, then demo filler
+  const all = [...dbQueue, ...(userApp && !dbQueue.some(a => a.userId === app.user?.id) ? [userApp] : []), ...queue];
   const selApp = all.find(a => a.id === sel) || all[0];
 
-  const decide = (id: string, decision: string) => {
+  const decide = async (id: string, decision: string) => {
+    const target = all.find(a => a.id === id);
+    if (target?._db) {
+      const { reviewSellerApplication } = await import('@/lib/market');
+      const ok = await reviewSellerApplication(id, decision === 'approve' ? 'approved' : 'rejected');
+      if (!ok) { app.toast?.({ msg: 'Could not update application', kind: 'error', icon: 'close' }); return; }
+      // If this is the signed-in admin's own application, reflect locally too
+      if (target.userId === app.user?.id) {
+        app.setState?.(s => ({ ...s, sellerStatus: decision === 'approve' ? 'approved' : 'rejected' }));
+      }
+      setDbQueue(q => q.filter(a => a.id !== id));
+      setSel(null);
+      app.toast?.(decision === 'approve'
+        ? { msg: 'Seller approved', sub: target.shop, kind: 'success', icon: 'check' }
+        : { msg: 'Application declined', sub: target.shop, icon: 'close' });
+      return;
+    }
     if (id === 'me') {
       app.setState?.(s => ({ ...s, sellerStatus: decision === 'approve' ? 'approved' : 'rejected' }));
       app.toast?.(decision === 'approve'

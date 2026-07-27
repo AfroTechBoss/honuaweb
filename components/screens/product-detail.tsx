@@ -128,6 +128,14 @@ function WriteReviewModal({ product, onClose, onSubmit }: { product: any; onClos
     };
     const existing = loadReviews();
     localStorage.setItem('honua_reviews', JSON.stringify([...existing, review]));
+    // DB products (uuid ids) also get a real product_reviews row
+    if (app.user?.id && /^[0-9a-f-]{36}$/.test(String(product.id))) {
+      import('@/lib/supabase').then(({ supabase }) =>
+        supabase.from('product_reviews').upsert({
+          product_id: product.id, user_id: app.user.id, stars: rating, body: text || null,
+        }, { onConflict: 'product_id,user_id' })
+      ).catch(() => {});
+    }
     setDone(true);
     onSubmit(review);
   };
@@ -167,14 +175,63 @@ function WriteReviewModal({ product, onClose, onSubmit }: { product: any; onClos
 // ─── Product detail page ─────────────────────────────────────────────────────
 export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any }) {
   const app = useApp();
-  const product = ALL_PRODUCTS.find(p => p.id === id);
+  const isDbId = /^[0-9a-f-]{36}$/.test(String(id));
+  const mockProduct = ALL_PRODUCTS.find(p => p.id === id);
+  const [dbProduct, setDbProduct] = React.useState<any>(null);
+  const [dbLoading, setDbLoading] = React.useState(isDbId);
   const [reviews, setReviews] = React.useState<any[]>([]);
   const [showReview, setShowReview] = React.useState(false);
   const [qty, setQty] = React.useState(1);
 
+  // Real product from Supabase when the id is a uuid
   React.useEffect(() => {
-    if (product) setReviews(getProductReviews(product.id, product.title));
+    if (!isDbId) return;
+    let alive = true;
+    setDbLoading(true);
+    import('@/lib/market').then(({ getProductById }) => getProductById(id)).then(p => {
+      if (!alive) return;
+      if (p) {
+        setDbProduct({
+          id: p.id, title: p.name, price: p.price_cents / 100, brand: p.brand, tag: p.tag,
+          imgUrl: p.imgUrl, img: p.name, category: p.category,
+          seller: { name: p.brand, handle: p.brand.toLowerCase().replace(/\s+/g, ''), rating: p.rating, reviews: p.review_count },
+          description: p.description || `${p.name} from ${p.brand}. Sustainably made with planet-friendly materials.`,
+          eco: ECO_DETAILS[p.tag] || [],
+          inStock: true, stock: 40,
+        });
+      }
+      setDbLoading(false);
+    }).catch(() => setDbLoading(false));
+    return () => { alive = false; };
+  }, [id, isDbId]);
+
+  const product = mockProduct ?? dbProduct;
+
+  React.useEffect(() => {
+    if (!product) return;
+    setReviews(getProductReviews(product.id, product.title));
+    // DB reviews for real products
+    if (isDbId) {
+      import('@/lib/supabase').then(({ supabase }) =>
+        supabase.from('product_reviews')
+          .select('stars, body, created_at, profile:profiles!product_reviews_user_id_fkey(full_name, handle, avatar_url)')
+          .eq('product_id', id).order('created_at', { ascending: false })
+      ).then(({ data }: any) => {
+        if (data?.length) setReviews(data.map((r: any) => ({
+          rating: r.stars, text: r.body ?? '', date: r.created_at, author: r.profile?.full_name ?? 'A member',
+        })));
+      }).catch(() => {});
+    }
   }, [product?.id]);
+
+  if (!product && dbLoading) {
+    return (
+      <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+        <DesktopSidebar active="marketplace" onNav={onNav} />
+        <div style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Loading product…</div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (

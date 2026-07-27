@@ -51,11 +51,7 @@ const STATE_DEFAULTS: any = {
   following: ["sarahgreen", "greentech"],
   joinedCommunities: ["Urban gardeners", "Solar DIY", "Ocean cleanup crew"],
   joinedChallenges: [1, 2],
-  cart: [
-    { id: 'p1', name: 'Refillable shampoo bar', price: '$12', brand: 'BareHaus', tag: 'Plastic-free', imgUrl: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&q=80', quantity: 1 },
-    { id: 'p2', name: 'Solar phone charger', price: '$48', brand: 'Sunly', tag: 'Solar', imgUrl: 'https://images.unsplash.com/photo-1620634409738-62a2e2b1a5b7?w=400&q=80', quantity: 1 },
-    { id: 'p3', name: 'Bamboo cutlery set', price: '$18', brand: 'Forrest', tag: 'Compostable', imgUrl: 'https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=400&q=80', quantity: 1 },
-  ],
+  cart: [],
   cartOpen: false,
   wishlist: [],
   drafts: [],
@@ -75,6 +71,8 @@ function loadState() {
   if (typeof window === "undefined") return { ...STATE_DEFAULTS };
   try {
     const raw = JSON.parse(localStorage.getItem(LS_STATE) || "{}");
+    // One-time cleanup: drop the old demo-seeded cart items (ids p1/p2/p3)
+    if (Array.isArray(raw.cart)) raw.cart = raw.cart.filter((c: any) => !['p1', 'p2', 'p3'].includes(c?.id));
     return { ...STATE_DEFAULTS, ...raw };
   } catch {
     return { ...STATE_DEFAULTS };

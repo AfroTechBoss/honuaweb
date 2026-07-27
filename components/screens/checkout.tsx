@@ -492,6 +492,12 @@ export function DesktopCheckout() {
     const address = { firstName, lastName, street, city, zip, country, email };
     const snapshot = { id: orderId, total, itemCount, items: [...cart], address };
     saveOrder({ ...snapshot, subtotal, shipping, createdAt: new Date().toISOString(), status: 'processing' });
+    // Persist to Supabase too, so orders survive across devices
+    if (app.user?.id) {
+      import('@/lib/market')
+        .then(({ createDbOrder }) => createDbOrder(app.user.id, { id: orderId, items: [...cart], subtotal, shipping, total, email, address }))
+        .catch(() => {});
+    }
     setOrderSnapshot(snapshot);
     clearCart?.();
     setSuccess(true);

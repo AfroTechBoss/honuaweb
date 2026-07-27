@@ -78,6 +78,20 @@ export function DesktopSell({ onNav, params }: { onNav: any; params?: Record<str
   const status = app.state?.sellerStatus || 'none';
   const [started, setStarted] = React.useState(false);
 
+  // Sync seller status from Supabase (application may have been reviewed elsewhere)
+  React.useEffect(() => {
+    if (!app.user?.id) return;
+    import('@/lib/market').then(({ getMySellerApplication }) => getMySellerApplication(app.user.id)).then(dbApp => {
+      if (!dbApp) return;
+      const dbStatus = dbApp.status === 'approved' ? 'approved' : dbApp.status === 'rejected' ? 'rejected' : 'pending';
+      app.setState?.((s: any) => s.sellerStatus === dbStatus ? s : ({
+        ...s,
+        sellerStatus: dbStatus,
+        sellerShop: s.sellerShop ?? { name: dbApp.shop_name, handle: dbApp.shop_handle, tagline: dbApp.tagline },
+      }));
+    }).catch(() => {});
+  }, [app.user?.id]);
+
   const body = () => {
     if (status === 'pending')  return <SellPending onNav={onNav} />;
     if (status === 'approved') return <SellApproved onNav={onNav} />;
@@ -210,8 +224,15 @@ function ApplyWizard({ onNav, onCancel }) {
     return true;
   };
 
-  const submit = () => {
+  const submit = async () => {
     app.setState?.(s => ({ ...s, sellerStatus: 'pending', sellerShop: { name: f.name, handle: f.handle || f.name.toLowerCase().replace(/\s+/g, ''), tagline: f.tagline } }));
+    // Persist to Supabase so admins can actually review it
+    if (app.user?.id) {
+      try {
+        const { submitSellerApplication } = await import('@/lib/market');
+        await submitSellerApplication(app.user.id, f);
+      } catch {}
+    }
     app.toast?.({ msg: 'Application submitted', sub: 'We\'ll review it within 2 business days.', kind: 'success', icon: 'check' });
   };
 

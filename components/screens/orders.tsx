@@ -139,7 +139,20 @@ export function DesktopOrders({ onNav }: { onNav?: any }) {
   const router = useRouter();
   const [orders, setOrders] = React.useState<any[]>([]);
 
-  React.useEffect(() => { setOrders(loadOrders()); }, []);
+  React.useEffect(() => {
+    const local = loadOrders();
+    setOrders(local);
+    // Merge in DB orders (source of truth across devices)
+    if (app.user?.id) {
+      import('@/lib/market').then(({ getDbOrders }) => getDbOrders(app.user.id)).then(dbOrders => {
+        if (!dbOrders.length) return;
+        const seen = new Set(dbOrders.map((o: any) => o.id));
+        const merged = [...dbOrders, ...local.filter((o: any) => !seen.has(o.id))];
+        merged.sort((a: any, b: any) => new Date(b.date ?? b.createdAt ?? 0).getTime() - new Date(a.date ?? a.createdAt ?? 0).getTime());
+        setOrders(merged);
+      }).catch(() => {});
+    }
+  }, [app.user?.id]);
 
   const goToOrder = (id: string) => router.push(`/orders/${id}`);
 
@@ -241,7 +254,18 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
   React.useEffect(() => {
     const orders = loadOrders();
     const found = orders.find((o: any) => o.id === orderId);
-    if (found) setOrder(found); else setNotFound(true);
+    if (found) setOrder(found);
+    else {
+      // Not in localStorage — try Supabase (order placed on another device)
+      Promise.all([import('@/lib/market'), import('@/lib/supabase')]).then(async ([{ getDbOrders }, { supabase }]) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId) { setNotFound(true); return; }
+        const dbOrders = await getDbOrders(userId);
+        const dbFound = dbOrders.find((o: any) => o.id === orderId);
+        if (dbFound) setOrder(dbFound); else setNotFound(true);
+      }).catch(() => setNotFound(true));
+    }
     const reviews = loadReviews();
     if (reviews[orderId]) setReview(reviews[orderId]);
   }, [orderId]);

@@ -8,12 +8,23 @@ import { getNotifications, markAllRead } from "@/lib/notifications";
 export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [mob, setMob] = React.useState(false);
+  const [dbProducts, setDbProducts] = React.useState<any[]>([]);
+  const [cat, setCat] = React.useState('All');
   React.useEffect(() => {
     const check = () => setMob(window.innerWidth <= 768);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  // Real products from Supabase — falls back to demo catalogue if table is empty
+  React.useEffect(() => {
+    import('@/lib/market').then(({ getProducts }) => getProducts()).then(setDbProducts).catch(() => {});
+  }, []);
+  const useDb = dbProducts.length > 0;
+  const featured = useDb ? dbProducts.find((p: any) => p.featured) : null;
+  const gridProducts = useDb ? dbProducts.filter((p: any) => !p.featured) : MOCK.products;
+  const shownProducts = cat === 'All' ? gridProducts : gridProducts.filter((p: any) => (p.category ?? 'Home') === cat);
 
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -39,20 +50,28 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
         }}>
           <div style={{ padding: mob ? 18 : 28 }}>
             <span className="chip chip-green">Featured drop · 24h</span>
-            <h2 className="font-display" style={{ margin: '10px 0 8px', fontSize: mob ? 20 : 30, fontWeight: 600, letterSpacing: '-0.02em' }}>The repair kit. 92 tools, one foldable case.</h2>
-            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>By the Fix-it Collective. Every purchase funds a community repair café for a month.</p>
+            <h2 className="font-display" style={{ margin: '10px 0 8px', fontSize: mob ? 20 : 30, fontWeight: 600, letterSpacing: '-0.02em' }}>{featured ? `${featured.name}.` : 'The repair kit. 92 tools, one foldable case.'}</h2>
+            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>{featured?.description ?? 'By the Fix-it Collective. Every purchase funds a community repair café for a month.'}</p>
             <div style={{ display: 'flex', gap: 14, marginTop: 16, alignItems: 'center' }}>
-              <span style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Lora' }}>$84</span>
-              <span style={{ fontSize: 14, color: 'var(--ink-3)', textDecoration: 'line-through' }}>$120</span>
-              <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => { app.addToCart({ id: 'featured-repair-kit', name: 'The repair kit', price: '$84', brand: 'Fix-it Collective', tag: 'Repairable', quantity: 1 }); app.toast?.({ msg: 'Added to cart', sub: 'The repair kit · $84', kind: 'success', icon: 'cart' }); }}>Add to cart</button>
+              <span style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Lora' }}>{featured?.price ?? '$84'}</span>
+              {(featured ? featured.compare_at_cents : true) && <span style={{ fontSize: 14, color: 'var(--ink-3)', textDecoration: 'line-through' }}>{featured?.compare_at_cents ? `$${(featured.compare_at_cents / 100).toFixed(0)}` : '$120'}</span>}
+              <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => {
+                const item = featured
+                  ? { id: featured.id, name: featured.name, price: featured.price, brand: featured.brand, tag: featured.tag, imgUrl: featured.imgUrl, quantity: 1 }
+                  : { id: 'featured-repair-kit', name: 'The repair kit', price: '$84', brand: 'Fix-it Collective', tag: 'Repairable', quantity: 1 };
+                app.addToCart(item);
+                app.toast?.({ msg: 'Added to cart', sub: `${item.name} · ${item.price}`, kind: 'success', icon: 'cart' });
+              }}>Add to cart</button>
             </div>
           </div>
-          {!mob && <ImagePlaceholder label="repair kit hero — folded leather case open with tools" height={280} />}
+          {!mob && (featured?.imgUrl
+            ? <img src={featured.imgUrl} alt={featured.name} style={{ width: '100%', height: 280, objectFit: 'cover' }} />
+            : <ImagePlaceholder label="repair kit hero — folded leather case open with tools" height={280} />)}
         </div>
 
         {/* Filters */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, flexWrap: 'wrap', minWidth: 0, overflow: 'hidden' }}>
-          <div style={{ minWidth: 0, flex: 1 }}><MarketFilters /></div>
+          <div style={{ minWidth: 0, flex: 1 }}><MarketFilters active={cat} onChange={setCat} /></div>
           {!mob && (
             <div style={{ display: 'flex', gap: 8 }}>
               <span className="chip">Made in EU</span>
@@ -65,8 +84,8 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
 
         {/* Product grid */}
         <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: mob ? 10 : 14 }}>
-          {MOCK.products.map((p, i) => {
-            const productId = `m${i + 1}`;
+          {shownProducts.map((p: any, i: number) => {
+            const productId = useDb ? p.id : `m${i + 1}`;
             const wished = app.wishlist?.has(productId) || app.wishlist?.has(p.name);
             return (
             <div key={i} className="post-card" onClick={() => app.nav?.('product', { id: productId })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer' }}>
@@ -84,11 +103,13 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
                 <div style={{ fontSize: mob ? 13 : 14, fontWeight: 600, marginTop: 3 }}>{p.name}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Lora' }}>{p.price}</span>
-                  <button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); app.addToCart({ id: 'p-' + i, ...p, quantity: 1 }); app.toast?.({ msg: 'Added to cart', sub: p.name, kind: 'success', icon: 'cart' }); }} style={{ padding: '4px 10px', fontSize: 12 }}>Add</button>
+                  <button className="btn btn-ghost" onClick={(e) => { e.stopPropagation(); app.addToCart({ ...p, id: productId, quantity: 1 }); app.toast?.({ msg: 'Added to cart', sub: p.name, kind: 'success', icon: 'cart' }); }} style={{ padding: '4px 10px', fontSize: 12 }}>Add</button>
                 </div>
                 {!mob && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>★★★★★ 4.{7 + i % 3} · {120 + i * 14}</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{useDb
+                      ? (p.review_count > 0 ? `★ ${p.rating} · ${p.review_count}` : 'New listing')
+                      : `★★★★★ 4.${7 + i % 3} · ${120 + i * 14}`}</div>
                     <button onClick={(e) => { e.stopPropagation(); app.nav?.('messages', { handle: p.brand.toLowerCase().replace(/\s+/g, '') }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--sky)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
                       <Icon name="msg" size={11} /> Ask
                     </button>
@@ -104,12 +125,14 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
   );
 };
 
-export function MarketFilters() {
-  const [active, setActive] = React.useState('All');
+export function MarketFilters({ active: controlled, onChange }: { active?: string; onChange?: (t: string) => void } = {}) {
+  const [local, setLocal] = React.useState('All');
+  const active = controlled ?? local;
+  const set = onChange ?? setLocal;
   return (
     <div className="pill-nav">
       {['All', 'Home', 'Food', 'Style', 'Energy', 'Outdoors', 'Books'].map((t) => (
-        <button key={t} className={active === t ? 'active' : ''} onClick={() => setActive(t)}>{t}</button>
+        <button key={t} className={active === t ? 'active' : ''} onClick={() => set(t)}>{t}</button>
       ))}
     </div>
   );
@@ -924,6 +947,15 @@ export function Confetti() {
 export function MProject({ data, close }) {
   const app = useApp();
   const going = app.community?.has('proj-' + data.id);
+  const isDbProject = /^[0-9a-f-]{36}$/.test(String(data.id));
+  const handleRsvp = () => {
+    app.community.toggle('proj-' + data.id);
+    // Real RSVP for DB projects — keeps going_count accurate for everyone
+    if (isDbProject && app.user?.id) {
+      import('@/lib/market').then(({ toggleRsvp }) => toggleRsvp(app.user.id, data.id, going)).catch(() => {});
+    }
+    app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: `${data.t} · ${data.when}`, kind: 'success', icon: 'check' });
+  };
   return (
     <Modal onClose={close} width={560}>
       <div style={{ height: 180, position: 'relative', background: (data.color || 'var(--green)') }}>
@@ -936,10 +968,10 @@ export function MProject({ data, close }) {
         <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--ink-3)' }}>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="calendar" size={14} /> {data.when}</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="users" size={14} /> {data.going} going</span>
-          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="pin" size={14} /> Brooklyn, NY</span>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="pin" size={14} /> {data.locationName || 'Near you'}</span>
         </div>
         <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)' }}>
-          Hosted by <strong>{data.host}</strong>. Bring gloves and a refillable bottle — tools and refreshments provided. All skill levels welcome; this is a great first action if you're new to the neighborhood crew.
+          Hosted by <strong>{data.host}</strong>. {data.description || 'Bring gloves and a refillable bottle — tools and refreshments provided. All skill levels welcome; this is a great first action if you\'re new to the neighborhood crew.'}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: 14, background: 'var(--bg-2)', borderRadius: 12 }}>
           <div style={{ display: 'flex' }}>
@@ -951,7 +983,7 @@ export function MProject({ data, close }) {
       <ModalFoot>
         <button className="btn btn-ghost" onClick={() => { app.toast({ msg: 'Link copied', sub: 'Project link copied to clipboard.', icon: 'share' }); }}><Icon name="share" size={14} /> Share</button>
         <button className="btn btn-ghost" onClick={() => { close(); app.nav('messages'); }}><Icon name="msg" size={14} /> Message host</button>
-        <button className={going ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => { app.community.toggle('proj-' + data.id); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: `${data.t} · ${data.when}`, kind: 'success', icon: 'check' }); }}>
+        <button className={going ? 'btn btn-ghost' : 'btn btn-green'} onClick={handleRsvp}>
           {going ? 'Going ✓ — cancel' : "I'm going"}
         </button>
       </ModalFoot>
@@ -1041,7 +1073,22 @@ export function MProduct({ data, close }) {
 export function MCredit({ data, close }) {
   const app = useApp();
   const [qty, setQty] = React.useState(1);
+  const [buying, setBuying] = React.useState(false);
   const unit = parseFloat(String(data.price).replace(/[^0-9.]/g, '')) || 20;
+
+  const handleBuy = async () => {
+    setBuying(true);
+    try {
+      // Record the retirement in Supabase when signed in and the credit is real
+      if (app.user?.id) {
+        const { purchaseCredit } = await import('@/lib/market');
+        await purchaseCredit(app.user.id, { id: data.id, name: data.name }, qty, Math.round(unit * qty * 100));
+        window.dispatchEvent(new Event('honua:offset-purchased'));
+      }
+      close();
+      app.openModal('celebrate', { title: `Offset ${qty} t CO₂`, sub: `You retired ${qty} tonne${qty > 1 ? 's' : ''} via ${data.name}. Certificate added to your wallet.` });
+    } finally { setBuying(false); }
+  };
   return (
     <Modal onClose={close} width={560}>
       <ModalHead icon="leaf" title={data.name} sub={`${data.type} · ${data.region} · vintage ${data.vintage}`} onClose={close} />
@@ -1070,8 +1117,8 @@ export function MCredit({ data, close }) {
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: `Offset ${qty} t CO₂`, sub: `You retired ${qty} tonne${qty > 1 ? 's' : ''} via ${data.name}. Certificate added to your wallet.` }); }}>
-          Buy {qty} t · ${(unit * qty).toFixed(2)}
+        <button className="btn btn-green" onClick={handleBuy} disabled={buying}>
+          {buying ? 'Processing…' : `Buy ${qty} t · $${(unit * qty).toFixed(2)}`}
         </button>
       </ModalFoot>
     </Modal>

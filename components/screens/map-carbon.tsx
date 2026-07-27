@@ -133,6 +133,20 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   // Fix Leaflet icons on mount
   React.useEffect(() => { fixLeafletIcons(); setMapReady(true); }, []);
 
+  // Real projects from Supabase (created via "Start a project")
+  const [dbProjects, setDbProjects] = React.useState<any[]>([]);
+  const loadDbProjects = React.useCallback(() => {
+    import('@/lib/market').then(({ getMapProjects }) => getMapProjects()).then(setDbProjects).catch(() => {});
+  }, []);
+  React.useEffect(() => { loadDbProjects(); }, [loadDbProjects]);
+
+  // Refresh the list when a project is created from the modal
+  React.useEffect(() => {
+    const handler = () => loadDbProjects();
+    window.addEventListener('honua:project-created', handler);
+    return () => window.removeEventListener('honua:project-created', handler);
+  }, [loadDbProjects]);
+
   // Close location dropdown on outside click
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -218,16 +232,18 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     );
   }, []);
 
-  // Build projects at real coordinates relative to user
+  // Build projects: real DB projects (absolute coords) + demo samples placed near the user
   const projects = React.useMemo(() => {
     if (userLat === null || userLng === null) return [];
-    return SAMPLE_PROJECTS.map(p => ({
+    const samples = SAMPLE_PROJECTS.map(p => ({
       ...p,
       lat: userLat + p.latOff,
       lng: userLng + p.lngOff,
       color: CAT_COLORS[p.cat] || '#22c55e',
     }));
-  }, [userLat, userLng]);
+    const real = dbProjects.map(p => ({ ...p, color: CAT_COLORS[p.cat] || '#22c55e' }));
+    return [...real, ...samples];
+  }, [userLat, userLng, dbProjects]);
 
   const filtered = projects.filter(p => {
     const catMatch = filter === 'all' || p.cat.toLowerCase() === filter;
@@ -545,7 +561,7 @@ export function BigMap({ projects = [], onPick }: { projects?: any[]; onPick?: (
 export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [filter, setFilter] = React.useState('All credits');
-  const credits = [
+  const FALLBACK_CREDITS = [
     { name: 'Mau Forest restoration', region: 'Kenya', type: 'Forestry', verifier: 'Verra VCS', vintage: '2025', price: '$18.20', volume: '12,400 tCO₂', tag: 'Premium', color: 'var(--green)' },
     { name: 'Borneo peatland protection', region: 'Indonesia', type: 'Wetland', verifier: 'Gold Standard', vintage: '2024', price: '$24.80', volume: '8,200 tCO₂', tag: 'Verified', color: 'var(--green-2)' },
     { name: 'Patagonia rewilding', region: 'Chile', type: 'Rewilding', verifier: 'Plan Vivo', vintage: '2025', price: '$31.50', volume: '4,100 tCO₂', tag: 'Premium', color: 'var(--green)' },
@@ -553,8 +569,29 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
     { name: 'Mangrove blue carbon', region: 'Senegal', type: 'Coastal', verifier: 'Verra VCS', vintage: '2024', price: '$22.00', volume: '6,800 tCO₂', tag: 'Verified', color: 'var(--green-2)' },
     { name: 'Biochar (Sonoma Coop)', region: 'USA', type: 'Soil', verifier: 'Puro.Earth', vintage: '2025', price: '$118', volume: '900 tCO₂', tag: 'Removal', color: 'var(--sky)' },
   ];
+  const [dbCredits, setDbCredits] = React.useState<any[]>([]);
+  const [myOffsets, setMyOffsets] = React.useState<{ tonnes: number; totalCents: number } | null>(null);
+
+  const refresh = React.useCallback(() => {
+    import('@/lib/market').then(async ({ getCarbonCredits, getMyOffsets }) => {
+      const credits = await getCarbonCredits();
+      setDbCredits(credits);
+      if (app.user?.id) setMyOffsets(await getMyOffsets(app.user.id));
+    }).catch(() => {});
+  }, [app.user?.id]);
+  React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    const handler = () => refresh();
+    window.addEventListener('honua:offset-purchased', handler);
+    return () => window.removeEventListener('honua:offset-purchased', handler);
+  }, [refresh]);
+
+  const credits = dbCredits.length > 0 ? dbCredits : FALLBACK_CREDITS;
   const matches = (c) => filter === 'All credits' ? true : filter === 'Removal' ? c.tag === 'Removal' : c.type === filter;
   const shown = credits.filter(matches);
+  const yearLabel = new Date().getFullYear();
+  const offsetsDisplay = myOffsets ? `${myOffsets.tonnes % 1 === 0 ? myOffsets.tonnes : myOffsets.tonnes.toFixed(1)} t` : '0 t';
+  const offsetsSub = myOffsets ? `$${(myOffsets.totalCents / 100).toFixed(0)} retired` : 'none yet';
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="carbon" onNav={onNav} />
@@ -577,8 +614,8 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
           {[
             ['SPOT PRICE · tCO₂', '$24.10', '+1.8%'],
             ['VOLUME · 24h', '2,840 t', '+12%'],
-            ['PROJECTS LISTED', '147', '+4 this week'],
-            ['YOUR OFFSETS · 2026', '1.4 t', '24 IT spent'],
+            ['PROJECTS LISTED', String(credits.length), 'live credits'],
+            [`YOUR OFFSETS · ${yearLabel}`, offsetsDisplay, offsetsSub],
           ].map(([l, v, d]) => (
             <div key={l} style={{
               background: 'var(--surface)', border: '1px solid var(--line)',

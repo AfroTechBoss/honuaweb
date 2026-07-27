@@ -2603,6 +2603,53 @@ export function MStartProject({ close }) {
   const [cat, setCat] = React.useState('Cleanup');
   const [date, setDate] = React.useState('');
   const [location, setLocation] = React.useState('');
+  const [desc, setDesc] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    if (!app.user?.id) {
+      close();
+      app.toast({ msg: 'Sign in to start a project', icon: 'user' });
+      return;
+    }
+    setSaving(true);
+    try {
+      // Geocode the free-text location so the project lands on the map
+      let lat: number | null = null, lng: number | null = null;
+      if (location.trim()) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`, { headers: { 'Accept-Language': 'en' } });
+          const results = await res.json();
+          if (results?.[0]) { lat = parseFloat(results[0].lat); lng = parseFloat(results[0].lon); }
+        } catch {}
+      }
+      // Fall back to the browser's location so it still shows on the map
+      if (lat === null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        await new Promise<void>(resolve => {
+          navigator.geolocation.getCurrentPosition(
+            pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve(); },
+            () => resolve(),
+            { timeout: 4000 }
+          );
+        });
+      }
+      const { createMapProject } = await import('@/lib/market');
+      const ok = await createMapProject(app.user.id, {
+        title: name.trim(), category: cat, startsAt: date || undefined,
+        locationName: location.trim() || undefined, description: desc.trim() || undefined,
+        hostName: app.user?.name, lat, lng,
+      });
+      close();
+      if (ok) {
+        window.dispatchEvent(new Event('honua:project-created'));
+        app.toast({ kind: 'success', msg: 'Project created', sub: lat !== null ? 'It\'s live on the map now.' : 'Saved — add a location to place it on the map.', icon: 'pin' });
+      } else {
+        app.toast({ msg: 'Could not create project', sub: 'Check that migration 015 has been run.', kind: 'error', icon: 'close' });
+      }
+    } finally { setSaving(false); }
+  };
+
   return (
     <Modal onClose={close} width={540}>
       <ModalHead icon="pin" title="Start a project" sub="Rally your neighborhood around a local action." onClose={close} />
@@ -2626,11 +2673,11 @@ export function MStartProject({ close }) {
           </div>
           <div><span className="fld-label">Location</span><input className="fld" type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Brooklyn, NY" /></div>
         </div>
-        <div style={{ marginTop: 14 }}><span className="fld-label">Description</span><textarea className="fld" placeholder="What will you do, what to bring…" /></div>
+        <div style={{ marginTop: 14 }}><span className="fld-label">Description</span><textarea className="fld" value={desc} onChange={e => setDesc(e.target.value)} placeholder="What will you do, what to bring…" /></div>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Project submitted', sub: 'It will appear on the map once verified (usually <1h).', icon: 'pin' }); }} disabled={!name.trim()} style={{ opacity: name.trim() ? 1 : .5 }}>Create project</button>
+        <button className="btn btn-green" onClick={handleCreate} disabled={!name.trim() || saving} style={{ opacity: name.trim() && !saving ? 1 : .5 }}>{saving ? 'Creating…' : 'Create project'}</button>
       </ModalFoot>
     </Modal>
   );
