@@ -1,6 +1,11 @@
 # Honua — Desktop (Next.js)
 
-The Honua desktop redesign rebuilt as a real **Next.js 15 / App Router** project in TypeScript. Every screen from the prototype is a routed page; navigation, likes, saves, follows, cart, modals, toasts and dark mode all work client-side on mock data (persisted to `localStorage`).
+A real **Next.js 15 / App Router** app in TypeScript, backed by **Supabase**
+(Postgres + Auth + Realtime + Storage). The social feed, impact verification,
+communities, challenges, action map, carbon market, and a two-sided marketplace
+(list → buy → fulfil → track → payout) are all wired to the database. Auth is
+gated server-side via `@supabase/ssr` middleware; checkout supports live Stripe
+(with mock fallback when keys are absent).
 
 ## Run it
 
@@ -12,7 +17,15 @@ npm run dev
 
 Open <http://localhost:3000>.
 
-> This is a front-end-only build: all data is mock data in `components/`. There is no backend, auth, or database wired up.
+## Backend setup
+
+1. Create a Supabase project and set the env vars (see
+   [`supabase/migrations/README.md`](supabase/migrations/README.md)).
+2. Run the SQL migrations in `supabase/migrations/` in order.
+3. Optional: add Stripe keys for live checkout + webhooks (see the same doc).
+
+> Screens gracefully fall back to demo data when a table is empty or a migration
+> hasn't been run yet, so the app is always runnable.
 
 ## Routes
 
