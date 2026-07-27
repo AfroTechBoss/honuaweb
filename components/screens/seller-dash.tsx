@@ -68,6 +68,17 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [approved, dbMode, app.user?.id]);
 
+  // Merge real per-product sales (from order_items) into the product list
+  const realSales = React.useMemo(() => {
+    const by: Record<string, number> = {};
+    for (const o of orders) if (o._db && o.productId && o.status !== 'cancelled') by[o.productId] = (by[o.productId] ?? 0) + (o.qty ?? 1);
+    return by;
+  }, [orders]);
+  const productsView = React.useMemo(
+    () => products.map((p: any) => realSales[p.id] != null ? { ...p, sales: realSales[p.id] } : p),
+    [products, realSales]
+  );
+
   if (!approved) return <DashGate onNav={onNav} status={app.state?.sellerStatus} />;
 
   const shop = app.state?.sellerShop?.name ? { ...MOCK_SELLER.shop, name: app.state.sellerShop.name, handle: app.state.sellerShop.handle || MOCK_SELLER.shop.handle } : MOCK_SELLER.shop;
@@ -153,10 +164,10 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
 
         {/* Tab body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }} className="no-scrollbar">
-          {tab === 'overview'  && <OverviewTab products={products} orders={orders} onTab={setTab} />}
-          {tab === 'products'  && <ProductsTab products={products} onEdit={setEditing} onRemove={removeProduct} onToggle={toggleProduct} />}
+          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} />}
+          {tab === 'products'  && <ProductsTab products={productsView} onEdit={setEditing} onRemove={removeProduct} onToggle={toggleProduct} />}
           {tab === 'orders'    && <OrdersTab orders={orders} onAdvance={advanceOrder} />}
-          {tab === 'analytics' && <AnalyticsTab products={products} />}
+          {tab === 'analytics' && <AnalyticsTab products={productsView} orders={orders} />}
           {tab === 'customers' && <CustomersTab />}
           {tab === 'messages'  && <MessagesTab />}
           {tab === 'payouts'   && <PayoutsTab orders={orders} />}
@@ -188,11 +199,28 @@ function DashGate({ onNav, status }) {
   );
 }
 
+// Daily buckets for the last `days` days from real order rows.
+// Returns null when the rows aren't DB-backed (demo mode keeps its mock chart).
+function dailySeries(orders: any[], value: (o: any) => number, days = 30): number[] | null {
+  if (!orders.some((o: any) => o._db && o.createdAt)) return null;
+  const buckets = new Array(days).fill(0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  for (const o of orders) {
+    if (!o._db || !o.createdAt || o.status === 'cancelled') continue;
+    const d = Math.floor((today.getTime() - new Date(o.createdAt).setHours(0, 0, 0, 0)) / 86_400_000);
+    if (d >= 0 && d < days) buckets[days - 1 - d] += value(o);
+  }
+  return buckets;
+}
+const revenueSeries = (orders: any[]) => dailySeries(orders, o => o.total);
+const unitSeries = (orders: any[]) => dailySeries(orders, o => o.qty ?? 1) ?? MOCK_SELLER.viewsSeries;
+
 // =====================================================================
 // Overview tab
 // =====================================================================
 function OverviewTab({ products, orders, onTab }) {
   const app = useApp();
+  const realSeries = revenueSeries(orders);
   const confirmed = orders.filter(o => ['confirmed', 'shipped', 'delivered'].includes(o.status)).reduce((s, o) => s + o.total, 0);
   const pending = orders.filter(o => o.status === 'processing').reduce((s, o) => s + o.total, 0);
   const available = orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0);
@@ -225,8 +253,8 @@ function OverviewTab({ products, orders, onTab }) {
             <span style={{ fontSize: 14, fontWeight: 600 }}>Revenue</span>
             <span className="chip" style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>Last 30 days</span>
           </div>
-          <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em' }}>{sMoney(MOCK_SELLER.revenueSeries.reduce((a, b) => a + b, 0), 0)}</div>
-          <div style={{ marginTop: 10 }}><SSpark data={MOCK_SELLER.revenueSeries} color="var(--green)" w={520} h={90} /></div>
+          <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em' }}>{sMoney((realSeries ?? MOCK_SELLER.revenueSeries).reduce((a, b) => a + b, 0), 0)}</div>
+          <div style={{ marginTop: 10 }}><SSpark data={realSeries ?? MOCK_SELLER.revenueSeries} color="var(--green)" w={520} h={90} /></div>
         </div>
 
         {/* Payout card */}
@@ -245,7 +273,7 @@ function OverviewTab({ products, orders, onTab }) {
               <Avatar name={o.buyer} size={34} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.product}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{o.id} · {o.buyer} · {o.date}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{o.orderNo ?? o.id} · {o.buyer} · {o.date}</div>
               </div>
               <span className="tabular" style={{ fontSize: 14, fontWeight: 600 }}>{sMoney(o.total, 0)}</span>
               <SBadge status={o.status} size="sm" />
@@ -471,41 +499,71 @@ function OrdersTab({ orders, onAdvance }) {
 // =====================================================================
 // Analytics tab
 // =====================================================================
-function AnalyticsTab({ products }) {
+function AnalyticsTab({ products, orders = [] }: { products: any[]; orders?: any[] }) {
+  const realSeries = revenueSeries(orders);
+  const isReal = realSeries !== null;
+  const nonCancelled = orders.filter((o: any) => o.status !== 'cancelled');
   const totalViews = products.reduce((s, p) => s + p.views, 0);
   const totalSales = products.reduce((s, p) => s + p.sales, 0);
-  const conv = ((totalSales / totalViews) * 100).toFixed(1);
+  const conv = totalViews > 0 ? ((totalSales / totalViews) * 100).toFixed(1) : '0.0';
+
+  // Real metrics computed from actual order items
+  const realRevenue = nonCancelled.reduce((s: number, o: any) => s + o.total, 0);
+  const realUnits = nonCancelled.reduce((s: number, o: any) => s + (o.qty ?? 1), 0);
+  const buyerCounts = new Map<string, number>();
+  for (const o of nonCancelled) buyerCounts.set(o.handle, (buyerCounts.get(o.handle) ?? 0) + 1);
+  const uniqueBuyers = buyerCounts.size;
+  const repeatBuyers = uniqueBuyers > 0
+    ? Math.round(([...buyerCounts.values()].filter(n => n > 1).length / uniqueBuyers) * 100)
+    : null;
+  const avgOrder = nonCancelled.length > 0 ? realRevenue / nonCancelled.length : 0;
+
+  // Product performance: real mode ranks by units sold; demo ranks by views
+  const perfKey = isReal ? 'sales' : 'views';
+  const perfTotal = Math.max(1, products.reduce((s, p) => s + (p[perfKey] ?? 0), 0));
+
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <SStat label="Storefront views" value={totalViews.toLocaleString()} icon="leaf" trend={14} sub="30d" />
-        <SStat label="Add-to-cart rate" value="6.8%" icon="cart" trend={3} accent="var(--sky)" />
-        <SStat label="Conversion" value={conv + '%'} icon="bolt" trend={1.2} accent="var(--sun)" />
-        <SStat label="Repeat buyers" value="34%" icon="users" trend={5} />
+        {isReal ? (
+          <>
+            <SStat label="Revenue · 30d" value={sMoney(realSeries!.reduce((a, b) => a + b, 0), 0)} icon="coin" sub="from real orders" />
+            <SStat label="Units sold" value={realUnits.toLocaleString()} icon="cart" accent="var(--sky)" sub="all time" />
+            <SStat label="Avg order value" value={sMoney(avgOrder, 0)} icon="bolt" accent="var(--sun)" sub={`${nonCancelled.length} order${nonCancelled.length === 1 ? '' : 's'}`} />
+            <SStat label="Unique buyers" value={String(uniqueBuyers)} icon="users" sub={repeatBuyers != null ? `${repeatBuyers}% repeat` : ''} />
+          </>
+        ) : (
+          <>
+            <SStat label="Storefront views" value={totalViews.toLocaleString()} icon="leaf" trend={14} sub="30d" />
+            <SStat label="Add-to-cart rate" value="6.8%" icon="cart" trend={3} accent="var(--sky)" />
+            <SStat label="Conversion" value={conv + '%'} icon="bolt" trend={1.2} accent="var(--sun)" />
+            <SStat label="Repeat buyers" value="34%" icon="users" trend={5} />
+          </>
+        )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>Views · 30 days</span>
-          <div style={{ marginTop: 14 }}><SSpark data={MOCK_SELLER.viewsSeries} color="var(--sky)" w={460} h={110} /></div>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{isReal ? 'Units sold · 30 days' : 'Views · 30 days'}</span>
+          <div style={{ marginTop: 14 }}><SSpark data={isReal ? unitSeries(orders) : MOCK_SELLER.viewsSeries} color="var(--sky)" w={460} h={110} /></div>
         </div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
           <span style={{ fontSize: 14, fontWeight: 600 }}>Revenue · 30 days</span>
-          <div style={{ marginTop: 14 }}><SSpark data={MOCK_SELLER.revenueSeries} color="var(--green)" w={460} h={110} /></div>
+          <div style={{ marginTop: 14 }}><SSpark data={realSeries ?? MOCK_SELLER.revenueSeries} color="var(--green)" w={460} h={110} /></div>
         </div>
       </div>
       {/* Product performance */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, marginTop: 16 }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Product performance</span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Product performance {isReal && <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginLeft: 6 }}>BY UNITS SOLD</span>}</span>
         <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
-          {[...products].sort((a, b) => b.views - a.views).map(p => {
-            const pct = Math.round((p.views / totalViews) * 100);
+          {[...products].sort((a, b) => (b[perfKey] ?? 0) - (a[perfKey] ?? 0)).map(p => {
+            const pct = Math.round(((p[perfKey] ?? 0) / perfTotal) * 100);
             return (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <span style={{ width: 200, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{p.title}</span>
                 <div style={{ flex: 1, height: 8, borderRadius: 999, background: 'var(--bg-2)', overflow: 'hidden' }}>
                   <div style={{ width: pct + '%', height: '100%', borderRadius: 999, background: 'var(--green)' }} />
                 </div>
-                <span className="tabular" style={{ width: 70, textAlign: 'right', fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.views.toLocaleString()}</span>
+                <span className="tabular" style={{ width: 70, textAlign: 'right', fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{(p[perfKey] ?? 0).toLocaleString()}</span>
               </div>
             );
           })}

@@ -76,7 +76,7 @@ export async function getMyProducts(sellerId: string): Promise<any[]> {
       stock: r.stock,
       threshold: r.low_stock_at,
       views: 0, likes: 0,
-      sales: r.review_count ?? 0,
+      sales: 0, // real per-product sales are merged in from order_items by the dashboard
       img: r.name,
       imgUrl: r.image_url,
       tag: r.tag ?? 'Plastic-free',
@@ -180,6 +180,8 @@ export async function getSellerOrders(sellerId: string): Promise<any[]> {
     return data.map((r: any) => ({
       id: r.id,                                       // item id (used to advance)
       orderNo: r.order_id,                            // shown in the table
+      productId: r.product_id,
+      createdAt: r.created_at,
       product: r.name,
       buyer: r.buyer?.full_name ?? 'A member',
       handle: r.buyer?.handle ?? '—',
