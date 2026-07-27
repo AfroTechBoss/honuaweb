@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
-  const { items } = await req.json();
+  const { items, orderId } = await req.json();
 
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
@@ -26,9 +28,14 @@ export async function POST(req: Request) {
     currency: 'usd',
     automatic_payment_methods: { enabled: true },
     metadata: {
+      // Order id lets the webhook mark the exact order paid server-side
+      ...(orderId ? { order_id: String(orderId) } : {}),
       items: JSON.stringify(items.map((i: any) => ({ name: i.name, qty: i.quantity || 1 }))),
     },
   });
 
-  return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+  return NextResponse.json({
+    clientSecret: paymentIntent.client_secret,
+    paymentIntentId: paymentIntent.id,
+  });
 }

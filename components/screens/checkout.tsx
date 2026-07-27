@@ -468,17 +468,23 @@ export function DesktopCheckout() {
 
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
+  // Generate the order id up front so it can ride along in the payment intent
+  // metadata — the webhook uses it to mark this exact order paid server-side.
+  const orderIdRef = React.useRef('ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+  const paymentIntentIdRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     if (cart.length === 0) { setStripeMode('mock'); return; }
     fetch('/api/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: cart }),
+      body: JSON.stringify({ items: cart, orderId: orderIdRef.current }),
     })
       .then(r => r.json())
       .then(data => {
         if (data.clientSecret && publishableKey) {
           setClientSecret(data.clientSecret);
+          paymentIntentIdRef.current = data.paymentIntentId ?? null;
           setStripeMode('live');
         } else {
           setStripeMode('mock');
@@ -488,14 +494,20 @@ export function DesktopCheckout() {
   }, []);
 
   const handleSuccess = () => {
-    const orderId = 'ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const orderId = orderIdRef.current;
     const address = { firstName, lastName, street, city, zip, country, email };
     const snapshot = { id: orderId, total, itemCount, items: [...cart], address };
     saveOrder({ ...snapshot, subtotal, shipping, createdAt: new Date().toISOString(), status: 'processing' });
-    // Persist to Supabase too, so orders survive across devices
+    // Persist to Supabase too, so orders survive across devices. In live Stripe
+    // mode the client already saw payment succeed; the webhook is the
+    // authoritative confirmation (and covers closed tabs).
     if (app.user?.id) {
       import('@/lib/market')
-        .then(({ createDbOrder }) => createDbOrder(app.user.id, { id: orderId, items: [...cart], subtotal, shipping, total, email, address }))
+        .then(({ createDbOrder }) => createDbOrder(app.user.id, {
+          id: orderId, items: [...cart], subtotal, shipping, total, email, address,
+          paymentIntentId: paymentIntentIdRef.current,
+          paymentStatus: stripeMode === 'live' ? 'paid' : 'unpaid',
+        }))
         .catch(() => {});
     }
     setOrderSnapshot(snapshot);

@@ -121,10 +121,10 @@ const isUuid = (v: any) => /^[0-9a-f-]{36}$/.test(String(v));
 
 export async function createDbOrder(userId: string, order: {
   id: string; items: any[]; subtotal: number; shipping: number; total: number;
-  email?: string; address?: any;
+  email?: string; address?: any; paymentIntentId?: string | null; paymentStatus?: string;
 }): Promise<boolean> {
   try {
-    const { error } = await supabase.from('orders').insert({
+    const base: any = {
       id: order.id,
       user_id: userId,
       items: order.items,
@@ -133,7 +133,15 @@ export async function createDbOrder(userId: string, order: {
       total_cents: Math.round(order.total * 100),
       email: order.email ?? null,
       address: order.address ?? null,
-    });
+      payment_status: order.paymentStatus ?? 'unpaid',
+      payment_intent_id: order.paymentIntentId ?? null,
+    };
+    let { error } = await supabase.from('orders').insert(base);
+    if (error) {
+      // Payment columns may not exist yet (migration 023 not run) — retry bare
+      const { payment_status: _ps, payment_intent_id: _pi, ...noPayment } = base;
+      ({ error } = await supabase.from('orders').insert(noPayment));
+    }
     if (error) return false;
 
     // Line items (migration 020) — carry seller_id so sellers can fulfil.
@@ -355,6 +363,7 @@ export async function getDbOrders(userId: string): Promise<any[]> {
       email: o.email,
       address: o.address,
       status: o.status ?? 'processing',
+      paymentStatus: o.payment_status ?? null,
       date: o.created_at,
       createdAt: o.created_at,
       _db: true,

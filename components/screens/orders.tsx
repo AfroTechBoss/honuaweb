@@ -334,6 +334,12 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <h1 className="font-display" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>Order {order.id}</h1>
                 <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: meta.bg, color: meta.color }}>{meta.label}</span>
+                {order.paymentStatus === 'paid' && (
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: 'var(--green-tint)', color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={12} /> Paid</span>
+                )}
+                {order.paymentStatus === 'failed' && (
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: 'color-mix(in srgb, var(--clay) 14%, transparent)', color: 'var(--clay)' }}>Payment failed</span>
+                )}
               </div>
               <div style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>Placed {date}</div>
             </div>

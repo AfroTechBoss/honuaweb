@@ -9,6 +9,8 @@ const nextConfig = {
   // tsc is clean as of the fable branch — keep it that way
   typescript: { ignoreBuildErrors: false },
   eslint: { ignoreDuringBuilds: true },
+  // Stripe ships ESM that webpack can't parse — require it at runtime instead
+  serverExternalPackages: ['stripe'],
   webpack: (config) => {
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,
