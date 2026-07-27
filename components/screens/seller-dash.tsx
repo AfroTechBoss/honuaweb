@@ -31,20 +31,58 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
   const [products, setProducts] = React.useState(MOCK_SELLER.products);
   const [orders, setOrders] = React.useState(MOCK_SELLER.orders);
   const [editing, setEditing] = React.useState(null); // product being edited / 'new'
+  // Real mode: signed-in sellers manage actual marketplace listings
+  const dbMode = !!app.user?.id;
+
+  const reloadProducts = React.useCallback(async () => {
+    if (!app.user?.id) return;
+    const { getMyProducts } = await import('@/lib/market');
+    const mine = await getMyProducts(app.user.id);
+    setProducts(mine);
+  }, [app.user?.id]);
+
+  React.useEffect(() => {
+    if (approved && dbMode) reloadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approved, dbMode, reloadProducts]);
 
   if (!approved) return <DashGate onNav={onNav} status={app.state?.sellerStatus} />;
 
   const shop = app.state?.sellerShop?.name ? { ...MOCK_SELLER.shop, name: app.state.sellerShop.name, handle: app.state.sellerShop.handle || MOCK_SELLER.shop.handle } : MOCK_SELLER.shop;
 
-  const saveProduct = (p) => {
-    setProducts(list => {
-      const exists = list.some(x => x.id === p.id);
-      return exists ? list.map(x => x.id === p.id ? p : x) : [{ ...p, id: 'p' + Date.now() }, ...list];
-    });
-    app.toast?.({ msg: editing === 'new' ? 'Product published' : 'Product updated', sub: p.title, kind: 'success', icon: 'check' });
+  const saveProduct = async (p) => {
+    if (dbMode) {
+      const { saveSellerProduct } = await import('@/lib/market');
+      const ok = await saveSellerProduct(app.user.id, shop.name, p);
+      if (!ok) { app.toast?.({ msg: 'Could not save product', sub: 'Check migration 019 has been run.', kind: 'error', icon: 'close' }); return; }
+      await reloadProducts();
+    } else {
+      setProducts(list => {
+        const exists = list.some(x => x.id === p.id);
+        return exists ? list.map(x => x.id === p.id ? p : x) : [{ ...p, id: 'p' + Date.now() }, ...list];
+      });
+    }
+    app.toast?.({ msg: editing === 'new' ? 'Product published' : 'Product updated', sub: p.title + (dbMode && p.status === 'active' ? ' · live on the marketplace' : ''), kind: 'success', icon: 'check' });
     setEditing(null);
   };
-  const removeProduct = (id) => { setProducts(l => l.filter(x => x.id !== id)); app.toast?.({ msg: 'Product removed', icon: 'trash' }); };
+  const removeProduct = async (id) => {
+    if (dbMode) {
+      const { deleteSellerProduct } = await import('@/lib/market');
+      await deleteSellerProduct(id, app.user.id);
+    }
+    setProducts(l => l.filter(x => x.id !== id));
+    app.toast?.({ msg: 'Product removed', icon: 'trash' });
+  };
+  const toggleProduct = async (id, st) => {
+    setProducts(l => l.map(p => p.id === id ? { ...p, status: st } : p));
+    if (dbMode) {
+      const target = products.find((p: any) => p.id === id);
+      if (target) {
+        const { saveSellerProduct } = await import('@/lib/market');
+        await saveSellerProduct(app.user.id, shop.name, { ...target, status: st });
+      }
+    }
+  };
   const advanceOrder = (id) => {
     const flow = { processing: 'confirmed', confirmed: 'shipped', shipped: 'delivered' };
     setOrders(list => list.map(o => o.id === id && flow[o.status] ? { ...o, status: flow[o.status] } : o));
@@ -86,7 +124,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
         {/* Tab body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }} className="no-scrollbar">
           {tab === 'overview'  && <OverviewTab products={products} orders={orders} onTab={setTab} />}
-          {tab === 'products'  && <ProductsTab products={products} onEdit={setEditing} onRemove={removeProduct} onToggle={(id, st) => setProducts(l => l.map(p => p.id === id ? { ...p, status: st } : p))} />}
+          {tab === 'products'  && <ProductsTab products={products} onEdit={setEditing} onRemove={removeProduct} onToggle={toggleProduct} />}
           {tab === 'orders'    && <OrdersTab orders={orders} onAdvance={advanceOrder} />}
           {tab === 'analytics' && <AnalyticsTab products={products} />}
           {tab === 'customers' && <CustomersTab />}
@@ -238,7 +276,9 @@ function ProductsTab({ products, onEdit, onRemove, onToggle }) {
           return (
             <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2.4fr 1fr 1fr 1fr 0.8fr 90px', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}><ImagePlaceholder label="" height={44} /></div>
+                <div style={{ width: 44, height: 44, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
+                  {p.imgUrl ? <img src={p.imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <ImagePlaceholder label="" height={44} />}
+                </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', display: 'flex', gap: 8 }}>
@@ -275,15 +315,37 @@ function IconBtn({ icon, onClick, danger, title }: { icon: any; onClick?: () => 
 
 // ---- Product editor modal ----
 function ProductEditor({ product, onSave, onClose }) {
+  const app = useApp();
   const [f, setF] = React.useState(product || { title: '', price: '', category: SELLER_CATEGORIES[0], type: 'physical', status: 'active', stock: 0, threshold: 5, views: 0, likes: 0, sales: 0, img: '', tag: 'Plastic-free' });
+  const [uploading, setUploading] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const valid = f.title && f.price > 0;
+
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !app.user?.id) return;
+    setUploading(true);
+    try {
+      const { uploadFile } = await import('@/lib/storage');
+      const url = await uploadFile('posts', app.user.id, file);
+      set('imgUrl', url);
+    } catch {
+      app.toast?.({ msg: 'Upload failed', kind: 'error', icon: 'close' });
+    } finally { setUploading(false); }
+  };
+
   return (
     <Modal onClose={onClose} width={560}>
       <ModalHead icon="bag" title={product ? 'Edit product' : 'Add a product'} sub={product ? f.title : 'List something new on your storefront.'} onClose={onClose} />
       <div style={{ padding: '18px 24px 0', display: 'grid', gap: 16 }}>
         <div style={{ display: 'flex', gap: 14 }}>
-          <div style={{ width: 90, height: 90, borderRadius: 12, overflow: 'hidden', flexShrink: 0, border: '1px dashed var(--line-2)' }}><ImagePlaceholder label="photo" height={90} /></div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
+          <div onClick={() => fileRef.current?.click()} style={{ width: 90, height: 90, borderRadius: 12, overflow: 'hidden', flexShrink: 0, border: `1px dashed ${f.imgUrl ? 'var(--green)' : 'var(--line-2)'}`, cursor: 'pointer', position: 'relative', background: 'var(--bg-2)', display: 'grid', placeItems: 'center' }}>
+            {f.imgUrl
+              ? <img src={f.imgUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', lineHeight: 1.4 }}>{uploading ? 'Uploading…' : '+ photo'}</span>}
+          </div>
           <DashFld label="Product title" value={f.title} onChange={v => set('title', v)} placeholder="What are you selling?" />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>

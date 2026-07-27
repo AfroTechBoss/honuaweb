@@ -54,6 +54,67 @@ export async function getProductById(id: string): Promise<Product | null> {
   } catch { return null; }
 }
 
+// ---- Seller product management (dashboard shape <-> DB shape) ----
+const DASH_TO_DB_STATUS: Record<string, string> = { active: 'live', draft: 'draft', inactive: 'inactive' };
+const DB_TO_DASH_STATUS: Record<string, string> = { live: 'active', draft: 'draft', inactive: 'inactive', flagged: 'active', removed: 'inactive' };
+
+export async function getMyProducts(sellerId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map((r: any) => ({
+      id: r.id,
+      title: r.name,
+      price: (r.price_cents ?? 0) / 100,
+      category: r.category ?? 'Home & Garden',
+      type: r.product_type ?? 'physical',
+      status: DB_TO_DASH_STATUS[r.status] ?? 'active',
+      stock: r.stock,
+      threshold: r.low_stock_at,
+      views: 0, likes: 0,
+      sales: r.review_count ?? 0,
+      img: r.name,
+      imgUrl: r.image_url,
+      tag: r.tag ?? 'Plastic-free',
+    }));
+  } catch { return []; }
+}
+
+export async function saveSellerProduct(sellerId: string, shopName: string, f: any): Promise<boolean> {
+  const row: any = {
+    name: f.title,
+    brand: shopName,
+    price_cents: Math.round((parseFloat(f.price) || 0) * 100),
+    category: f.category ?? null,
+    product_type: f.type ?? 'physical',
+    status: DASH_TO_DB_STATUS[f.status] ?? 'live',
+    stock: f.type === 'physical' ? (f.stock ?? null) : null,
+    low_stock_at: f.type === 'physical' ? (f.threshold ?? null) : null,
+    tag: f.tag ?? null,
+    ...(f.imgUrl ? { image_url: f.imgUrl } : {}),
+    seller_id: sellerId,
+  };
+  try {
+    if (f.id && /^[0-9a-f-]{36}$/.test(String(f.id))) {
+      const { error } = await supabase.from('products').update(row).eq('id', f.id).eq('seller_id', sellerId);
+      return !error;
+    }
+    const { error } = await supabase.from('products').insert(row);
+    return !error;
+  } catch { return false; }
+}
+
+export async function deleteSellerProduct(id: string, sellerId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('products').delete().eq('id', id).eq('seller_id', sellerId);
+    return !error;
+  } catch { return false; }
+}
+
 // ---- Orders ----
 export async function createDbOrder(userId: string, order: {
   id: string; items: any[]; subtotal: number; shipping: number; total: number;
