@@ -643,13 +643,13 @@ export function MLogAction({ close, data }: { close: () => void; data?: { catego
   );
 };
 
-// --- Export report ---
+// --- Export report (redesigned: Lora headings / Satoshi body / JetBrains Mono data,
+// matching the main app's brand system — replaces the old ad-hoc Georgia/system-ui look) ---
 function inRange(iso: string | undefined, range: string): boolean {
   if (!iso) return false;
   if (range === 'All time') return true;
   const d = new Date(iso); const now = new Date();
   if (range === 'This year') return d.getFullYear() === now.getFullYear();
-  // This month
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 }
 
@@ -666,11 +666,12 @@ function downloadBlob(content: BlobPart, type: string, filename: string) {
 
 // Honua category colours for exports (hex — canvas can't use CSS vars)
 const EXPORT_CAT_HEX: Record<string, string> = {
-  Transport: '#1f9d55', Energy: '#84cc16', Food: '#0ea5e9', Waste: '#f59e0b',
-  Ocean: '#06b6d4', Lifestyle: '#a855f7', Policy: '#f43f5e', Education: '#14b8a6', General: '#94a3b8',
+  Transport: '#1f6f3f', Energy: '#2e9a5b', Food: '#1d6dc4', Waste: '#e6b450',
+  Ocean: '#1d6dc4', Lifestyle: '#8a5fd6', Policy: '#c4623a', Education: '#1d6dc4', General: '#8a918c',
 };
+const BRAND_GREEN = '#1f6f3f';
+const BRAND_GREEN_2 = '#2e9a5b';
 
-// Rounded-rect helper for canvas
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -681,9 +682,20 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
+// Loads the brand webfonts into a canvas context (Lora for display, Satoshi
+// for body, JetBrains Mono for data/labels) before we draw the PNG card.
+async function ensureExportFonts() {
+  const specs = [
+    ['700 118px Lora', 'Lora'],
+    ['400 30px Satoshi', 'Satoshi'],
+    ['600 26px "JetBrains Mono"', 'JetBrains Mono'],
+  ] as const;
+  await Promise.all(specs.map(([spec]) => (document as any).fonts?.load?.(spec)));
+}
+
 export function MExport({ close }) {
   const app = useApp();
-  const [fmt, setFmt] = React.useState('CSV');
+  const [fmt, setFmt] = React.useState('PDF');
   const [range, setRange] = React.useState('This month');
   const [busy, setBusy] = React.useState(false);
 
@@ -706,7 +718,6 @@ export function MExport({ close }) {
       const slug = range.toLowerCase().replace(/\s+/g, '-');
       const co2Big = totalCo2 >= 1000 ? `${(totalCo2 / 1000).toFixed(1)} t` : `${Math.round(totalCo2)} kg`;
 
-      // Per-category totals (for the breakdown in PDF/PNG)
       const byCat: Record<string, { co2: number; gp: number }> = {};
       for (const l of logs) {
         const c = l.category ?? 'General';
@@ -727,106 +738,122 @@ export function MExport({ close }) {
         const preamble = [`# Honua impact report — ${name} — ${range} — ${stamp}`, ''];
         downloadBlob([...preamble, header.map(cell).join(','), ...body, totals].join('\n'), 'text/csv;charset=utf-8', `honua-impact-${slug}.csv`);
       } else if (fmt === 'PDF') {
-        // Branded print report → the browser's "Save as PDF"
-        const rows = logs.map(l => {
-          const col = EXPORT_CAT_HEX[l.category ?? 'General'] ?? '#94a3b8';
-          const st = l.status === 'verified' ? '<b style="color:#1f9d55">✓ verified</b>' : (l.status ?? 'unverified');
-          return `<tr><td>${(l.logged_at ?? '').substring(0, 10)}</td><td><span class="dot" style="background:${col}"></span>${l.category}</td><td>${l.action}</td><td>${l.quantity ?? ''} ${l.unit ?? ''}</td><td class="r">${Number(l.co2_saved_kg ?? 0).toFixed(2)}</td><td class="r">${l.points ?? 0}</td><td>${st}</td></tr>`;
+        const rows = logs.map((l, i) => {
+          const st = l.status === 'verified' ? `<b class="verified">VERIFIED</b>` : 'PENDING';
+          return `<tr><td class="idx">${String(i + 1).padStart(2, '0')}</td><td>${(l.logged_at ?? '').substring(0, 10)}</td><td>${l.category}</td><td>${l.action}</td><td>${l.quantity ?? ''} ${l.unit ?? ''}</td><td class="r">${Number(l.co2_saved_kg ?? 0).toFixed(2)}</td><td class="r">${l.points ?? 0}</td><td class="st">${st}</td></tr>`;
         }).join('');
-        const catBars = cats.map(([c, v]) => `<div class="cb"><span class="dot" style="background:${EXPORT_CAT_HEX[c] ?? '#94a3b8'}"></span><span class="cbl">${c}</span><span class="cbv">${v.co2.toFixed(1)} kg · ${v.gp} GP</span></div>`).join('');
+        const catRows = cats.map(([c, v]) => `<tr><td>${c}</td><td class="r">${v.co2.toFixed(1)} kg</td><td class="r">${v.gp} GP</td></tr>`).join('');
         const html = `<!doctype html><html><head><meta charset="utf-8"><title>Honua Impact — ${name} — ${range}</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
           <style>
-            :root{--g:#1f6f3f;--g2:#2e9a5b}
-            *{box-sizing:border-box} body{font-family:'Satoshi',system-ui,-apple-system,sans-serif;color:#0a0d0b;margin:0;padding:0}
-            .page{max-width:820px;margin:0 auto;padding:0 44px 48px}
-            .hero{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;margin:0 -44px 28px;padding:38px 44px 30px}
-            .brand{font:600 13px/1 'JetBrains Mono',monospace;letter-spacing:.14em;opacity:.85;text-transform:uppercase}
-            .big{font:700 52px/1 Georgia,'Lora',serif;letter-spacing:-.02em;margin:14px 0 2px}
-            .heron{opacity:.85;font-size:14px}
-            .kpis{display:flex;gap:14px;margin:22px 0 26px}
-            .kpi{flex:1;background:#f4f7f4;border-radius:14px;padding:16px 18px}
-            .kpi b{display:block;font:700 26px Georgia,serif}.kpi span{font-size:12px;color:#5b6b60}
-            h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#7a8a80;margin:22px 0 12px}
-            .cb{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eef1ee;font-size:14px}
-            .cbl{flex:1}.cbv{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#5b6b60}
-            .dot{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;margin-right:2px}
-            table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
-            th,td{text-align:left;padding:8px 8px;border-bottom:1px solid #eef1ee}
-            th{font:600 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em;color:#98a69c}
-            td.r,th.r{text-align:right}
-            .foot{margin-top:26px;font-size:11.5px;color:#98a69c;font-family:'JetBrains Mono',monospace}
-            @media print{.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+            *{box-sizing:border-box} body{font-family:'Satoshi','Geist',system-ui,-apple-system,sans-serif;color:#0a0d0b;margin:0;padding:0;background:#fafaf7}
+            .page{max-width:800px;margin:0 auto;padding:56px 48px 60px}
+            .masthead{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0a0d0b;padding-bottom:18px;margin-bottom:34px}
+            .brand{font:600 11px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:#5c635e}
+            .doc-id{font:400 11px 'JetBrains Mono',monospace;color:#8a918c;text-align:right}
+            .headline{font:700 44px/1.05 'Lora',serif;letter-spacing:-.01em;margin:26px 0 6px}
+            .sub{font-size:14px;color:#5c635e}
+            .rule{border:none;border-top:1px solid #0a0d0b;margin:30px 0 0}
+            .kpis{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #0a0d0b;margin-top:0}
+            .kpi{padding:18px 20px;border-right:1px solid #0a0d0b}
+            .kpi:last-child{border-right:none}
+            .kpi b{display:block;font:600 30px 'Lora',serif}
+            .kpi span{font:500 10.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:#5c635e}
+            h2{font:600 11px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.14em;color:#0a0d0b;margin:36px 0 12px;padding-bottom:8px;border-bottom:1px solid #0a0d0b}
+            table{width:100%;border-collapse:collapse;font-size:12.5px}
+            .cat-table td{padding:7px 4px;border-bottom:1px solid #e8e7e1}
+            .cat-table td.r{text-align:right;font-family:'JetBrains Mono',monospace}
+            .log-table th{font:500 9.5px 'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em;color:#8a918c;text-align:left;padding:6px 4px;border-bottom:1px solid #0a0d0b}
+            .log-table td{padding:8px 4px;border-bottom:1px solid #e8e7e1;font-size:12px}
+            .log-table td.idx{font-family:'JetBrains Mono',monospace;color:#8a918c}
+            .log-table td.r{text-align:right;font-family:'JetBrains Mono',monospace}
+            .log-table td.st{font:500 10px 'JetBrains Mono',monospace;letter-spacing:.04em}
+            .verified{color:#0a0d0b}
+            .foot{margin-top:40px;padding-top:16px;border-top:1px solid #0a0d0b;font:400 11px 'JetBrains Mono',monospace;color:#8a918c;display:flex;justify-content:space-between}
+            @media print{body{background:#fff}}
           </style></head><body><div class="page">
-          <div class="hero"><div class="brand">🌱 Honua · Impact Report</div>
-            <div class="big">${co2Big} CO₂ avoided</div>
-            <div class="heron">${name} · ${range} · generated ${stamp}</div></div>
+          <div class="masthead"><div class="brand">Honua — Impact Report</div><div class="doc-id">Generated ${stamp}</div></div>
+          <div class="headline">${co2Big} CO&#8322; avoided</div>
+          <div class="sub">${name} &middot; ${range}</div>
           <div class="kpis">
             <div class="kpi"><b>${totalGp}</b><span>Green Points</span></div>
             <div class="kpi"><b>${logs.length}</b><span>Actions logged</span></div>
-            <div class="kpi"><b>${verified}</b><span>Community-verified</span></div>
+            <div class="kpi"><b>${verified}</b><span>Verified</span></div>
           </div>
-          <h2>By category</h2>${catBars}
+          <h2>By category</h2>
+          <table class="cat-table"><tbody>${catRows}</tbody></table>
           <h2>Every action</h2>
-          <table><thead><tr><th>Date</th><th>Category</th><th>Action</th><th>Amount</th><th class="r">CO₂ kg</th><th class="r">GP</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
-          <div class="foot">honua.green — verified community impact</div>
+          <table class="log-table"><thead><tr><th>No.</th><th>Date</th><th>Category</th><th>Action</th><th>Amount</th><th style="text-align:right">CO&#8322; kg</th><th style="text-align:right">GP</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+          <div class="foot"><span>honua.green</span><span>Verified community impact ledger</span></div>
           </div><script>window.onload=function(){setTimeout(function(){window.print()},250)}</script></body></html>`;
         const w = window.open('', '_blank');
         if (w) { w.document.write(html); w.document.close(); }
         else { app.toast({ msg: 'Allow pop-ups to export the PDF', icon: 'close' }); setBusy(false); return; }
       } else {
-        // Branded PNG summary card (square, share-friendly). toDataURL is
-        // synchronous and reliable across browsers.
+        await ensureExportFonts();
         const S = 1080;
         const cv = document.createElement('canvas'); cv.width = S; cv.height = S;
         const ctx = cv.getContext('2d');
         if (!ctx) throw new Error('canvas unsupported');
-        // background gradient + soft highlight
-        const g = ctx.createLinearGradient(0, 0, S, S); g.addColorStop(0, '#1b5e37'); g.addColorStop(1, '#2e9a5b');
-        ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-        const rg = ctx.createRadialGradient(S * 0.8, S * 0.15, 40, S * 0.8, S * 0.15, S * 0.9);
-        rg.addColorStop(0, 'rgba(255,255,255,.14)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = rg; ctx.fillRect(0, 0, S, S);
-        const P = 88;
-        // wordmark
-        ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = '600 26px "JetBrains Mono", monospace';
-        ctx.fillText('🌱 HONUA · IMPACT', P, 130);
-        // big CO2
-        ctx.fillStyle = '#fff'; ctx.font = '700 118px Georgia, serif';
-        ctx.fillText(co2Big, P, 300);
-        ctx.font = '400 30px system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.85)';
-        ctx.fillText(`CO₂ avoided · ${range}`, P, 350);
-        // stat pills
-        const stats: [string, string][] = [[`${totalGp}`, 'Green Points'], [`${logs.length}`, 'Actions'], [`${verified}`, 'Verified']];
-        const pw = (S - P * 2 - 28 * 2) / 3;
-        stats.forEach(([v, l], i) => {
-          const x = P + i * (pw + 28), y = 420, ph = 150;
-          ctx.fillStyle = 'rgba(255,255,255,.12)'; roundRect(ctx, x, y, pw, ph, 24); ctx.fill();
-          ctx.fillStyle = '#fff'; ctx.font = '700 52px Georgia, serif'; ctx.textAlign = 'center';
-          ctx.fillText(v, x + pw / 2, y + 78);
-          ctx.font = '400 22px system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.82)';
-          ctx.fillText(l, x + pw / 2, y + 118);
-          ctx.textAlign = 'left';
+        const PAPER = '#fafaf7', INK = '#0a0d0b', MUTE = '#5c635e', LINE = '#d8d7d0', GREEN = BRAND_GREEN;
+        ctx.fillStyle = PAPER; ctx.fillRect(0, 0, S, S);
+        const P = 84;
+        // outer frame with green corner ticks — paper + ink + green, no gradients
+        ctx.strokeStyle = LINE; ctx.lineWidth = 1;
+        ctx.strokeRect(P * 0.55, P * 0.55, S - P * 1.1, S - P * 1.1);
+        const tick = 22;
+        [[P * 0.55, P * 0.55, 1, 1], [S - P * 0.55, P * 0.55, -1, 1], [P * 0.55, S - P * 0.55, 1, -1], [S - P * 0.55, S - P * 0.55, -1, -1]].forEach(([x, y, dx, dy]: any) => {
+          ctx.strokeStyle = GREEN; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + tick * dx, y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + tick * dy); ctx.stroke();
         });
-        // category breakdown bars
-        let by = 660;
-        ctx.font = '600 22px "JetBrains Mono", monospace'; ctx.fillStyle = 'rgba(255,255,255,.7)';
-        ctx.fillText('BY CATEGORY', P, by); by += 34;
+        ctx.fillStyle = GREEN; ctx.font = '600 22px "JetBrains Mono", monospace';
+        ctx.fillText('HONUA — IMPACT REPORT', P, 150);
+        ctx.fillStyle = MUTE; ctx.textAlign = 'right'; ctx.fillText(stamp, S - P, 150); ctx.textAlign = 'left';
+        ctx.strokeStyle = LINE; ctx.beginPath(); ctx.moveTo(P, 174); ctx.lineTo(S - P, 174); ctx.stroke();
+
+        ctx.fillStyle = INK; ctx.font = '600 112px Lora, serif';
+        ctx.fillText(co2Big, P, 320);
+        ctx.font = '400 26px Satoshi, system-ui, sans-serif'; ctx.fillStyle = MUTE;
+        ctx.fillText(`CO2 avoided — ${range}`, P, 360);
+
+        // KPI row: bordered cells, green rule underline on the value
+        const stats: [string, string][] = [[`${totalGp}`, 'GREEN POINTS'], [`${logs.length}`, 'ACTIONS'], [`${verified}`, 'VERIFIED']];
+        const kY = 430, kH = 130, kw = (S - P * 2) / 3;
+        ctx.strokeStyle = LINE; ctx.lineWidth = 1;
+        ctx.strokeRect(P, kY, S - P * 2, kH);
+        stats.forEach(([v, l], i) => {
+          const x = P + i * kw;
+          if (i > 0) { ctx.beginPath(); ctx.moveTo(x, kY); ctx.lineTo(x, kY + kH); ctx.stroke(); }
+          ctx.fillStyle = INK; ctx.font = '600 46px Lora, serif';
+          ctx.fillText(v, x + 26, kY + 68);
+          ctx.fillStyle = GREEN; ctx.fillRect(x + 26, kY + 82, 28, 3);
+          ctx.font = '500 16px "JetBrains Mono", monospace'; ctx.fillStyle = MUTE;
+          ctx.fillText(l, x + 26, kY + 106);
+        });
+
+        let by = 630;
+        ctx.font = '600 18px "JetBrains Mono", monospace'; ctx.fillStyle = GREEN;
+        ctx.fillText('BY CATEGORY', P, by);
+        ctx.strokeStyle = LINE; ctx.beginPath(); ctx.moveTo(P, by + 16); ctx.lineTo(S - P, by + 16); ctx.stroke();
+        by += 52;
         const maxGp = Math.max(...cats.map(([, v]) => v.gp), 1);
         cats.slice(0, 5).forEach(([c, v]) => {
-          ctx.fillStyle = EXPORT_CAT_HEX[c] ?? '#94a3b8';
-          roundRect(ctx, P, by, 20, 20, 5); ctx.fill();
-          ctx.fillStyle = '#fff'; ctx.font = '500 26px system-ui, sans-serif';
-          ctx.fillText(c, P + 34, by + 18);
-          // bar
-          const barX = P + 300, barW = S - P - barX;
-          ctx.fillStyle = 'rgba(255,255,255,.14)'; roundRect(ctx, barX, by + 2, barW, 16, 8); ctx.fill();
-          ctx.fillStyle = EXPORT_CAT_HEX[c] ?? '#94a3b8';
-          roundRect(ctx, barX, by + 2, Math.max(10, barW * (v.gp / maxGp)), 16, 8); ctx.fill();
-          by += 48;
+          ctx.fillStyle = INK; ctx.font = '500 25px Satoshi, system-ui, sans-serif';
+          ctx.fillText(c.toUpperCase(), P, by);
+          ctx.font = '400 20px "JetBrains Mono", monospace'; ctx.fillStyle = MUTE; ctx.textAlign = 'right';
+          ctx.fillText(`${v.co2.toFixed(1)} KG · ${v.gp} GP`, S - P, by);
+          ctx.textAlign = 'left';
+          // thin green progress tick beneath, scaled to share of points
+          const barY = by + 12, barW = S - P * 2;
+          ctx.fillStyle = LINE; ctx.fillRect(P, barY, barW, 3);
+          ctx.fillStyle = GREEN; ctx.fillRect(P, barY, Math.max(6, barW * (v.gp / maxGp)), 3);
+          by += 46;
         });
-        // footer
-        ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = '400 24px system-ui, sans-serif';
-        ctx.fillText(`${name} · honua.green · ${stamp}`, P, S - 70);
+
+        ctx.fillStyle = MUTE; ctx.font = '400 18px "JetBrains Mono", monospace';
+        ctx.fillText(`${name.toUpperCase()} · HONUA.GREEN`, P, S - 90);
 
         triggerDownload(cv.toDataURL('image/png'), `honua-impact-${slug}.png`);
       }
@@ -846,7 +873,7 @@ export function MExport({ close }) {
           {['CSV', 'PDF', 'PNG card'].map(f => <button key={f} onClick={() => setFmt(f)} className={'chip ' + (fmt === f ? 'chip-green' : '')} style={{ cursor: 'pointer', border: fmt === f ? 'none' : undefined }}>{f}</button>)}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginBottom: 16 }}>
-          {fmt === 'CSV' ? 'Spreadsheet of every logged action.' : fmt === 'PDF' ? 'Printable report — opens your browser\'s print dialog (choose “Save as PDF”).' : 'A shareable summary image.'}
+          {fmt === 'CSV' ? 'Spreadsheet of every logged action.' : fmt === 'PDF' ? "Printable report — opens your browser's print dialog (choose “Save as PDF”)." : 'A shareable summary image.'}
         </div>
         <span className="fld-label">Date range</span>
         <div style={{ display: 'flex', gap: 8 }}>
