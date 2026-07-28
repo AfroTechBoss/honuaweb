@@ -3,15 +3,11 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
-import { logImpact, TASK_IMPACTS } from "@/lib/impact";
+import { logTaskImpact, taskImpact } from "@/lib/impact";
 
 // =============== Desktop Tasks / Challenges ===============
-const TODAY_TASKS: [string, string][] = [
-  ['Bike commute', '+24 GP'],
-  ['Meatless meal', '+12 GP'],
-  ['Compost food scraps', '+18 GP'],
-  ['10 min education', '+50 GP'],
-  ['Skip ride-share', '+30 GP'],
+const TODAY_TASKS: string[] = [
+  'Bike commute', 'Meatless meal', 'Compost food scraps', '10 min education', 'Skip ride-share',
 ];
 
 export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
@@ -63,11 +59,12 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
       app.toast({ msg: `${taskName} — already logged today ✓`, icon: 'check' });
       return;
     }
-    const impact = TASK_IMPACTS[taskName] ?? { co2: 0.5, pts: 10, cat: 'General' };
+    const im = taskImpact(taskName);
     setLoggedToday(prev => new Set([...prev, taskName]));
-    app.toast({ msg: `${taskName} logged!`, sub: `+${impact.pts} GP · −${impact.co2} kg CO₂`, kind: 'success', icon: 'check' });
+    app.toast({ msg: `${taskName} logged!`, sub: `${im.quantity} ${im.unit} · +${im.pts} GP${im.co2 > 0 ? ` · −${im.co2} kg CO₂` : ''}`, kind: 'success', icon: 'check' });
     if (app.user?.id) {
-      await logImpact({ user_id: app.user.id, action: taskName, category: impact.cat, co2_saved_kg: impact.co2, points: impact.pts });
+      await logTaskImpact(app.user.id, taskName);
+      window.dispatchEvent(new Event('honua:impact-logged'));
     }
   };
 
@@ -115,8 +112,10 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-            {TODAY_TASKS.map(([t, r], i) => {
+            {TODAY_TASKS.map((t, i) => {
               const done = loggedToday.has(t);
+              const im = taskImpact(t);
+              const r = `${im.quantity} ${im.unit} · +${im.pts} GP`;
               const cardStyle: React.CSSProperties = {
                 background: done ? 'var(--green-tint)' : 'var(--bg-2)',
                 borderRadius: 12, padding: 14, cursor: 'pointer',
@@ -162,7 +161,8 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
                   app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.t}" streak continues — ${c.sub.toLowerCase()}. Keep it going.` });
                   if (app.user?.id) {
                     const cat = c.col === 'var(--green)' ? 'Transport' : 'Lifestyle';
-                    await logImpact({ user_id: app.user.id, action: c.t, category: cat, co2_saved_kg: 1.5, points: 20 });
+                    await logTaskImpact(app.user.id, c.t, cat);
+                    window.dispatchEvent(new Event('honua:impact-logged'));
                   }
                 }}>Log today</button>
               </div>

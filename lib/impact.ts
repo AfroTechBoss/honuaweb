@@ -71,15 +71,38 @@ export function computeImpact(category: string, quantity: number): { co2: number
   };
 }
 
-// Named daily-task presets (challenges grid). Each is a specific action with a
-// fixed, pre-computed impact derived from the factors above.
-export const TASK_IMPACTS: Record<string, { co2: number; pts: number; cat: string }> = {
-  'Bike commute':        { co2: 2.0, pts: 24, cat: 'Transport' }, // ~12 km
-  'Meatless meal':       { co2: 2.0, pts: 8,  cat: 'Food' },      // 1 meal
-  'Compost food scraps': { co2: 0.5, pts: 6,  cat: 'Waste' },     // ~1 kg
-  '10 min education':    { co2: 0.0, pts: 10, cat: 'Education' },
-  'Skip ride-share':     { co2: 1.7, pts: 20, cat: 'Transport' }, // ~10 km
+// Named daily-task presets (challenges grid). Each is a specific action defined
+// as a category + a representative quantity — CO₂/GP are then derived from the
+// same factor model as everything else (via computeImpact), so they stay in sync
+// when factors change.
+export const TASK_IMPACTS: Record<string, { category: string; quantity: number }> = {
+  'Bike commute':        { category: 'Transport', quantity: 12 }, // ~12 km each way
+  'Meatless meal':       { category: 'Food',      quantity: 1 },  // 1 meat-free meal
+  'Compost food scraps': { category: 'Waste',     quantity: 1 },  // ~1 kg diverted
+  '10 min education':    { category: 'Education',  quantity: 1 },  // 1 session
+  'Skip ride-share':     { category: 'Transport', quantity: 10 }, // ~10 km
 };
+
+// Derived CO₂/GP for a named daily task.
+export function taskImpact(taskName: string): { co2: number; pts: number; cat: string; quantity: number; unit: string } {
+  const t = TASK_IMPACTS[taskName] ?? { category: 'General', quantity: 1 };
+  const { co2, pts, unit } = computeImpact(t.category, t.quantity);
+  return { co2, pts, cat: t.category, quantity: t.quantity, unit };
+}
+
+// One-tap log for a daily task / challenge preset (no proof, not verifiable —
+// these are quick self-logs). Stores quantity + unit, with progressive fallback
+// if migration 026 / 018 columns aren't present.
+export async function logTaskImpact(userId: string, taskName: string, categoryOverride?: string, quantityOverride?: number): Promise<{ co2: number; pts: number; error?: string }> {
+  const cat = categoryOverride ?? TASK_IMPACTS[taskName]?.category ?? 'General';
+  const qty = quantityOverride ?? TASK_IMPACTS[taskName]?.quantity ?? (ACTION_IMPACTS[cat]?.defaultQty ?? 1);
+  const { co2, pts, unit } = computeImpact(cat, qty);
+  const full: any = { user_id: userId, action: taskName, category: cat, co2_saved_kg: co2, points: pts, quantity: qty, unit, status: 'unverified' };
+  let res = await supabase.from('impact_logs').insert(full).select().single();
+  if (res.error) { const { quantity: _q, unit: _u, ...noQty } = full; res = await supabase.from('impact_logs').insert(noQty).select().single(); }
+  if (res.error) { const { quantity: _q, unit: _u, status: _s, ...bare } = full; res = await supabase.from('impact_logs').insert(bare).select().single(); }
+  return { co2, pts, error: res.error?.message };
+}
 
 export async function logImpact(log: Omit<ImpactLog, 'id' | 'logged_at'>) {
   return supabase.from('impact_logs').insert(log).select().single();
