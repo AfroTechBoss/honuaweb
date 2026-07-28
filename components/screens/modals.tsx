@@ -677,6 +677,7 @@ async function ensureExportFonts() {
   await Promise.all(specs.map(([spec]) => (document as any).fonts?.load?.(spec)));
 }
 
+// Export report — brand-system redesign (Lora / Satoshi / JetBrains Mono)
 export function MExport({ close }) {
   const app = useApp();
   const [fmt, setFmt] = React.useState('PDF');
