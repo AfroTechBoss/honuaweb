@@ -195,7 +195,7 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
           id: p.id, title: p.name, price: p.price_cents / 100, brand: p.brand, tag: p.tag,
           imgUrl: p.imgUrl, img: p.name, category: p.category,
           // Use the seller's real profile handle so "Message" opens a DM with them
-          seller: { name: p.sellerName || p.brand, handle: p.sellerHandle || null, logo: p.sellerLogo || null, rating: p.rating, reviews: p.review_count },
+          seller: { name: p.sellerShopName || p.sellerName || p.brand, handle: p.sellerHandle || null, shopHandle: p.sellerShopHandle || null, logo: p.sellerLogo || null, rating: p.rating, reviews: p.review_count },
           description: p.description || `${p.name} from ${p.brand}. Sustainably made with planet-friendly materials.`,
           eco: ECO_DETAILS[p.tag] || [],
           inStock: true, stock: 40,
@@ -370,23 +370,30 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
             <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16 }}>
               <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', marginBottom: 10 }}>SOLD BY</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, overflow: 'hidden', background: 'var(--green)', display: 'grid', placeItems: 'center', fontSize: 18, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                <div onClick={() => product.seller.shopHandle && onNav?.('shop', { handle: product.seller.shopHandle })} style={{ width: 44, height: 44, borderRadius: 12, overflow: 'hidden', background: 'var(--green)', display: 'grid', placeItems: 'center', fontSize: 18, color: '#fff', fontWeight: 700, flexShrink: 0, cursor: product.seller.shopHandle ? 'pointer' : 'default' }}>
                   {product.seller.logo
                     ? <img src={product.seller.logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : product.seller.name.charAt(0)}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{product.seller.name}</div>
+                  <div onClick={() => product.seller.shopHandle && onNav?.('shop', { handle: product.seller.shopHandle })} style={{ fontSize: 14, fontWeight: 600, cursor: product.seller.shopHandle ? 'pointer' : 'default' }}>{product.seller.name}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
                     <Stars rating={product.seller.reviews > 0 ? product.seller.rating : 0} size={11} />
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{product.seller.reviews > 0 ? `${product.seller.rating.toFixed(1)} · ${product.seller.reviews} reviews` : 'No reviews yet'}</span>
                   </div>
                 </div>
-                {product.seller.handle && (
-                  <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: product.seller.handle, shop: 1 })} style={{ fontSize: 13, padding: '7px 12px' }}>
-                    <Icon name="msg" size={13} /> Message
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {product.seller.shopHandle && (
+                    <button className="btn btn-ghost" onClick={() => onNav?.('shop', { handle: product.seller.shopHandle })} style={{ fontSize: 13, padding: '7px 12px' }}>
+                      <Icon name="bag" size={13} /> Visit shop
+                    </button>
+                  )}
+                  {product.seller.handle && (
+                    <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: product.seller.handle, shop: 1 })} style={{ fontSize: 13, padding: '7px 12px' }}>
+                      <Icon name="msg" size={13} /> Message
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

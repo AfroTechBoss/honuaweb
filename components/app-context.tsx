@@ -37,6 +37,7 @@ export function pathFor(key: string, params: any = {}): string {
     case "orders": return "/orders";
     case "order": return `/orders/${params?.id ?? ''}`;
     case "product": return `/marketplace/${params?.id ?? ''}`;
+    case "shop": return `/shop/${encodeURIComponent(params?.handle ?? '')}`;
     default: return "/";
   }
 }

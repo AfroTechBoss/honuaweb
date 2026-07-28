@@ -47,12 +47,14 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
     setOrders(await getSellerOrders(app.user.id));
   }, [app.user?.id]);
 
-  // Shop logo for the header
+  // Shop identity (logo + handle) for the header + storefront link
   const [shopLogo, setShopLogo] = React.useState<string | null>(null);
+  const [shopHandle, setShopHandle] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (!app.user?.id) return;
     import('@/lib/market').then(({ getShopForOwner }) => getShopForOwner(app.user.id)).then(shop => {
       if (shop?.logo) setShopLogo(shop.logo);
+      if (shop?.handle) setShopHandle(shop.handle);
     }).catch(() => {});
   }, [app.user?.id]);
 
@@ -165,7 +167,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>honua.green/shop/{shop.handle} · ★ {shop.rating} ({shop.reviews})</div>
             </div>
-            <button className="btn btn-ghost" onClick={() => onNav?.('marketplace')} style={{ padding: '8px 14px' }}>View storefront <Icon name="arrow" size={14} /></button>
+            <button className="btn btn-ghost" onClick={() => shopHandle ? onNav?.('shop', { handle: shopHandle }) : onNav?.('marketplace')} style={{ padding: '8px 14px' }}>View storefront <Icon name="arrow" size={14} /></button>
             <button className="btn btn-green" onClick={() => setEditing('new')} style={{ padding: '8px 16px' }}><Icon name="plus" size={15} stroke={2.4} /> Add product</button>
           </div>
           {/* Tabs */}
@@ -647,40 +649,109 @@ function MiniStat({ label, value }) {
 // =====================================================================
 // Messages tab
 // =====================================================================
+// Real customer↔store conversations (shop-context DMs owned by this seller)
 function MessagesTab() {
-  const [sel, setSel] = React.useState(MOCK_SELLER.threads[0].handle);
+  const app = useApp();
+  const sellerId = app.user?.id;
+  const [convos, setConvos] = React.useState<any[]>([]);
+  const [sel, setSel] = React.useState<string | null>(null);
+  const [messages, setMessages] = React.useState<any[]>([]);
   const [draft, setDraft] = React.useState('');
-  const [extra, setExtra] = React.useState({});
-  const t = MOCK_SELLER.threads.find(x => x.handle === sel);
-  const msgs = [...t.msgs, ...(extra[sel] || []).map(m => ['me', m])];
-  const send = () => { if (!draft.trim()) return; setExtra(e => ({ ...e, [sel]: [...(e[sel] || []), draft] })); setDraft(''); };
+  const [loading, setLoading] = React.useState(true);
+  const endRef = React.useRef<HTMLDivElement>(null);
+
+  const loadConvos = React.useCallback(async () => {
+    if (!sellerId) { setLoading(false); return; }
+    const { getShopConversations } = await import('@/lib/market');
+    const list = await getShopConversations(sellerId);
+    setConvos(list);
+    setSel(prev => prev ?? list[0]?.id ?? null);
+    setLoading(false);
+  }, [sellerId]);
+  React.useEffect(() => { loadConvos(); }, [loadConvos]);
+
+  const loadMessages = React.useCallback(async (convoId: string) => {
+    const { supabase } = await import('@/lib/supabase');
+    const { data } = await supabase.from('messages').select('*').eq('conversation_id', convoId).order('created_at', { ascending: true });
+    setMessages(data ?? []);
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  }, []);
+  React.useEffect(() => { if (sel) loadMessages(sel); }, [sel, loadMessages]);
+
+  // Realtime: new messages in the open conversation + convo list refresh
+  React.useEffect(() => {
+    if (!sellerId) return;
+    let ch: any;
+    import('@/lib/supabase').then(({ supabase }) => {
+      ch = supabase.channel(`shop-msgs-${sellerId}-${Math.random().toString(36).slice(2)}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p: any) => {
+          if (p.new.conversation_id === sel) loadMessages(sel);
+          loadConvos();
+        })
+        .subscribe();
+    });
+    return () => { ch?.unsubscribe(); };
+  }, [sellerId, sel, loadMessages, loadConvos]);
+
+  const active = convos.find(c => c.id === sel);
+  const send = async () => {
+    if (!draft.trim() || !sel || !sellerId) return;
+    const text = draft.trim();
+    setDraft('');
+    setMessages(m => [...m, { id: 'opt-' + Date.now(), conversation_id: sel, sender_id: sellerId, content: text, created_at: new Date().toISOString() }]);
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    const { supabase } = await import('@/lib/supabase');
+    await supabase.from('messages').insert({ conversation_id: sel, sender_id: sellerId, content: text });
+    // Accept the request so the customer can reply, and bump ordering
+    await supabase.from('conversations').update({ status: 'accepted', last_message_at: new Date().toISOString() }).eq('id', sel);
+  };
+
+  if (loading) return <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>Loading messages…</div>;
+  if (convos.length === 0) return (
+    <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--ink-3)' }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: 'var(--ink-4)' }}><Icon name="msg" size={24} /></div>
+      <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)' }}>No customer messages yet</div>
+      <p style={{ fontSize: 14, maxWidth: 320, margin: '6px auto 0', lineHeight: 1.5 }}>When a shopper messages your store from a product or your storefront, the conversation appears here.</p>
+    </div>
+  );
+
+  const timeAgo = (ts: string) => {
+    if (!ts) return '';
+    const s = Math.floor((Date.now() - new Date(ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z').getTime()) / 1000);
+    if (s < 60) return 'now'; if (s < 3600) return `${Math.floor(s / 60)}m`; if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}d`;
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 0, border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', height: 540, background: 'var(--surface)' }}>
       <div style={{ borderRight: '1px solid var(--line)', overflow: 'auto' }} className="no-scrollbar">
-        {MOCK_SELLER.threads.map(th => (
-          <button key={th.handle} onClick={() => setSel(th.handle)} style={{ display: 'flex', gap: 11, width: '100%', textAlign: 'left', padding: '14px 16px', border: 'none', borderBottom: '1px solid var(--line)', cursor: 'pointer', background: sel === th.handle ? 'var(--green-tint)' : 'transparent', alignItems: 'center' }}>
-            <span style={{ position: 'relative' }}><Avatar name={th.name} size={38} />{th.online && <span style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: 'var(--green)', border: '2px solid var(--surface)' }} />}</span>
+        {convos.map(c => (
+          <button key={c.id} onClick={() => setSel(c.id)} style={{ display: 'flex', gap: 11, width: '100%', textAlign: 'left', padding: '14px 16px', border: 'none', borderBottom: '1px solid var(--line)', cursor: 'pointer', background: sel === c.id ? 'var(--green-tint)' : 'transparent', alignItems: 'center' }}>
+            <Avatar src={c.customer?.avatar_url} name={c.customer?.full_name} size={38} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13.5, fontWeight: 600 }}>{th.name}</span><span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{th.time}</span></div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{th.last}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13.5, fontWeight: 600 }}>{c.customer?.full_name ?? 'Customer'}</span><span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{c.lastMsg ? timeAgo(c.lastMsg.created_at) : ''}</span></div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.lastMsg ? (c.lastMsg.sender_id === sellerId ? `You: ${c.lastMsg.content}` : c.lastMsg.content) : 'No messages yet'}</div>
             </div>
-            {th.unread > 0 && <span style={{ background: 'var(--green)', color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 10, fontFamily: 'JetBrains Mono' }}>{th.unread}</span>}
           </button>
         ))}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar name={t.name} size={34} /><div><div style={{ fontSize: 14, fontWeight: 600 }}>{t.name}</div><div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{t.online ? 'Active now' : 'Offline'}</div></div>
+          <Avatar src={active?.customer?.avatar_url} name={active?.customer?.full_name} size={34} />
+          <div><div style={{ fontSize: 14, fontWeight: 600 }}>{active?.customer?.full_name ?? 'Customer'}</div><div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{active?.customer?.handle ?? ''}</div></div>
         </div>
         <div style={{ flex: 1, overflow: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
-          {msgs.map(([who, text], i) => (
-            <div key={i} style={{ alignSelf: who === 'me' ? 'flex-end' : 'flex-start', maxWidth: '70%', padding: '9px 13px', borderRadius: 14,
-              background: who === 'me' ? 'var(--green)' : 'var(--bg-2)', color: who === 'me' ? '#fff' : 'var(--ink)', fontSize: 13.5, lineHeight: 1.45 }}>{text}</div>
-          ))}
+          {messages.map((m, i) => {
+            const mine = m.sender_id === sellerId;
+            return (
+              <div key={m.id ?? i} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '70%', padding: '9px 13px', borderRadius: 14,
+                background: mine ? 'var(--green)' : 'var(--bg-2)', color: mine ? '#fff' : 'var(--ink)', fontSize: 13.5, lineHeight: 1.45 }}>{m.content}</div>
+            );
+          })}
+          <div ref={endRef} />
         </div>
         <div style={{ padding: 14, borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
-          <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Reply…" style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 999, padding: '10px 16px', fontSize: 13.5, outline: 'none', background: 'var(--bg-2)' }} />
-          <button className="btn btn-green" onClick={send} style={{ padding: '10px 18px' }}>Send</button>
+          <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Reply to your customer…" style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 999, padding: '10px 16px', fontSize: 13.5, outline: 'none', background: 'var(--bg-2)' }} />
+          <button className="btn btn-green" onClick={send} disabled={!draft.trim()} style={{ padding: '10px 18px', opacity: draft.trim() ? 1 : 0.5 }}>Send</button>
         </div>
       </div>
     </div>

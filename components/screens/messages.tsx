@@ -161,11 +161,15 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       `)
       .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
       .order('last_message_at', { ascending: false, nullsFirst: false });
-    // Attach last message properly (supabase returns array, take first)
-    const enriched = (data ?? []).map((c: any) => ({
-      ...c,
-      last_msg: Array.isArray(c.last_msg) ? c.last_msg[c.last_msg.length - 1] : c.last_msg,
-    }));
+    // Attach last message properly (supabase returns array, take first).
+    // Hide conversations where I'm the shop owner — those are customer
+    // inquiries and live in the seller dashboard's Messages tab instead.
+    const enriched = (data ?? [])
+      .filter((c: any) => c.shop_owner_id !== userId)
+      .map((c: any) => ({
+        ...c,
+        last_msg: Array.isArray(c.last_msg) ? c.last_msg[c.last_msg.length - 1] : c.last_msg,
+      }));
     setConvos(enriched);
   }, [userId]);
 

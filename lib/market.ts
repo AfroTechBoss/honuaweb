@@ -15,7 +15,7 @@ export type Product = {
   rating: number; review_count: number; featured: boolean; compare_at_cents: number | null;
   // real seller identity (null for the seeded demo catalogue)
   sellerId: string | null; sellerHandle: string | null; sellerName: string | null;
-  sellerLogo: string | null;
+  sellerLogo: string | null; sellerShopHandle: string | null; sellerShopName: string | null;
 };
 
 function mapProduct(row: any): Product {
@@ -37,26 +37,32 @@ function mapProduct(row: any): Product {
     sellerId: row.seller_id ?? null,
     sellerHandle: row.seller?.handle ?? null,
     sellerName: row.seller?.full_name ?? null,
-    sellerLogo: null, // filled in by attachShopLogos
+    sellerLogo: null,        // filled in by attachShopInfo
+    sellerShopHandle: null,
+    sellerShopName: null,
   };
 }
 
 // Join the seller's real profile so products carry a messageable handle
 const PRODUCT_SELECT = '*, seller:profiles!products_seller_id_fkey(handle, full_name)';
 
-// Attach each product's shop logo (from seller_applications) in one batched query
-async function attachShopLogos(products: Product[]): Promise<Product[]> {
+// Attach each product's shop identity (logo, shop handle, shop name) from
+// seller_applications in one batched query.
+async function attachShopInfo(products: Product[]): Promise<Product[]> {
   const ids = [...new Set(products.map(p => p.sellerId).filter(Boolean))] as string[];
   if (!ids.length) return products;
   try {
     const { data } = await supabase
       .from('seller_applications')
-      .select('user_id, logo_url')
+      .select('user_id, logo_url, shop_handle, shop_name, created_at')
       .in('user_id', ids)
-      .not('logo_url', 'is', null);
-    const byOwner: Record<string, string> = {};
-    for (const r of data ?? []) if (r.logo_url && !byOwner[r.user_id]) byOwner[r.user_id] = r.logo_url;
-    return products.map(p => p.sellerId && byOwner[p.sellerId] ? { ...p, sellerLogo: byOwner[p.sellerId] } : p);
+      .order('created_at', { ascending: false });
+    const byOwner: Record<string, any> = {};
+    for (const r of data ?? []) if (!byOwner[r.user_id]) byOwner[r.user_id] = r; // latest per owner
+    return products.map(p => {
+      const s = p.sellerId ? byOwner[p.sellerId] : null;
+      return s ? { ...p, sellerLogo: s.logo_url ?? null, sellerShopHandle: s.shop_handle ?? null, sellerShopName: s.shop_name ?? null } : p;
+    });
   } catch { return products; }
 }
 
@@ -70,7 +76,7 @@ export async function getProducts(): Promise<Product[]> {
     if (error || !data) return [];
     // Ignore junk rows from any leftover pre-migration table
     const products = data.filter((r: any) => r.name && r.price_cents != null).map(mapProduct);
-    return attachShopLogos(products);
+    return attachShopInfo(products);
   } catch { return []; }
 }
 
@@ -78,8 +84,41 @@ export async function getProductById(id: string): Promise<Product | null> {
   try {
     const { data, error } = await supabase.from('products').select(PRODUCT_SELECT).eq('id', id).maybeSingle();
     if (error || !data) return null;
-    const [product] = await attachShopLogos([mapProduct(data)]);
+    const [product] = await attachShopInfo([mapProduct(data)]);
     return product;
+  } catch { return null; }
+}
+
+// ---- Storefront (public shop page) ----
+export type Storefront = {
+  ownerId: string; name: string; handle: string; logo: string | null;
+  tagline: string | null; location: string | null; products: Product[];
+};
+
+export async function getStorefront(shopHandle: string): Promise<Storefront | null> {
+  try {
+    const { data: shop } = await supabase
+      .from('seller_applications')
+      .select('user_id, shop_name, shop_handle, logo_url, tagline, location, created_at')
+      .eq('shop_handle', shopHandle)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!shop) return null;
+    const { data: prodData } = await supabase
+      .from('products').select(PRODUCT_SELECT)
+      .eq('seller_id', shop.user_id).eq('status', 'live')
+      .order('created_at', { ascending: false });
+    const products = await attachShopInfo((prodData ?? []).filter((r: any) => r.name && r.price_cents != null).map(mapProduct));
+    return {
+      ownerId: shop.user_id,
+      name: shop.shop_name,
+      handle: shop.shop_handle,
+      logo: shop.logo_url ?? null,
+      tagline: shop.tagline ?? null,
+      location: shop.location ?? null,
+      products,
+    };
   } catch { return null; }
 }
 
@@ -557,23 +596,52 @@ export async function submitSellerApplication(userId: string, f: any): Promise<b
   } catch { return false; }
 }
 
-// A seller's shop identity (name + logo) for shop-branded conversations.
-// Cached per owner id for the session.
-const _shopCache: Record<string, { name: string; logo: string | null } | null> = {};
-export async function getShopForOwner(ownerId: string): Promise<{ name: string; logo: string | null } | null> {
+// A seller's shop identity (name + logo + handle) for shop-branded
+// conversations and storefront links. Cached per owner id for the session.
+const _shopCache: Record<string, { name: string; logo: string | null; handle: string | null } | null> = {};
+export async function getShopForOwner(ownerId: string): Promise<{ name: string; logo: string | null; handle: string | null } | null> {
   if (ownerId in _shopCache) return _shopCache[ownerId];
   try {
     const { data } = await supabase
       .from('seller_applications')
-      .select('shop_name, logo_url, status, created_at')
+      .select('shop_name, shop_handle, logo_url, status, created_at')
       .eq('user_id', ownerId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const shop = data?.shop_name ? { name: data.shop_name, logo: data.logo_url ?? null } : null;
+    const shop = data?.shop_name ? { name: data.shop_name, logo: data.logo_url ?? null, handle: data.shop_handle ?? null } : null;
     _shopCache[ownerId] = shop;
     return shop;
   } catch { return null; }
+}
+
+// ---- Shop conversations (seller dashboard Messages tab) ----
+// Conversations where this seller is the shop owner, i.e. customer inquiries
+// about their store — distinct from their personal DMs.
+export async function getShopConversations(sellerId: string): Promise<any[]> {
+  try {
+    const { data } = await supabase
+      .from('conversations')
+      .select(`
+        *,
+        buyer1:profiles!user1_id(id, handle, full_name, avatar_url, verified),
+        buyer2:profiles!user2_id(id, handle, full_name, avatar_url, verified),
+        last_msg:messages(content, created_at, sender_id)
+      `)
+      .eq('shop_owner_id', sellerId)
+      .order('last_message_at', { ascending: false, nullsFirst: false });
+    return (data ?? []).map((c: any) => {
+      // The customer is whichever participant isn't the seller
+      const customer = c.user1_id === sellerId ? c.buyer2 : c.buyer1;
+      const lastArr = Array.isArray(c.last_msg) ? c.last_msg : (c.last_msg ? [c.last_msg] : []);
+      return {
+        id: c.id,
+        status: c.status,
+        customer,
+        lastMsg: lastArr[lastArr.length - 1] ?? null,
+      };
+    });
+  } catch { return []; }
 }
 
 export async function getMySellerApplication(userId: string): Promise<any | null> {
