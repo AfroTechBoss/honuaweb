@@ -14,6 +14,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // Supabase auth.
 const PUBLIC_PATHS = [
   "/login",
+  "/auth",       // OAuth callback (/auth/callback) — must run to exchange the code
   "/terms",
   "/seller-policy",
   "/proposition",

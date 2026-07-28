@@ -452,7 +452,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loginWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (error) throw error;
   }, []);
@@ -460,7 +460,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loginWithApple = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
-      options: { redirectTo: `${window.location.origin}/` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (error) throw error;
   }, []);
