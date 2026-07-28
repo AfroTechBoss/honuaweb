@@ -664,23 +664,7 @@ function downloadBlob(content: BlobPart, type: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-// Honua category colours for exports (hex — canvas can't use CSS vars)
-const EXPORT_CAT_HEX: Record<string, string> = {
-  Transport: '#1f6f3f', Energy: '#2e9a5b', Food: '#1d6dc4', Waste: '#e6b450',
-  Ocean: '#1d6dc4', Lifestyle: '#8a5fd6', Policy: '#c4623a', Education: '#1d6dc4', General: '#8a918c',
-};
 const BRAND_GREEN = '#1f6f3f';
-const BRAND_GREEN_2 = '#2e9a5b';
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
 
 // Loads the brand webfonts into a canvas context (Lora for display, Satoshi
 // for body, JetBrains Mono for data/labels) before we draw the PNG card.
