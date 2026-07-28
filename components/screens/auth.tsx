@@ -82,30 +82,236 @@ function SocialButtons({ onGoogle, onApple }: { onGoogle: () => void; onApple: (
   );
 }
 
+// ── Forgot-password modal ─────────────────────────────────────────────────────
+type ForgotStep = 'email' | 'method' | 'code' | 'new-password' | 'link-sent' | 'done';
+
+function ForgotPasswordModal({ initialEmail, onClose }: { initialEmail: string; onClose: () => void }) {
+  const app = useApp();
+  const [step, setStep] = React.useState<ForgotStep>('email');
+  const [email, setEmail] = React.useState(initialEmail);
+  const [method, setMethod] = React.useState<'link' | 'code'>('link');
+  const [code, setCode] = React.useState('');
+  const [pw, setPw] = React.useState('');
+  const [confirmPw, setConfirmPw] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const codeRefs = Array.from({ length: 6 }, () => React.useRef<HTMLInputElement>(null));
+
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
+
+  const isValidEmail = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
+
+  const sendLink = async () => {
+    setLoading(true); setErr('');
+    try {
+      await app.resetPassword(email.trim());
+      setStep('link-sent');
+    } catch (e: any) { setErr(e?.message || 'Could not send reset link.'); }
+    finally { setLoading(false); }
+  };
+
+  const sendCode = async () => {
+    setLoading(true); setErr('');
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false } });
+      if (error) throw error;
+      setStep('code');
+    } catch (e: any) { setErr(e?.message || 'Could not send code.'); }
+    finally { setLoading(false); }
+  };
+
+  const verifyCode = async () => {
+    if (code.length < 6) { setErr('Enter the full 6-digit code.'); return; }
+    setLoading(true); setErr('');
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'email' });
+      if (error) throw error;
+      setStep('new-password');
+    } catch (e: any) { setErr(e?.message || 'Invalid or expired code.'); }
+    finally { setLoading(false); }
+  };
+
+  const updatePassword = async () => {
+    if (pw.length < 8) { setErr('Password must be at least 8 characters.'); return; }
+    if (pw !== confirmPw) { setErr("Passwords don't match."); return; }
+    setLoading(true); setErr('');
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase.auth.updateUser({ password: pw });
+      if (error) throw error;
+      setStep('done');
+    } catch (e: any) { setErr(e?.message || 'Could not update password.'); }
+    finally { setLoading(false); }
+  };
+
+  const handleCodeInput = (i: number, v: string) => {
+    const digit = v.replace(/\D/g, '').slice(-1);
+    const chars = code.split('');
+    chars[i] = digit;
+    const next = chars.join('').slice(0, 6);
+    setCode(next.padEnd(6, '').slice(0, 6).replace(/ /g, ''));
+    setCode(chars.slice(0, 6).join('').replace(/[^0-9]/g, '').slice(0, 6));
+    // Focus next
+    if (digit && i < 5) codeRefs[i + 1].current?.focus();
+  };
+
+  const handleCodeKey = (i: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !code[i] && i > 0) codeRefs[i - 1].current?.focus();
+  };
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    setCode(pasted.padEnd(6, ''));
+    codeRefs[Math.min(pasted.length, 5)].current?.focus();
+    e.preventDefault();
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: 'var(--bg)', borderRadius: 20, padding: '36px 36px 32px', width: '100%', maxWidth: 420, boxShadow: '0 24px 80px rgba(0,0,0,.25)', position: 'relative' }}>
+        {/* Close button */}
+        <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 6, borderRadius: 8, display: 'grid', placeItems: 'center' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+
+        {/* ── Step: email entry ── */}
+        {step === 'email' && (
+          <>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', marginBottom: 18 }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Reset your password</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 22px', lineHeight: 1.55 }}>Enter your account email and we'll help you get back in.</p>
+            <label style={lab}>EMAIL ADDRESS</label>
+            <input type="email" value={email} onChange={e => { setEmail(e.target.value); setErr(''); }} placeholder="you@example.com" style={field} autoFocus
+              onKeyDown={e => e.key === 'Enter' && isValidEmail(email) && setStep('method')} />
+            {err && <p style={{ fontSize: 12.5, color: 'var(--clay)', margin: '6px 0 0' }}>{err}</p>}
+            <button onClick={() => { if (!isValidEmail(email)) { setErr('Enter a valid email address.'); return; } setErr(''); setStep('method'); }} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 18 }}>
+              Continue
+            </button>
+          </>
+        )}
+
+        {/* ── Step: choose method ── */}
+        {step === 'method' && (
+          <>
+            <button onClick={() => setStep('email')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 20 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7"/></svg> Back
+            </button>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.02em' }}>How would you like to reset?</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 22px', lineHeight: 1.55 }}>We'll send a message to <b style={{ color: 'var(--ink)', fontFamily: 'JetBrains Mono', fontSize: 13 }}>{email.trim()}</b></p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {([['link', 'Magic link', 'Receive a secure link by email. Click it to set a new password.', 'M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6'],
+                 ['code', '6-digit code', 'Get a one-time code by email. Enter it here, then set your password.', 'M12 2a10 10 0 100 20A10 10 0 0012 2zm0 5v5l3 3']] as const).map(([val, title, desc, path]) => (
+                <button key={val} onClick={() => setMethod(val)} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 18px', borderRadius: 14, border: `2px solid ${method === val ? 'var(--green)' : 'var(--line)'}`, background: method === val ? 'var(--green-tint)' : 'var(--surface)', cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: method === val ? 'var(--green)' : 'var(--bg-2)', display: 'grid', placeItems: 'center', flexShrink: 0, transition: 'background .15s' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={method === val ? '#fff' : 'var(--ink-3)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={path}/></svg>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 3 }}>{title}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>{desc}</div>
+                  </div>
+                  {method === val && <div style={{ marginLeft: 'auto', flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: 'var(--green)', display: 'grid', placeItems: 'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg></div>}
+                </button>
+              ))}
+            </div>
+            {err && <p style={{ fontSize: 12.5, color: 'var(--clay)', margin: '8px 0 0' }}>{err}</p>}
+            <button onClick={method === 'link' ? sendLink : sendCode} disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 20, opacity: loading ? 0.7 : 1 }}>
+              {loading ? 'Sending…' : method === 'link' ? 'Send magic link' : 'Send code'}
+            </button>
+          </>
+        )}
+
+        {/* ── Step: magic link sent ── */}
+        {step === 'link-sent' && (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: 18, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', margin: '0 auto 20px' }}>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: '0 0 10px', letterSpacing: '-0.02em' }}>Check your email</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 8px', lineHeight: 1.6 }}>We sent a password reset link to</p>
+            <div style={{ display: 'inline-block', background: 'var(--green-tint)', color: 'var(--green)', fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, padding: '5px 14px', borderRadius: 8, marginBottom: 20 }}>{email.trim()}</div>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 24px', lineHeight: 1.6 }}>Click the link in that email to set a new password. Check your spam folder if it doesn't arrive within a few minutes.</p>
+            <button onClick={() => { setStep('method'); setErr(''); }} style={{ fontSize: 13, color: 'var(--green)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginBottom: 10 }}>Resend email</button>
+            <button onClick={onClose} className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 14 }}>Back to sign in</button>
+          </div>
+        )}
+
+        {/* ── Step: enter code ── */}
+        {step === 'code' && (
+          <>
+            <button onClick={() => setStep('method')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginBottom: 20 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7"/></svg> Back
+            </button>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', marginBottom: 18 }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+            </div>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Enter your code</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 24px', lineHeight: 1.55 }}>We sent a 6-digit code to <b style={{ color: 'var(--ink)', fontFamily: 'JetBrains Mono', fontSize: 13 }}>{email.trim()}</b></p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 6 }} onPaste={handleCodePaste}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <input key={i} ref={codeRefs[i]} type="text" inputMode="numeric" maxLength={1}
+                  value={code[i] || ''}
+                  onChange={e => handleCodeInput(i, e.target.value)}
+                  onKeyDown={e => handleCodeKey(i, e)}
+                  style={{ width: 46, height: 54, textAlign: 'center', fontSize: 22, fontFamily: 'JetBrains Mono', fontWeight: 700, background: 'var(--bg-2)', border: `2px solid ${code[i] ? 'var(--green)' : 'var(--line)'}`, borderRadius: 12, color: 'var(--ink)', outline: 'none', caretColor: 'var(--green)' }}
+                />
+              ))}
+            </div>
+            {err && <p style={{ fontSize: 12.5, color: 'var(--clay)', margin: '8px 0 0', textAlign: 'center' }}>{err}</p>}
+            <button onClick={verifyCode} disabled={loading || code.replace(/[^0-9]/g, '').length < 6} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 20, opacity: (loading || code.replace(/[^0-9]/g, '').length < 6) ? 0.6 : 1 }}>
+              {loading ? 'Verifying…' : 'Verify code'}
+            </button>
+            <button onClick={() => { setCode(''); sendCode(); }} style={{ display: 'block', width: '100%', textAlign: 'center', fontSize: 13, color: 'var(--green)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginTop: 14, padding: 6 }}>
+              Resend code
+            </button>
+          </>
+        )}
+
+        {/* ── Step: set new password ── */}
+        {step === 'new-password' && (
+          <>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', marginBottom: 18 }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Set a new password</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 22px', lineHeight: 1.55 }}>Choose a strong password for your Honua account.</p>
+            <PasswordField value={pw} onChange={(e: any) => { setPw(e.target.value); setErr(''); }} placeholder="At least 8 characters" label="NEW PASSWORD" />
+            <PasswordField value={confirmPw} onChange={(e: any) => { setConfirmPw(e.target.value); setErr(''); }} placeholder="Repeat your new password" label="CONFIRM PASSWORD" />
+            {err && <p style={{ fontSize: 12.5, color: 'var(--clay)', margin: '4px 0 0' }}>{err}</p>}
+            <button onClick={updatePassword} disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 14, opacity: loading ? 0.7 : 1 }}>
+              {loading ? 'Updating…' : 'Update password'}
+            </button>
+          </>
+        )}
+
+        {/* ── Step: all done ── */}
+        {step === 'done' && (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>🌱</div>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px', letterSpacing: '-0.02em' }}>Password updated!</h2>
+            <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 24px', lineHeight: 1.55 }}>Your password has been changed. You can now sign in with your new password.</p>
+            <button onClick={onClose} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15 }}>Back to sign in</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Sign-in form ──────────────────────────────────────────────────────────────
 function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: () => void }) {
   const app = useApp();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
-  const [resetting, setResetting] = React.useState(false);
+  const [showForgot, setShowForgot] = React.useState(false);
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
-
-  const handleForgot = async () => {
-    const addr = email.trim();
-    if (!addr || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) {
-      app.toast?.({ msg: 'Enter your email first', sub: 'Type your account email above, then tap Forgot password.', icon: 'bolt' });
-      return;
-    }
-    setResetting(true);
-    try {
-      await app.resetPassword(addr);
-      app.toast?.({ msg: 'Reset link sent', sub: `Check ${addr} for a link to set a new password.`, kind: 'success', icon: 'msg' });
-    } catch (e: any) {
-      app.toast?.({ msg: 'Could not send reset link', sub: e?.message, kind: 'error', icon: 'close' });
-    } finally { setResetting(false); }
-  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +328,7 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
 
   return (
     <div style={{ width: '100%', maxWidth: 380 }}>
+      {showForgot && <ForgotPasswordModal initialEmail={email} onClose={() => setShowForgot(false)} />}
       <h2 className="font-display" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>Welcome back</h2>
       <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '6px 0 24px' }}>Sign in to pick up where you left off.</p>
 
@@ -132,7 +339,7 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
         </div>
         <PasswordField value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="Your password" />
         <div style={{ textAlign: 'right', marginBottom: 4 }}>
-          <span onClick={resetting ? undefined : handleForgot} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: resetting ? 'default' : 'pointer', opacity: resetting ? 0.6 : 1 }}>{resetting ? 'Sending…' : 'Forgot password?'}</span>
+          <span onClick={() => setShowForgot(true)} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Forgot password?</span>
         </div>
         <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 8, opacity: loading ? 0.7 : 1 }}>
           {loading ? 'Signing in…' : 'Sign in'}

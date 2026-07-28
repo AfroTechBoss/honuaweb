@@ -469,7 +469,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // exchanges the recovery code for a session and forwards to /reset-password.
   const resetPassword = useCallback(async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
     });
     if (error) throw error;
   }, []);
