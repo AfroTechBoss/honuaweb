@@ -23,8 +23,33 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
   const [prog, setProg] = React.useState(0);
   const [paused, setPaused] = React.useState(false);
   const [liked, setLiked] = React.useState(false);
+  const [hearts, setHearts] = React.useState<any[]>([]);
   const [reply, setReply] = React.useState('');
   const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  // Like toggle — when liking, scatter green hearts that float + pop at random
+  const handleLike = React.useCallback(() => {
+    setLiked(prev => {
+      const now = !prev;
+      if (now) {
+        const seed = Date.now();
+        const batch = Array.from({ length: 16 }, (_, i) => ({
+          id: seed + i,
+          left: 6 + Math.random() * 88,        // %
+          top: 18 + Math.random() * 64,        // %
+          dx: (Math.random() * 2 - 1) * 90,    // px drift
+          rot: (Math.random() * 2 - 1) * 45,   // deg
+          size: 18 + Math.random() * 26,
+          dur: 900 + Math.random() * 800,      // ms
+          delay: Math.random() * 320,          // ms
+        }));
+        setHearts(h => [...h, ...batch]);
+        const ids = new Set(batch.map(b => b.id));
+        setTimeout(() => setHearts(h => h.filter(x => !ids.has(x.id))), 2400);
+      }
+      return now;
+    });
+  }, []);
 
   const group = groups[groupIdx];
   const story: Story | undefined = group?.stories[storyIdx];
@@ -174,8 +199,13 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
 
         {/* Post story */}
         {story.type === 'post' && story.post && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-            <div style={{ background: 'rgba(255,255,255,.08)', backdropFilter: 'blur(12px)', borderRadius: 20, padding: 20, maxWidth: 400, width: '100%', border: '1px solid rgba(255,255,255,.15)' }}>
+          // container is click-through (pointerEvents none) so tap-zones still
+          // work around the card; the card itself is clickable and sits above them
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 4, pointerEvents: 'none' }}>
+            <div
+              onClick={(e) => { e.stopPropagation(); onClose(); onNav?.('post', { id: story.post!.id }); }}
+              style={{ background: 'rgba(255,255,255,.08)', backdropFilter: 'blur(12px)', borderRadius: 20, padding: 20, maxWidth: 400, width: '100%', border: '1px solid rgba(255,255,255,.15)', cursor: 'pointer', pointerEvents: 'auto' }}
+            >
               {story.post.image_url && (
                 <img src={story.post.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 14, objectFit: 'cover', maxHeight: 220 }} />
               )}
@@ -205,7 +235,7 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
         <div onClick={(e) => { e.stopPropagation(); goPrev(); }}
           style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: '32%', cursor: 'pointer', zIndex: 2 }} />
         <div onClick={(e) => { e.stopPropagation(); goNext(); }}
-          style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '68%', cursor: 'pointer', zIndex: story.type === 'post' ? 0 : 2 }} />
+          style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '68%', cursor: 'pointer', zIndex: 2 }} />
 
         {/* Caption + reply */}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 100%)', padding: '56px 20px 28px', zIndex: 3 }}>
@@ -221,11 +251,29 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
               placeholder={`Reply to ${u.full_name.split(' ')[0]}…`}
               style={{ flex: 1, border: '1px solid rgba(255,255,255,.45)', background: 'transparent', color: '#fff', borderRadius: 999, padding: '10px 16px', fontSize: 14, outline: 'none', fontFamily: 'Satoshi' }}
             />
-            <button onClick={(e) => { e.stopPropagation(); setLiked(v => !v); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
-              <Icon name="heart" size={26} color={liked ? 'var(--clay)' : '#fff'} stroke={liked ? 2.4 : 1.8} />
+            <button onClick={(e) => { e.stopPropagation(); handleLike(); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+              <span key={liked ? 'on' : 'off'} style={{ display: 'inline-flex', animation: liked ? 'heart-pop .45s ease-out' : 'none' }}>
+                <Icon name="heart" size={26} color={liked ? 'var(--green)' : '#fff'} fill={liked ? 'var(--green)' : 'none'} stroke={liked ? 2.2 : 1.8} />
+              </span>
             </button>
           </div>
         </div>
+
+        {/* Floating green likes — scatter + pop across the screen */}
+        {hearts.length > 0 && (
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 30 }}>
+            {hearts.map(p => (
+              <span key={p.id} style={{
+                position: 'absolute', left: `${p.left}%`, top: `${p.top}%`,
+                animation: `storyHeartFloat ${p.dur}ms cubic-bezier(.2,.7,.3,1) ${p.delay}ms forwards`,
+                ['--dx' as any]: `${p.dx}px`, ['--r' as any]: `${p.rot}deg`,
+                filter: 'drop-shadow(0 2px 6px rgba(31,111,63,.5))', willChange: 'transform, opacity',
+              }}>
+                <Icon name="heart" size={p.size} color="var(--green)" fill="var(--green)" stroke={0} />
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
