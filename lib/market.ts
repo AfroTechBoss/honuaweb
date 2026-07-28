@@ -13,6 +13,8 @@ export type Product = {
   id: string; name: string; brand: string; price: string; price_cents: number;
   tag: string; category: string; imgUrl: string | null; description: string | null;
   rating: number; review_count: number; featured: boolean; compare_at_cents: number | null;
+  // real seller identity (null for the seeded demo catalogue)
+  sellerId: string | null; sellerHandle: string | null; sellerName: string | null;
 };
 
 function mapProduct(row: any): Product {
@@ -30,14 +32,20 @@ function mapProduct(row: any): Product {
     review_count: row.review_count ?? 0,
     featured: !!row.featured,
     compare_at_cents: row.compare_at_cents ?? null,
+    sellerId: row.seller_id ?? null,
+    sellerHandle: row.seller?.handle ?? null,
+    sellerName: row.seller?.full_name ?? null,
   };
 }
+
+// Join the seller's real profile so products carry a messageable handle
+const PRODUCT_SELECT = '*, seller:profiles!products_seller_id_fkey(handle, full_name)';
 
 export async function getProducts(): Promise<Product[]> {
   try {
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select(PRODUCT_SELECT)
       .eq('status', 'live')
       .order('created_at', { ascending: true });
     if (error || !data) return [];
@@ -48,7 +56,7 @@ export async function getProducts(): Promise<Product[]> {
 
 export async function getProductById(id: string): Promise<Product | null> {
   try {
-    const { data, error } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await supabase.from('products').select(PRODUCT_SELECT).eq('id', id).maybeSingle();
     if (error || !data) return null;
     return mapProduct(data);
   } catch { return null; }

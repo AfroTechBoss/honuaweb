@@ -194,7 +194,8 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
         setDbProduct({
           id: p.id, title: p.name, price: p.price_cents / 100, brand: p.brand, tag: p.tag,
           imgUrl: p.imgUrl, img: p.name, category: p.category,
-          seller: { name: p.brand, handle: p.brand.toLowerCase().replace(/\s+/g, ''), rating: p.rating, reviews: p.review_count },
+          // Use the seller's real profile handle so "Message" opens a DM with them
+          seller: { name: p.sellerName || p.brand, handle: p.sellerHandle || null, rating: p.rating, reviews: p.review_count },
           description: p.description || `${p.name} from ${p.brand}. Sustainably made with planet-friendly materials.`,
           eco: ECO_DETAILS[p.tag] || [],
           inStock: true, stock: 40,
@@ -372,9 +373,11 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
                     <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{product.seller.rating.toFixed(1)} · {product.seller.reviews} reviews</span>
                   </div>
                 </div>
-                <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: product.seller.handle })} style={{ fontSize: 13, padding: '7px 12px' }}>
-                  <Icon name="msg" size={13} /> Message
-                </button>
+                {product.seller.handle && (
+                  <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: product.seller.handle })} style={{ fontSize: 13, padding: '7px 12px' }}>
+                    <Icon name="msg" size={13} /> Message
+                  </button>
+                )}
               </div>
             </div>
           </div>
