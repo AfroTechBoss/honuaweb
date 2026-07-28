@@ -11,6 +11,7 @@ import { useApp } from "@/components/app-context";
 export const VOUCHES_TO_VERIFY = 3;
 
 export function ImpactVouchBar({ log, vouched, isOwn, onVouch }: { log: any; vouched: boolean; isOwn: boolean; onVouch: (log: any) => void }) {
+  const app = useApp();
   const verified = log.status === 'verified';
   const count = log.vouch_count ?? 0;
   return (
@@ -37,7 +38,15 @@ export function ImpactVouchBar({ log, vouched, isOwn, onVouch }: { log: any; vou
           <Icon name="check" size={14} stroke={2.6} /> Verified
         </span>
       ) : isOwn ? (
-        <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>awaiting vouches</span>
+        // Author can't vouch their own action — show a disabled button that
+        // explains why on click, instead of a silent label.
+        <button
+          onClick={() => app.toast?.({ msg: "You can't vouch for your own action", sub: 'Others in the community vouch to verify it.', icon: 'user' })}
+          title="You can't vouch for your own action"
+          style={{ padding: '6px 14px', fontSize: 12.5, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--bg-2)', color: 'var(--ink-4)', cursor: 'not-allowed' }}
+        >
+          Vouch
+        </button>
       ) : (
         <button className={vouched ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => onVouch(log)} style={{ padding: '6px 14px', fontSize: 12.5 }}>
           {vouched ? 'Vouched ✓' : 'Vouch'}
