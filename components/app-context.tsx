@@ -465,6 +465,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
+  // Send a password-reset email. The link returns to /auth/callback, which
+  // exchanges the recovery code for a session and forwards to /reset-password.
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    });
+    if (error) throw error;
+  }, []);
+
   const signup = useCallback(async (email: string, password: string, metadata: Record<string, any>) => {
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -531,7 +540,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     authed: st.authed,
     user: st.user,
     session: st.session,
-    login, loginWithGoogle, loginWithApple, signup, logout, uploadAvatar,
+    login, loginWithGoogle, loginWithApple, resetPassword, signup, logout, uploadAvatar,
     needsOnboarding: !!st.needsOnboarding,
     completeOAuthOnboarding,
     realtimeDeltas,

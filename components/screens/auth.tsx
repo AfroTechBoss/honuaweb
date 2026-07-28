@@ -88,8 +88,24 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+  const [resetting, setResetting] = React.useState(false);
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
+
+  const handleForgot = async () => {
+    const addr = email.trim();
+    if (!addr || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) {
+      app.toast?.({ msg: 'Enter your email first', sub: 'Type your account email above, then tap Forgot password.', icon: 'bolt' });
+      return;
+    }
+    setResetting(true);
+    try {
+      await app.resetPassword(addr);
+      app.toast?.({ msg: 'Reset link sent', sub: `Check ${addr} for a link to set a new password.`, kind: 'success', icon: 'msg' });
+    } catch (e: any) {
+      app.toast?.({ msg: 'Could not send reset link', sub: e?.message, kind: 'error', icon: 'close' });
+    } finally { setResetting(false); }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +132,7 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
         </div>
         <PasswordField value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="Your password" />
         <div style={{ textAlign: 'right', marginBottom: 4 }}>
-          <span onClick={() => app.toast?.({ msg: 'Reset link sent', sub: 'Check your inbox for a reset link.', icon: 'msg' })} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Forgot password?</span>
+          <span onClick={resetting ? undefined : handleForgot} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: resetting ? 'default' : 'pointer', opacity: resetting ? 0.6 : 1 }}>{resetting ? 'Sending…' : 'Forgot password?'}</span>
         </div>
         <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '13px 16px', fontSize: 15, marginTop: 8, opacity: loading ? 0.7 : 1 }}>
           {loading ? 'Signing in…' : 'Sign in'}
