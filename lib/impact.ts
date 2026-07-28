@@ -199,18 +199,18 @@ export async function getMyVouches(userId: string, logIds: string[]): Promise<st
   } catch { return []; }
 }
 
-export async function vouchForLog(userId: string, logId: string): Promise<boolean> {
+export async function vouchForLog(userId: string, logId: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const { error } = await supabase.from('impact_vouches').insert({ user_id: userId, log_id: logId });
-    return !error;
-  } catch { return false; }
+    return { ok: !error, error: error?.message };
+  } catch (e: any) { return { ok: false, error: e?.message }; }
 }
 
-export async function unvouchLog(userId: string, logId: string): Promise<boolean> {
+export async function unvouchLog(userId: string, logId: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const { error } = await supabase.from('impact_vouches').delete().match({ user_id: userId, log_id: logId });
-    return !error;
-  } catch { return false; }
+    return { ok: !error, error: error?.message };
+  } catch (e: any) { return { ok: false, error: e?.message }; }
 }
 
 export async function getRecentLogs(userId: string, limit = 20): Promise<ImpactLog[]> {

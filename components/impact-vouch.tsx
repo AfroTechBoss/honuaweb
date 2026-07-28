@@ -78,11 +78,13 @@ export function useImpactVouches(postIds: string[]) {
     setMine(v => vouched ? v.filter(x => x !== log.id) : [...v, log.id]);
     setLogs(prev => ({ ...prev, [log.post_id]: { ...log, vouch_count: Math.max(0, (log.vouch_count ?? 0) + (vouched ? -1 : 1)) } }));
     const { vouchForLog, unvouchLog } = await import('@/lib/impact');
-    const ok = vouched ? await unvouchLog(app.user.id, log.id) : await vouchForLog(app.user.id, log.id);
+    const { ok, error } = vouched ? await unvouchLog(app.user.id, log.id) : await vouchForLog(app.user.id, log.id);
     if (!ok) {
-      // Roll back
+      // Roll back + surface why (e.g. RLS: can't vouch your own action)
       setMine(v => vouched ? [...v, log.id] : v.filter(x => x !== log.id));
       setLogs(prev => ({ ...prev, [log.post_id]: log }));
+      const isOwn = log.user_id === app.user.id;
+      app.toast?.({ msg: isOwn ? "You can't vouch for your own action" : 'Could not record vouch', sub: isOwn ? undefined : error, kind: 'error', icon: 'close' });
       return;
     }
     // Re-read the authoritative row (trigger may have flipped it to verified)
