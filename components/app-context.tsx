@@ -339,6 +339,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
     refreshUnread(userId);
     refreshCollections(userId);
+    // Sync seller status app-wide so "Sell on Honua" vs "Seller dashboard"
+    // is correct everywhere (marketplace, sidebar) — not just on /sell.
+    import('@/lib/market').then(({ getMySellerApplication }) => getMySellerApplication(userId)).then(dbApp => {
+      if (!dbApp) return;
+      const dbStatus = dbApp.status === 'approved' ? 'approved' : dbApp.status === 'rejected' ? 'rejected' : 'pending';
+      setSt((s: any) => s.sellerStatus === dbStatus ? s : ({
+        ...s,
+        sellerStatus: dbStatus,
+        sellerShop: s.sellerShop ?? { name: dbApp.shop_name, handle: dbApp.shop_handle, tagline: dbApp.tagline },
+      }));
+    }).catch(() => {});
   }, [st.user?.id, refreshUnread, refreshCollections]);
 
   // ---- Supabase Realtime: post counts + incoming notifications ----

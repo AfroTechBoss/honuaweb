@@ -37,7 +37,9 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
           <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: mob ? 20 : 36, fontWeight: 600, letterSpacing: mob ? '-0.01em' : '-0.03em', lineHeight: 1.2 }}>Sustainable goods, vouched by humans.</h1>
           <p style={{ margin: '4px 0 10px', color: 'var(--ink-3)', fontSize: 14 }}>Every product carries an impact label and a real review from someone on Honua.</p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-ghost" onClick={() => onNav?.('sell')} style={{ color: 'var(--green)', borderColor: 'var(--green-3)', fontSize: 13 }}><Icon name="bag" size={14} /> Sell on Honua</button>
+            {app.state?.sellerStatus === 'approved'
+              ? <button className="btn btn-ghost" onClick={() => onNav?.('seller')} style={{ color: 'var(--green)', borderColor: 'var(--green-3)', fontSize: 13 }}><Icon name="bag" size={14} /> Seller dashboard</button>
+              : <button className="btn btn-ghost" onClick={() => onNav?.('sell')} style={{ color: 'var(--green)', borderColor: 'var(--green-3)', fontSize: 13 }}><Icon name="bag" size={14} /> Sell on Honua</button>}
             <button className="btn btn-ghost" onClick={() => app.openModal?.('list', { title: 'Your wishlist', icon: 'bookmark', sub: (app.state.wishlist.length || 'No') + ' saved items', items: app.state.wishlist.length ? app.state.wishlist.map(n => ({ icon: 'bag', title: n, sub: 'tap a product to add to cart' })) : [{ icon: 'bookmark', title: 'Nothing saved yet', sub: 'tap the bookmark on any product' }] })} style={{ fontSize: 13 }}><Icon name="bookmark" size={14} /> Wishlist</button>
             <button className="btn btn-primary" onClick={() => app.openCart?.()} style={{ fontSize: 13 }}><Icon name="bag" size={14} /> Cart · {app.cartCount}</button>
           </div>

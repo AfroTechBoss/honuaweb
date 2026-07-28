@@ -141,8 +141,9 @@ export function DesktopSidebar({ active, onNav }: any) {
             <div className="menu-pop" style={{ position: "absolute", bottom: 64, left: 12, right: 12, zIndex: 41, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 20px 50px -16px rgba(0,0,0,.3)", padding: 6, overflow: "hidden" }}>
               {([
                 ["View profile", "user", () => onNav?.("profile")],
-                ["Sell on Honua", "bag", () => onNav?.("sell")],
-                ["Seller dashboard", "leaf", () => onNav?.("seller")],
+                app.state?.sellerStatus === 'approved'
+                  ? ["Seller dashboard", "bag", () => onNav?.("seller")]
+                  : ["Sell on Honua", "bag", () => onNav?.("sell")],
                 ["Admin · approvals", "check", () => onNav?.("admin")],
                 ["Settings", "settings", () => onNav?.("settings")],
                 ["Switch appearance", "sparkles", () => app.toggleDark?.()],
@@ -249,9 +250,13 @@ export function MobileNav() {
                 ))}
               </div>
               <div className="more-sheet-actions">
-                <button onClick={() => { setMoreOpen(false); app.nav?.("sell"); }} className="more-sheet-action-btn">
-                  <Icon name="bag" size={16} /> Sell on Honua
-                </button>
+                {app.state?.sellerStatus === 'approved'
+                  ? <button onClick={() => { setMoreOpen(false); app.nav?.("seller"); }} className="more-sheet-action-btn">
+                      <Icon name="bag" size={16} /> Seller dashboard
+                    </button>
+                  : <button onClick={() => { setMoreOpen(false); app.nav?.("sell"); }} className="more-sheet-action-btn">
+                      <Icon name="bag" size={16} /> Sell on Honua
+                    </button>}
                 <button onClick={() => { setConfirmLogout(true); }} className="more-sheet-action-btn logout">
                   <Icon name="logout" size={16} /> Log out
                 </button>
