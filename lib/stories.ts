@@ -98,6 +98,69 @@ export async function deleteStory(storyId: string) {
   if (error) throw error;
 }
 
+// ---- Story likes (migration 027) ----
+export async function isStoryLiked(userId: string, storyId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.from('story_likes').select('story_id').eq('user_id', userId).eq('story_id', storyId).maybeSingle();
+    return !!data;
+  } catch { return false; }
+}
+
+export async function likeStory(userId: string, storyId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('story_likes').insert({ user_id: userId, story_id: storyId });
+    return !error;
+  } catch { return false; }
+}
+
+export async function unlikeStory(userId: string, storyId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('story_likes').delete().match({ user_id: userId, story_id: storyId });
+    return !error;
+  } catch { return false; }
+}
+
+// ---- Story reply → real DM to the author (reuses conversations/messages) ----
+export async function sendStoryReply(fromUserId: string, toUserId: string, text: string): Promise<boolean> {
+  if (fromUserId === toUserId) return false; // no messaging yourself
+  try {
+    // Find an existing conversation in either direction
+    const [{ data: e1 }, { data: e2 }] = await Promise.all([
+      supabase.from('conversations').select('id').eq('user1_id', fromUserId).eq('user2_id', toUserId).maybeSingle(),
+      supabase.from('conversations').select('id').eq('user1_id', toUserId).eq('user2_id', fromUserId).maybeSingle(),
+    ]);
+    let convoId: string | undefined = (e1 ?? e2)?.id;
+
+    if (!convoId) {
+      // Mutual follow → accepted, else pending (matches the DM system's rules)
+      const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
+        supabase.from('follows').select('id').eq('follower_id', fromUserId).eq('following_id', toUserId).maybeSingle(),
+        supabase.from('follows').select('id').eq('follower_id', toUserId).eq('following_id', fromUserId).maybeSingle(),
+      ]);
+      const status = iFollow && theyFollow ? 'accepted' : 'pending';
+      const { data: created, error } = await supabase.from('conversations')
+        .insert({ user1_id: fromUserId, user2_id: toUserId, status })
+        .select('id').single();
+      if (error) {
+        // Duplicate race — re-find
+        const [{ data: r1 }, { data: r2 }] = await Promise.all([
+          supabase.from('conversations').select('id').eq('user1_id', fromUserId).eq('user2_id', toUserId).maybeSingle(),
+          supabase.from('conversations').select('id').eq('user1_id', toUserId).eq('user2_id', fromUserId).maybeSingle(),
+        ]);
+        convoId = (r1 ?? r2)?.id;
+        if (!convoId) return false;
+      } else {
+        convoId = created.id;
+      }
+    }
+
+    const { error: msgErr } = await supabase.from('messages').insert({ conversation_id: convoId, sender_id: fromUserId, content: text });
+    if (msgErr) return false;
+    await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', convoId);
+    return true;
+  } catch { return false; }
+}
+
 export async function uploadStoryMedia(file: File, userId: string): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'bin';
   const path = `${userId}/${Date.now()}.${ext}`;

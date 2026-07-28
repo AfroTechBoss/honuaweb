@@ -27,8 +27,24 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
   const [reply, setReply] = React.useState('');
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
-  // Like toggle — when liking, scatter green hearts that float + pop at random
+  const group = groups[groupIdx];
+  const story: Story | undefined = group?.stories[storyIdx];
+  const isVideo = story?.type === 'video';
+
+  // Load the real liked state whenever the current story changes
+  const currentStoryId = story?.id;
+  React.useEffect(() => {
+    setLiked(false);
+    if (!currentStoryId || !app.user?.id) return;
+    let alive = true;
+    import('@/lib/stories').then(({ isStoryLiked }) => isStoryLiked(app.user.id, currentStoryId))
+      .then(l => { if (alive) setLiked(l); }).catch(() => {});
+    return () => { alive = false; };
+  }, [currentStoryId, app.user?.id]);
+
+  // Like toggle — persists to story_likes; when liking, scatter green hearts
   const handleLike = React.useCallback(() => {
+    const storyId = currentStoryId;
     setLiked(prev => {
       const now = !prev;
       if (now) {
@@ -47,13 +63,15 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
         const ids = new Set(batch.map(b => b.id));
         setTimeout(() => setHearts(h => h.filter(x => !ids.has(x.id))), 2400);
       }
+      // Persist
+      if (storyId && app.user?.id) {
+        import('@/lib/stories').then(({ likeStory, unlikeStory }) =>
+          now ? likeStory(app.user.id, storyId) : unlikeStory(app.user.id, storyId)
+        ).catch(() => {});
+      }
       return now;
     });
-  }, []);
-
-  const group = groups[groupIdx];
-  const story: Story | undefined = group?.stories[storyIdx];
-  const isVideo = story?.type === 'video';
+  }, [currentStoryId, app.user?.id]);
 
   const goNext = React.useCallback(() => {
     const g = groups[groupIdx];
@@ -121,10 +139,18 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
     if (s < 60) return 'now'; if (s < 3600) return `${Math.floor(s / 60)}m`; return `${Math.floor(s / 3600)}h`;
   };
 
-  const sendReply = () => {
-    if (!reply.trim()) return;
-    app.toast?.({ msg: `Reply sent to ${u.full_name.split(' ')[0]}`, icon: 'msg' });
+  const sendReply = async () => {
+    const text = reply.trim();
+    if (!text) return;
+    const authorId = story.user_id;
+    if (!app.user?.id) { app.toast?.({ msg: 'Sign in to reply', icon: 'user' }); return; }
+    if (authorId === app.user.id) { app.toast?.({ msg: "That's your own story", icon: 'user' }); return; }
     setReply('');
+    const { sendStoryReply } = await import('@/lib/stories');
+    const ok = await sendStoryReply(app.user.id, authorId, text);
+    app.toast?.(ok
+      ? { msg: `Reply sent to ${u.full_name.split(' ')[0]}`, sub: 'Continue the chat in Messages.', icon: 'msg', kind: 'success' }
+      : { msg: 'Could not send reply', kind: 'error', icon: 'close' });
   };
 
   // Background for the media area
