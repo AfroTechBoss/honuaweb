@@ -241,16 +241,23 @@ export async function getAllLogs(userId: string): Promise<ImpactLog[]> {
   return [];
 }
 
+// Local calendar day (YYYY-MM-DD) for a Date — avoids the UTC off-by-one that
+// dropped "today" for users ahead of UTC.
+export function localDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function computeStreak(logs: ImpactLog[]): number {
+  // Compare in the viewer's local timezone: parse each log's UTC timestamp to a
+  // local day, and walk back from local "today".
+  const days = new Set(logs.map(l => (l.logged_at ? localDay(new Date(l.logged_at)) : '')));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const days = new Set(logs.map(l => l.logged_at?.substring(0, 10) ?? ''));
   let streak = 0;
   for (let i = 0; i < 365; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const key = d.toISOString().substring(0, 10);
-    if (days.has(key)) {
+    if (days.has(localDay(d))) {
       streak++;
     } else if (i > 0) {
       break;

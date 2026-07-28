@@ -1,28 +1,42 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { getAllLogs, computeStreak, ImpactLog } from "@/lib/impact";
+import { getAllLogs, computeStreak, localDay, ImpactLog } from "@/lib/impact";
 
-type DayBucket = { date: string; t: number; e: number; f: number; o: number };
+// Distinct colour per category, used by the chart + legend.
+export const CAT_COLORS: Record<string, string> = {
+  Transport: 'var(--green)',
+  Energy:    '#84cc16', // lime
+  Food:      'var(--sky)',
+  Waste:     'var(--sun)',
+  Ocean:     '#06b6d4', // cyan
+  Lifestyle: '#a855f7', // purple
+  Policy:    '#f43f5e', // rose
+  Education: '#14b8a6', // teal
+  General:   'var(--ink-4)',
+};
+export const CAT_ORDER = ['Transport', 'Energy', 'Food', 'Waste', 'Ocean', 'Lifestyle', 'Policy', 'Education', 'General'];
 
+type DayBucket = { date: string; byCatKg: Record<string, number>; byCatGp: Record<string, number> };
+
+// Bucket logs into local calendar days, tracking both CO₂ (kg) and GP per
+// category. Local days avoid the UTC off-by-one that shifted logs a day.
 function groupByDateCategory(logs: ImpactLog[], days = 30): DayBucket[] {
-  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().substring(0, 10);
   const map: Record<string, DayBucket> = {};
   for (const l of logs) {
-    const d = l.logged_at?.substring(0, 10) ?? '';
-    if (d < cutoff) continue;
-    if (!map[d]) map[d] = { date: d, t: 0, e: 0, f: 0, o: 0 };
-    const kg = Number(l.co2_saved_kg ?? 0);
-    const cat = l.category ?? '';
-    if (cat === 'Transport') map[d].t += kg;
-    else if (cat === 'Energy') map[d].e += kg;
-    else if (cat === 'Food') map[d].f += kg;
-    else map[d].o += kg;
+    if (!l.logged_at) continue;
+    const key = localDay(new Date(l.logged_at));
+    if (!map[key]) map[key] = { date: key, byCatKg: {}, byCatGp: {} };
+    const cat = l.category ?? 'General';
+    map[key].byCatKg[cat] = (map[key].byCatKg[cat] ?? 0) + Number(l.co2_saved_kg ?? 0);
+    map[key].byCatGp[cat] = (map[key].byCatGp[cat] ?? 0) + Number(l.points ?? 0);
   }
   const result: DayBucket[] = [];
+  const base = new Date(); base.setHours(0, 0, 0, 0);
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86_400_000).toISOString().substring(0, 10);
-    result.push(map[d] ?? { date: d, t: 0, e: 0, f: 0, o: 0 });
+    const d = new Date(base); d.setDate(d.getDate() - i);
+    const key = localDay(d);
+    result.push(map[key] ?? { date: key, byCatKg: {}, byCatGp: {} });
   }
   return result;
 }
@@ -55,6 +69,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
   const [logs, setLogs] = React.useState<ImpactLog[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [chartDays, setChartDays] = React.useState(30);
+  const [chartMode, setChartMode] = React.useState<'co2' | 'gp'>('co2');
 
   const reload = React.useCallback(() => {
     if (!app.user?.id) { setLoading(false); return; }
@@ -124,24 +139,44 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
         {/* Main chart + streak */}
         <div className="two-col-grid" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18, marginBottom: 18 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
               <div>
-                <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>CO₂ ledger</h2>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Daily avoided emissions</div>
+                <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{chartMode === 'co2' ? 'CO₂ ledger' : 'Green Points'}</h2>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{chartMode === 'co2' ? 'Daily avoided emissions' : 'Daily points earned (all categories)'}</div>
               </div>
-              <div className="pill-nav">
-                {([7, 30, 90] as const).map(d => (
-                  <button key={d} className={chartDays === d ? 'active' : ''} onClick={() => setChartDays(d)}>{d}d</button>
-                ))}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="pill-nav">
+                  <button className={chartMode === 'co2' ? 'active' : ''} onClick={() => setChartMode('co2')}>CO₂</button>
+                  <button className={chartMode === 'gp' ? 'active' : ''} onClick={() => setChartMode('gp')}>GP</button>
+                </div>
+                <div className="pill-nav">
+                  {([7, 30, 90] as const).map(d => (
+                    <button key={d} className={chartDays === d ? 'active' : ''} onClick={() => setChartDays(d)}>{d}d</button>
+                  ))}
+                </div>
               </div>
             </div>
-            <BarChart data={chartData} />
-            <div style={{ display: 'flex', gap: 18, marginTop: 14, fontSize: 12, color: 'var(--ink-3)' }}>
-              <Legend color="var(--green)" label="Transport" />
-              <Legend color="var(--green-2)" label="Energy" />
-              <Legend color="var(--sky)" label="Food" />
-              <Legend color="var(--sun)" label="Other" />
-            </div>
+            <BarChart data={chartData} mode={chartMode} />
+            {(() => {
+              // Legend lists exactly the categories present in view
+              const present = new Set<string>();
+              for (const day of chartData) {
+                for (const c of CAT_ORDER) {
+                  if ((chartMode === 'co2' ? day.byCatKg[c] : day.byCatGp[c]) > 0) present.add(c);
+                }
+              }
+              const shown = CAT_ORDER.filter(c => present.has(c));
+              return (
+                <div style={{ display: 'flex', gap: 16, marginTop: 14, fontSize: 12, color: 'var(--ink-3)', flexWrap: 'wrap' }}>
+                  {shown.length === 0
+                    ? <span>No actions in this range yet.</span>
+                    : shown.map(c => <Legend key={c} color={CAT_COLORS[c]} label={c} />)}
+                </div>
+              );
+            })()}
+            {chartMode === 'co2' && (
+              <div style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 6 }}>Advocacy, education & cleanup earn Green Points but no CO₂ — switch to <b>GP</b> to see them.</div>
+            )}
           </div>
 
           {/* Streak + level */}
@@ -298,50 +333,86 @@ export function Legend({ color, label }) {
   );
 };
 
-export function BarChart({ data }: { data?: DayBucket[] }) {
-  const days = data?.length ?? 30;
-  const chartData: DayBucket[] = data ?? Array.from({ length: 30 }).map((_, i) => {
-    const d = new Date(Date.now() - (29 - i) * 86_400_000).toISOString().substring(0, 10);
-    return { date: d, t: 3 + Math.sin(i * 0.4) * 2 + Math.random() * 2, e: 2 + Math.cos(i * 0.3) * 1.5 + Math.random() * 1.5, f: 1 + Math.random() * 2, o: Math.random() * 1.5 };
-  });
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  const max = Math.max(...chartData.map(d => d.t + d.e + d.f + d.o), 1);
+function ChartTooltip({ day, leftPct }: { day: DayBucket; leftPct: number }) {
+  const cats = CAT_ORDER.filter(c => (day.byCatKg[c] ?? 0) > 0 || (day.byCatGp[c] ?? 0) > 0);
+  const totalKg = Object.values(day.byCatKg).reduce((s, v) => s + v, 0);
+  const totalGp = Object.values(day.byCatGp).reduce((s, v) => s + v, 0);
+  const left = Math.min(86, Math.max(14, leftPct));
+  return (
+    <div style={{ position: 'absolute', top: 0, left: left + '%', transform: 'translate(-50%,-100%)', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.16)', padding: '9px 11px', minWidth: 158, zIndex: 5, pointerEvents: 'none' }}>
+      <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', marginBottom: 6 }}>{formatDateLabel(day.date)}</div>
+      {cats.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--ink-4)' }}>No actions logged</div>
+      ) : cats.map(c => (
+        <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 3 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: CAT_COLORS[c], flexShrink: 0 }} />
+          <span style={{ flex: 1, color: 'var(--ink-2)' }}>{c}</span>
+          <span style={{ fontFamily: 'JetBrains Mono', color: 'var(--ink)' }}>
+            {(day.byCatKg[c] ?? 0) > 0 ? `${round2(day.byCatKg[c])} kg` : `+${day.byCatGp[c]} GP`}
+          </span>
+        </div>
+      ))}
+      {cats.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--line)', marginTop: 5, paddingTop: 5, display: 'flex', justifyContent: 'space-between', fontSize: 11.5, fontWeight: 700 }}>
+          <span>Total</span>
+          <span style={{ fontFamily: 'JetBrains Mono' }}>{round2(totalKg)} kg · {totalGp} GP</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function BarChart({ data, mode = 'co2' }: { data?: DayBucket[]; mode?: 'co2' | 'gp' }) {
+  const [hover, setHover] = React.useState<number | null>(null);
+  const chartData: DayBucket[] = data ?? [];
+  const days = chartData.length || 30;
+  const catsOf = (d: DayBucket) => (mode === 'co2' ? d.byCatKg : d.byCatGp);
+  const totalOf = (d: DayBucket) => Object.values(catsOf(d)).reduce((s, v) => s + v, 0);
+
+  const max = Math.max(...chartData.map(totalOf), mode === 'co2' ? 1 : 10);
   const barW = Math.max(6, Math.floor(560 / Math.max(days, 1)) - 2);
   const totalW = days * (barW + 2);
+  const H = 180;
 
   const labelIdxs = days <= 7
     ? Array.from({ length: days }, (_, i) => i)
     : [0, Math.floor(days / 4), Math.floor(days / 2), Math.floor(3 * days / 4), days - 1];
 
   return (
-    <svg viewBox={`0 0 ${totalW} 200`} width="100%" height="220" style={{ display: 'block' }}>
-      {[0, 0.25, 0.5, 0.75, 1].map(p => (
-        <line key={p} x1="0" x2={totalW} y1={200 - p * 180} y2={200 - p * 180} stroke="var(--line)" strokeWidth="1" strokeDasharray={p === 0 ? '' : '2 4'} />
-      ))}
-      {chartData.map((d, i) => {
-        const x = i * (barW + 2);
-        const scale = 180 / max;
-        let y = 200;
-        const parts: [keyof DayBucket, string][] = [['t', 'var(--green)'], ['e', 'var(--green-2)'], ['f', 'var(--sky)'], ['o', 'var(--sun)']];
-        return (
-          <g key={i}>
-            {parts.map(([k, c]) => {
-              const h = (d[k] as number) * scale;
-              if (h < 0.5) return null;
-              y -= h;
-              return <rect key={k} x={x} y={y} width={barW} height={h - 0.5} fill={c} rx="1" />;
-            })}
-          </g>
-        );
-      })}
-      {labelIdxs.map(i => {
-        if (i >= chartData.length) return null;
-        return (
+    <div style={{ position: 'relative' }}>
+      <svg viewBox={`0 0 ${totalW} 200`} width="100%" height="220" style={{ display: 'block' }} onMouseLeave={() => setHover(null)}>
+        {[0, 0.25, 0.5, 0.75, 1].map(p => (
+          <line key={p} x1="0" x2={totalW} y1={200 - p * H} y2={200 - p * H} stroke="var(--line)" strokeWidth="1" strokeDasharray={p === 0 ? '' : '2 4'} />
+        ))}
+        {chartData.map((d, i) => {
+          const x = i * (barW + 2);
+          const scale = H / max;
+          const cats = catsOf(d);
+          let y = 200;
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)} style={{ cursor: 'pointer' }}>
+              {/* full-height transparent hover target */}
+              <rect x={x - 1} y={20} width={barW + 2} height={H} fill={hover === i ? 'var(--bg-2)' : 'transparent'} opacity={0.6} />
+              {CAT_ORDER.filter(c => (cats[c] ?? 0) > 0).map(c => {
+                const h = cats[c] * scale;
+                if (h < 0.4) return null;
+                y -= h;
+                return <rect key={c} x={x} y={y} width={barW} height={Math.max(0.6, h - 0.5)} fill={CAT_COLORS[c]} rx="1" />;
+              })}
+            </g>
+          );
+        })}
+        {labelIdxs.map(i => (i < chartData.length ? (
           <text key={i} x={i * (barW + 2) + barW / 2} y="218" fontSize="9" fontFamily="JetBrains Mono" textAnchor="middle" fill="var(--ink-4)">
             {formatDateLabel(chartData[i].date)}
           </text>
-        );
-      })}
-    </svg>
+        ) : null))}
+      </svg>
+      {hover != null && chartData[hover] && (
+        <ChartTooltip day={chartData[hover]} leftPct={((hover + 0.5) / days) * 100} />
+      )}
+    </div>
   );
 };
