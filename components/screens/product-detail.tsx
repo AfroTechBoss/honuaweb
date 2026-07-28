@@ -248,8 +248,9 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
   }
 
   const wished = app.wishlist?.has(product.id) || app.wishlist?.has(product.title);
-  const avg = reviews.length ? avgRating(reviews) : product.seller.rating;
-  const reviewCount = reviews.length || product.seller.reviews;
+  const reviewCount = reviews.length || product.seller.reviews || 0;
+  // Empty by default — only show a rating once there's at least one review
+  const avg = reviews.length ? avgRating(reviews) : (reviewCount > 0 ? product.seller.rating : 0);
 
   const addToCart = () => {
     for (let i = 0; i < qty; i++) {
@@ -320,8 +321,14 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
               <h1 className="font-display" style={{ margin: 0, fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2 }}>{product.title}</h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <Stars rating={avg} size={16} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{avg.toFixed(1)}</span>
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>({reviewCount} reviews)</span>
+                {reviewCount > 0 ? (
+                  <>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{avg.toFixed(1)}</span>
+                    <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>({reviewCount} review{reviewCount === 1 ? '' : 's'})</span>
+                  </>
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>No reviews yet</span>
+                )}
               </div>
             </div>
 
@@ -369,8 +376,8 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{product.seller.name}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                    <Stars rating={product.seller.rating} size={11} />
-                    <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{product.seller.rating.toFixed(1)} · {product.seller.reviews} reviews</span>
+                    <Stars rating={product.seller.reviews > 0 ? product.seller.rating : 0} size={11} />
+                    <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{product.seller.reviews > 0 ? `${product.seller.rating.toFixed(1)} · ${product.seller.reviews} reviews` : 'No reviews yet'}</span>
                   </div>
                 </div>
                 {product.seller.handle && (
@@ -391,8 +398,9 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
                 <h2 className="font-display" style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Reviews</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                   <Stars rating={avg} size={16} />
-                  <span style={{ fontSize: 16, fontWeight: 700 }}>{avg.toFixed(1)}</span>
-                  <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>· {reviewCount} reviews</span>
+                  {reviewCount > 0
+                    ? <><span style={{ fontSize: 16, fontWeight: 700 }}>{avg.toFixed(1)}</span><span style={{ fontSize: 14, color: 'var(--ink-3)' }}>· {reviewCount} review{reviewCount === 1 ? '' : 's'}</span></>
+                    : <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>No reviews yet</span>}
                 </div>
               </div>
               <button className="btn btn-primary" onClick={() => setShowReview(true)} style={{ padding: '9px 18px' }}>

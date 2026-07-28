@@ -28,7 +28,8 @@ function mapProduct(row: any): Product {
     category: row.category ?? 'Home',
     imgUrl: row.image_url ?? null,
     description: row.description ?? null,
-    rating: Number(row.rating ?? 4.8),
+    // No reviews yet → 0 stars (don't show a default rating on unreviewed items)
+    rating: (row.review_count ?? 0) > 0 ? Number(row.rating ?? 0) : 0,
     review_count: row.review_count ?? 0,
     featured: !!row.featured,
     compare_at_cents: row.compare_at_cents ?? null,
