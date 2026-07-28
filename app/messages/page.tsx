@@ -8,5 +8,6 @@ export default function Page() {
   const { nav } = useApp();
   const searchParams = useSearchParams();
   const handle = searchParams.get("handle");
-  return <DesktopMessages onNav={nav} params={handle ? { handle } : {}} />;
+  const shop = searchParams.get("shop");
+  return <DesktopMessages onNav={nav} params={handle ? { handle, shop } : {}} />;
 }

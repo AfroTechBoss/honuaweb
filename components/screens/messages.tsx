@@ -29,6 +29,23 @@ function TypingBubble() {
   );
 }
 
+// Shop-branded conversations: when a conversation carries shop context and the
+// other participant is the shop owner, render the shop's name + logo instead of
+// the seller's personal profile.
+function participantDisplay(convo: any, other: any) {
+  const isShop = !!convo?.shop_owner_id && convo.shop_owner_id === other?.id;
+  if (isShop) {
+    return {
+      name: convo.shop_name || other?.full_name || 'Shop',
+      handle: other?.handle,
+      avatar: convo.shop_logo_url || other?.avatar_url || null,
+      verified: true,
+      isShop: true,
+    };
+  }
+  return { name: other?.full_name, handle: other?.handle, avatar: other?.avatar_url, verified: other?.verified, isShop: false };
+}
+
 export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [tab, setTab] = React.useState<'inbox' | 'requests'>('inbox');
@@ -55,22 +72,39 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
     return () => clearInterval(id);
   }, []);
 
-  // Auto-open DM when navigated from a profile's Message button
+  // Auto-open DM when navigated from a profile's Message button (or a shop's)
   React.useEffect(() => {
     const handle = params?.handle as string | undefined;
+    const isShop = !!params?.shop;
     if (!handle || !userId) return;
     (async () => {
       const { supabase } = await import('@/lib/supabase');
       const { data: target } = await supabase.from('profiles').select('id').eq('handle', handle).single();
       if (!target) return;
 
+      // Shop context: fetch the seller's shop identity to brand the conversation
+      let shopFields: any = {};
+      if (isShop) {
+        try {
+          const { getShopForOwner } = await import('@/lib/market');
+          const shop = await getShopForOwner(target.id);
+          if (shop) shopFields = { shop_owner_id: target.id, shop_name: shop.name, shop_logo_url: shop.logo };
+        } catch {}
+      }
+
       // Check for existing conversation in either direction (two separate queries — nested AND in .or() is unsupported)
       const [{ data: e1 }, { data: e2 }] = await Promise.all([
-        supabase.from('conversations').select('id').eq('user1_id', userId).eq('user2_id', target.id).maybeSingle(),
-        supabase.from('conversations').select('id').eq('user1_id', target.id).eq('user2_id', userId).maybeSingle(),
+        supabase.from('conversations').select('id, shop_owner_id').eq('user1_id', userId).eq('user2_id', target.id).maybeSingle(),
+        supabase.from('conversations').select('id, shop_owner_id').eq('user1_id', target.id).eq('user2_id', userId).maybeSingle(),
       ]);
       const existing = e1 ?? e2;
-      if (existing) { await loadConvos(); setActiveConvoId(existing.id); return; }
+      if (existing) {
+        // Upgrade a plain conversation to shop-branded if opened via a shop link
+        if (isShop && shopFields.shop_owner_id && !existing.shop_owner_id) {
+          await supabase.from('conversations').update(shopFields).eq('id', existing.id).then(() => {});
+        }
+        await loadConvos(); setActiveConvoId(existing.id); return;
+      }
 
       // Check mutual follow — ignore errors (follows table 400 just means not following)
       const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
@@ -80,7 +114,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       const mutual = !!iFollow && !!theyFollow;
 
       const { data: newConvo, error: insertErr } = await supabase.from('conversations').insert({
-        user1_id: userId, user2_id: target.id, status: mutual ? 'accepted' : 'pending',
+        user1_id: userId, user2_id: target.id, status: mutual ? 'accepted' : 'pending', ...shopFields,
       }).select('*, user1_profile:profiles!user1_id(id,handle,full_name,avatar_url,verified), user2_profile:profiles!user2_id(id,handle,full_name,avatar_url,verified)').single();
       if (insertErr) {
         // If duplicate (race condition), just find and open the existing one
@@ -107,6 +141,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   const otherUser = activeConvo
     ? (activeConvo.user1_id === userId ? activeConvo.user2_profile : activeConvo.user1_profile)
     : null;
+  const otherDisplay = participantDisplay(activeConvo, otherUser);
   const isAccepted = activeConvo?.status === 'accepted';
   const iAmRecipient = activeConvo && activeConvo.user1_id !== userId;
   // I can send if: accepted OR I am the original sender (first message already sent)
@@ -328,7 +363,9 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   const filtered = searchQuery
     ? displayConvos.filter(c => {
         const other = c.user1_id === userId ? c.user2_profile : c.user1_profile;
-        return other?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || other?.handle?.toLowerCase().includes(searchQuery.toLowerCase());
+        const disp = participantDisplay(c, other);
+        const q = searchQuery.toLowerCase();
+        return disp.name?.toLowerCase().includes(q) || other?.handle?.toLowerCase().includes(q);
       })
     : displayConvos;
 
@@ -396,15 +433,19 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
             )}
             {filtered.map(c => {
               const other = c.user1_id === userId ? c.user2_profile : c.user1_profile;
+              const disp = participantDisplay(c, other);
               const last = c.last_msg;
               const isActive = c.id === activeConvoId;
               const unread = false; // TODO: track unread per convo
               return (
                 <div key={c.id} onClick={() => setActiveConvoId(c.id)} className="row-hover" style={{ padding: '12px 20px', display: 'flex', gap: 12, cursor: 'pointer', background: isActive ? 'var(--green-tint)' : 'transparent', borderLeft: isActive ? '3px solid var(--green)' : '3px solid transparent' }}>
-                  <Avatar src={other?.avatar_url} name={other?.full_name} size={44} verified={other?.verified} />
+                  <Avatar src={disp.avatar} name={disp.name} size={44} verified={disp.verified} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                      <span style={{ fontWeight: 600 }}>{other?.full_name}</span>
+                      <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        {disp.name}
+                        {disp.isShop && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
+                      </span>
                       <span style={{ color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{last?.created_at ? msgTimeAgo(last.created_at) : ''}</span>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -432,14 +473,17 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
               <button className="msg-back-btn btn btn-ghost" onClick={() => setActiveConvoId(null)} style={{ padding: '6px 10px', fontSize: 13, gap: 4 }}>
                 ← Back
               </button>
-              <span style={{ cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: otherUser?.handle })}>
-                <Avatar src={otherUser?.avatar_url} name={otherUser?.full_name} size={40} verified={otherUser?.verified} />
+              <span style={{ cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: otherDisplay.handle })}>
+                <Avatar src={otherDisplay.avatar} name={otherDisplay.name} size={40} verified={otherDisplay.verified} />
               </span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{otherUser?.full_name}</div>
-                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{otherUser?.handle}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {otherDisplay.name}
+                  {otherDisplay.isShop && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{otherDisplay.handle}</div>
               </div>
-              <button className="btn btn-ghost" style={{ padding: '7px 12px', fontSize: 13 }} onClick={() => onNav?.('profile', { handle: otherUser?.handle })}>Profile</button>
+              <button className="btn btn-ghost" style={{ padding: '7px 12px', fontSize: 13 }} onClick={() => onNav?.('profile', { handle: otherDisplay.handle })}>{otherDisplay.isShop ? 'Shop' : 'Profile'}</button>
               <button onClick={deleteConvo} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', padding: 6 }} title="Delete conversation">
                 <Icon name="trash" size={15} />
               </button>
@@ -450,7 +494,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
               <div style={{ padding: '14px 24px', background: 'var(--sun-tint, #fffbeb)', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Icon name="bell" size={16} color="var(--sun, #f59e0b)" />
                 <div style={{ flex: 1, fontSize: 13, color: 'var(--ink-2)' }}>
-                  <strong>{otherUser?.full_name}</strong> wants to message you. Accept to reply and let them know you've seen their messages.
+                  <strong>{otherDisplay.name}</strong> wants to message you. Accept to reply and let them know you've seen their messages.
                 </div>
                 <button onClick={acceptRequest} className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 13 }}>Accept</button>
                 <button onClick={deleteConvo} className="btn btn-ghost" style={{ padding: '7px 14px', fontSize: 13 }}>Decline</button>
@@ -513,7 +557,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
                     value={draft}
                     onChange={handleDraftChange}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                    placeholder={`Message ${otherUser?.full_name ?? ''}…`}
+                    placeholder={`Message ${otherDisplay.name ?? ''}…`}
                     style={{ flex: 1, background: 'var(--bg-2)', border: 'none', outline: 'none', padding: '11px 14px', borderRadius: 999, fontSize: 14, fontFamily: 'inherit' }}
                     disabled={sending}
                   />

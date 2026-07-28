@@ -214,6 +214,18 @@ function ApplyWizard({ onNav, onCancel }) {
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
   const tog = (k: string, v: string) => setF((p: any) => ({ ...p, [k]: p[k].includes(v) ? p[k].filter((x: string) => x !== v) : [...p[k], v] }));
 
+  // Shop logo upload
+  const [logoFile, setLogoFile] = React.useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = React.useState<string | null>(null);
+  const logoRef = React.useRef<HTMLInputElement>(null);
+  const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+    set('logo', true);
+  };
+
   const canNext = () => {
     if (step === 0) return f.name && f.tagline;
     if (step === 1) return f.categories.length > 0;
@@ -229,8 +241,13 @@ function ApplyWizard({ onNav, onCancel }) {
     // Persist to Supabase so admins can actually review it
     if (app.user?.id) {
       try {
+        let logo_url: string | null = null;
+        if (logoFile) {
+          const { uploadFile } = await import('@/lib/storage');
+          logo_url = await uploadFile('avatars', app.user.id, logoFile);
+        }
         const { submitSellerApplication } = await import('@/lib/market');
-        await submitSellerApplication(app.user.id, f);
+        await submitSellerApplication(app.user.id, { ...f, logo_url });
       } catch {}
     }
     app.toast?.({ msg: 'Application submitted', sub: 'We\'ll review it within 2 business days.', kind: 'success', icon: 'check' });
@@ -265,13 +282,16 @@ function ApplyWizard({ onNav, onCancel }) {
           {step === 0 && (
             <div style={{ display: 'grid', gap: 18 }}>
               <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                <button onClick={() => set('logo', !f.logo)} style={{ width: 76, height: 76, borderRadius: 18, flexShrink: 0, cursor: 'pointer',
-                  border: '1.5px dashed var(--line-2)', background: f.logo ? 'var(--green-tint)' : 'var(--bg-2)', color: f.logo ? 'var(--green)' : 'var(--ink-4)', display: 'grid', placeItems: 'center' }}>
-                  <Icon name={f.logo ? 'check' : 'image'} size={22} stroke={2} />
+                <input ref={logoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogo} />
+                <button onClick={() => logoRef.current?.click()} style={{ width: 76, height: 76, borderRadius: 18, flexShrink: 0, cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                  border: `1.5px dashed ${logoPreview ? 'var(--green)' : 'var(--line-2)'}`, background: logoPreview ? 'transparent' : 'var(--bg-2)', color: 'var(--ink-4)', display: 'grid', placeItems: 'center' }}>
+                  {logoPreview
+                    ? <img src={logoPreview} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Icon name="image" size={22} stroke={2} />}
                 </button>
                 <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>
                   <span style={{ fontWeight: 600, color: 'var(--ink-2)' }}>Shop logo</span><br />
-                  Square PNG or JPG, at least 400×400. {f.logo ? 'Looks great.' : 'Click to upload.'}
+                  Square PNG or JPG, at least 400×400. {logoPreview ? 'Looks great.' : 'Click to upload.'}
                 </div>
               </div>
               <FldText label="Shop name" value={f.name} onChange={v => set('name', v)} placeholder="e.g. The Fix-it Collective" />

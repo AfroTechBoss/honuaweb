@@ -508,7 +508,7 @@ export async function toggleRsvp(userId: string, projectId: string, going: boole
 // ---- Seller applications ----
 export async function submitSellerApplication(userId: string, f: any): Promise<boolean> {
   try {
-    const { error } = await supabase.from('seller_applications').insert({
+    const row: any = {
       user_id: userId,
       shop_name: f.name,
       shop_handle: f.handle || f.name?.toLowerCase().replace(/[^a-z0-9]+/g, ''),
@@ -525,9 +525,35 @@ export async function submitSellerApplication(userId: string, f: any): Promise<b
       country: f.country || null,
       payout_method: f.payout || null,
       payout_schedule: f.schedule || null,
-    });
+      logo_url: f.logo_url || null,
+    };
+    let { error } = await supabase.from('seller_applications').insert(row);
+    if (error) {
+      // logo_url column may not exist yet (migration 025 not run) — retry without
+      const { logo_url: _l, ...noLogo } = row;
+      ({ error } = await supabase.from('seller_applications').insert(noLogo));
+    }
     return !error;
   } catch { return false; }
+}
+
+// A seller's shop identity (name + logo) for shop-branded conversations.
+// Cached per owner id for the session.
+const _shopCache: Record<string, { name: string; logo: string | null } | null> = {};
+export async function getShopForOwner(ownerId: string): Promise<{ name: string; logo: string | null } | null> {
+  if (ownerId in _shopCache) return _shopCache[ownerId];
+  try {
+    const { data } = await supabase
+      .from('seller_applications')
+      .select('shop_name, logo_url, status, created_at')
+      .eq('user_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const shop = data?.shop_name ? { name: data.shop_name, logo: data.logo_url ?? null } : null;
+    _shopCache[ownerId] = shop;
+    return shop;
+  } catch { return null; }
 }
 
 export async function getMySellerApplication(userId: string): Promise<any | null> {

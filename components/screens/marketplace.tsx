@@ -113,7 +113,7 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
                       ? (p.review_count > 0 ? `★ ${p.rating} · ${p.review_count}` : 'New listing')
                       : `★★★★★ 4.${7 + i % 3} · ${120 + i * 14}`}</div>
                     {(!useDb || p.sellerHandle) && (
-                      <button onClick={(e) => { e.stopPropagation(); app.nav?.('messages', { handle: useDb ? p.sellerHandle : p.brand.toLowerCase().replace(/\s+/g, '') }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--sky)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <button onClick={(e) => { e.stopPropagation(); app.nav?.('messages', { handle: useDb ? p.sellerHandle : p.brand.toLowerCase().replace(/\s+/g, ''), shop: 1 }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--sky)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
                         <Icon name="msg" size={11} /> Ask
                       </button>
                     )}

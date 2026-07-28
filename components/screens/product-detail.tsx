@@ -381,7 +381,7 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
                   </div>
                 </div>
                 {product.seller.handle && (
-                  <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: product.seller.handle })} style={{ fontSize: 13, padding: '7px 12px' }}>
+                  <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: product.seller.handle, shop: 1 })} style={{ fontSize: 13, padding: '7px 12px' }}>
                     <Icon name="msg" size={13} /> Message
                   </button>
                 )}
