@@ -15,31 +15,70 @@ export interface ImpactLog {
   status?: 'unverified' | 'pending' | 'verified';
   vouch_count?: number;
   description?: string | null;
+  // quantity-based model (migration 026)
+  quantity?: number | null;
+  unit?: string | null;
 }
 
 // Community vouches needed before a log counts as verified
 export const VOUCH_THRESHOLD = 3;
 
-// CO₂ saved (kg) and GP points per action category
-export const ACTION_IMPACTS: Record<string, { co2: number; pts: number }> = {
-  Transport:  { co2: 2.4, pts: 24 },
-  Food:       { co2: 1.5, pts: 15 },
-  Waste:      { co2: 0.8, pts: 18 },
-  Energy:     { co2: 1.2, pts: 20 },
-  Lifestyle:  { co2: 0.6, pts: 12 },
-  Ocean:      { co2: 0.5, pts: 15 },
-  Policy:     { co2: 0.0, pts: 20 },
-  Education:  { co2: 0.0, pts: 10 },
-  General:    { co2: 0.5, pts: 10 },
+// ---------------------------------------------------------------------------
+// Quantity-based CO₂ model
+//
+// Impact is computed as `quantity × emission factor`, not a flat per-action
+// value — so biking 30 km counts more than biking 2 km. Each category declares:
+//   unit             — what the quantity measures (e.g. "km not driven")
+//   factorKgPerUnit  — kg CO₂e avoided per unit (0 = no direct CO₂ avoidance)
+//   gpPerUnit        — Green Points earned per unit
+//   defaultQty/step  — sensible defaults for the input
+//   source           — where the factor comes from (keep these honest)
+//
+// Factors are grounded in widely-cited averages (EPA, DEFRA, IPCC, Poore &
+// Nemecek 2018). They're deliberately averages — real emissions vary by region,
+// grid mix, vehicle, etc. Tune them here in one place.
+// ---------------------------------------------------------------------------
+export type ImpactCategory = {
+  unit: string;
+  factorKgPerUnit: number;
+  gpPerUnit: number;
+  defaultQty: number;
+  step: number;
+  source: string;
 };
 
-// Named task impacts for the daily task grid
+export const ACTION_IMPACTS: Record<string, ImpactCategory> = {
+  Transport:  { unit: 'km not driven',     factorKgPerUnit: 0.17, gpPerUnit: 2,  defaultQty: 5, step: 1,   source: 'avg petrol car ~0.17 kg CO₂e/km (EPA/DEFRA)' },
+  Food:       { unit: 'meat-free meal',    factorKgPerUnit: 2.0,  gpPerUnit: 8,  defaultQty: 1, step: 1,   source: 'meat→plant meal swap ~2 kg CO₂e (Poore & Nemecek 2018)' },
+  Energy:     { unit: 'kWh saved',         factorKgPerUnit: 0.43, gpPerUnit: 3,  defaultQty: 3, step: 0.5, source: 'US grid avg ~0.43 kg CO₂e/kWh (EPA eGRID)' },
+  Waste:      { unit: 'kg diverted',       factorKgPerUnit: 0.5,  gpPerUnit: 6,  defaultQty: 2, step: 0.5, source: 'compost/recycle vs landfill ~0.5 kg CO₂e/kg' },
+  Ocean:      { unit: 'kg litter removed', factorKgPerUnit: 0,    gpPerUnit: 10, defaultQty: 3, step: 0.5, source: 'no direct CO₂ avoidance — rewarded in Green Points' },
+  Lifestyle:  { unit: 'eco-friendly swap', factorKgPerUnit: 0.6,  gpPerUnit: 10, defaultQty: 1, step: 1,   source: 'rough estimate for a general sustainable choice' },
+  Policy:     { unit: 'advocacy action',   factorKgPerUnit: 0,    gpPerUnit: 20, defaultQty: 1, step: 1,   source: 'no direct CO₂ — rewarded in Green Points' },
+  Education:  { unit: '30-min session',    factorKgPerUnit: 0,    gpPerUnit: 10, defaultQty: 1, step: 1,   source: 'no direct CO₂ — rewarded in Green Points' },
+  General:    { unit: 'action',            factorKgPerUnit: 0.3,  gpPerUnit: 8,  defaultQty: 1, step: 1,   source: 'generic small-action estimate' },
+};
+
+// Authoritative impact for a logged action: quantity × factor.
+// GP scale with quantity, with a small floor so tiny/zero-CO₂ logs still reward.
+export function computeImpact(category: string, quantity: number): { co2: number; pts: number; unit: string } {
+  const c = ACTION_IMPACTS[category] ?? ACTION_IMPACTS.General;
+  const q = Math.max(0, Number(quantity) || 0);
+  return {
+    co2: Math.round(q * c.factorKgPerUnit * 100) / 100, // 2 dp
+    pts: Math.max(5, Math.round(q * c.gpPerUnit)),
+    unit: c.unit,
+  };
+}
+
+// Named daily-task presets (challenges grid). Each is a specific action with a
+// fixed, pre-computed impact derived from the factors above.
 export const TASK_IMPACTS: Record<string, { co2: number; pts: number; cat: string }> = {
-  'Bike commute':        { co2: 2.4, pts: 24, cat: 'Transport' },
-  'Meatless meal':       { co2: 1.5, pts: 12, cat: 'Food' },
-  'Compost food scraps': { co2: 0.5, pts: 18, cat: 'Waste' },
-  '10 min education':    { co2: 0.0, pts: 50, cat: 'Education' },
-  'Skip ride-share':     { co2: 2.0, pts: 30, cat: 'Transport' },
+  'Bike commute':        { co2: 2.0, pts: 24, cat: 'Transport' }, // ~12 km
+  'Meatless meal':       { co2: 2.0, pts: 8,  cat: 'Food' },      // 1 meal
+  'Compost food scraps': { co2: 0.5, pts: 6,  cat: 'Waste' },     // ~1 kg
+  '10 min education':    { co2: 0.0, pts: 10, cat: 'Education' },
+  'Skip ride-share':     { co2: 1.7, pts: 20, cat: 'Transport' }, // ~10 km
 };
 
 export async function logImpact(log: Omit<ImpactLog, 'id' | 'logged_at'>) {
@@ -55,9 +94,12 @@ export async function logImpact(log: Omit<ImpactLog, 'id' | 'logged_at'>) {
 // (and with it entry into the "Verified impact" feed) once vouches reach the
 // threshold.
 export async function createImpactAction(userId: string, fields: {
-  action: string; category: string; co2: number; pts: number;
+  action: string; category: string; quantity: number;
   description?: string; proofFile?: File | null; shareToFeed?: boolean; userName?: string;
-}): Promise<{ log: any | null; postId: string | null; error?: string }> {
+}): Promise<{ log: any | null; postId: string | null; co2: number; pts: number; error?: string }> {
+  // Authoritative impact — computed here, not trusted from the client
+  const { co2, pts, unit } = computeImpact(fields.category, fields.quantity);
+
   let proof_url: string | null = null;
   if (fields.proofFile) {
     try {
@@ -66,12 +108,14 @@ export async function createImpactAction(userId: string, fields: {
     } catch {}
   }
 
+  const qtyLabel = `${fields.quantity} ${unit}`;
+
   // Optional feed post first, so the log can link to it
   let postId: string | null = null;
   if (fields.shareToFeed) {
     const content = fields.description?.trim()
-      ? `${fields.description.trim()}\n\n🌱 Logged: ${fields.action} · ${fields.co2} kg CO₂`
-      : `🌱 ${fields.action} — logged on my impact ledger (${fields.co2} kg CO₂). Vouch if you saw it happen!`;
+      ? `${fields.description.trim()}\n\n🌱 Logged: ${fields.action} · ${qtyLabel} · ${co2} kg CO₂`
+      : `🌱 ${fields.action} — ${qtyLabel} on my impact ledger (${co2} kg CO₂). Vouch if you saw it happen!`;
     const { data: post } = await supabase.from('posts').insert({
       user_id: userId,
       content,
@@ -81,19 +125,26 @@ export async function createImpactAction(userId: string, fields: {
     postId = post?.id ?? null;
   }
 
-  // Insert the log — progressively strip 018 columns if migration not run yet
+  // Insert the log — progressively strip newer columns if a migration is missing
   const full: any = {
     user_id: userId, action: fields.action, category: fields.category,
-    co2_saved_kg: fields.co2, points: fields.pts,
+    co2_saved_kg: co2, points: pts,
+    quantity: fields.quantity, unit,
     proof_url, post_id: postId, description: fields.description?.trim() || null,
     status: proof_url || postId ? 'pending' : 'unverified',
   };
   let res = await supabase.from('impact_logs').insert(full).select().single();
   if (res.error) {
-    const { proof_url: _p, post_id: _po, description: _d, status: _s, ...legacy } = full;
+    // migration 026 (quantity/unit) not run
+    const { quantity: _q, unit: _u, ...noQty } = full;
+    res = await supabase.from('impact_logs').insert(noQty).select().single();
+  }
+  if (res.error) {
+    // migration 018 (proof/post/status) not run
+    const { proof_url: _p, post_id: _po, description: _d, status: _s, quantity: _q, unit: _u, ...legacy } = full;
     res = await supabase.from('impact_logs').insert(legacy).select().single();
   }
-  return { log: res.data ?? null, postId, error: res.error?.message };
+  return { log: res.data ?? null, postId, co2, pts, error: res.error?.message };
 }
 
 // Logs linked to the given feed posts (batched for the home feed)
@@ -150,20 +201,21 @@ export async function getRecentLogs(userId: string, limit = 20): Promise<ImpactL
 }
 
 export async function getAllLogs(userId: string): Promise<ImpactLog[]> {
-  // Try with verification columns (migration 018); fall back for older schemas
-  let { data, error }: { data: any; error: any } = await supabase
-    .from('impact_logs')
-    .select('co2_saved_kg, points, logged_at, category, action, status, vouch_count')
-    .eq('user_id', userId)
-    .order('logged_at', { ascending: false });
-  if (error) {
-    ({ data } = await supabase
-      .from('impact_logs')
-      .select('co2_saved_kg, points, logged_at, category, action')
+  // Progressively fall back if newer columns aren't present:
+  // 026 (quantity/unit) → 018 (status/vouch_count) → base
+  const selects = [
+    'co2_saved_kg, points, logged_at, category, action, status, vouch_count, quantity, unit',
+    'co2_saved_kg, points, logged_at, category, action, status, vouch_count',
+    'co2_saved_kg, points, logged_at, category, action',
+  ];
+  for (const sel of selects) {
+    const { data, error } = await supabase
+      .from('impact_logs').select(sel)
       .eq('user_id', userId)
-      .order('logged_at', { ascending: false }));
+      .order('logged_at', { ascending: false });
+    if (!error) return (data as any) ?? [];
   }
-  return data ?? [];
+  return [];
 }
 
 export function computeStreak(logs: ImpactLog[]): number {

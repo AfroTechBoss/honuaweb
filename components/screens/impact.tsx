@@ -218,6 +218,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
                   <div style={{ fontWeight: 500, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.action}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {log.logged_at ? timeAgo(log.logged_at) : ''} · {log.category}
+                    {log.quantity != null && log.unit && <span>· {log.quantity} {log.unit}</span>}
                     {log.status === 'verified' && <span style={{ color: 'var(--green)', fontWeight: 700 }}>✓ verified</span>}
                     {log.status === 'pending' && <span style={{ color: 'var(--sun)', fontWeight: 700 }}>{log.vouch_count ?? 0}/3 vouches</span>}
                   </div>

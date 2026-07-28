@@ -26,35 +26,47 @@ So there are two tiers of impact:
 
 ---
 
-## 2. Where the numbers come from
+## 2. Where the numbers come from — `quantity × emission factor`
 
-Every action belongs to a **category**. Each category has a fixed **CO₂ estimate
-(kg)** and a **Green Points (GP)** reward. This lookup table is the single source
-of truth (`lib/impact.ts` → `ACTION_IMPACTS`):
+Impact is **calculated, not flat**: you enter a **quantity** (km, kWh, meals, kg…)
+and it's multiplied by the category's **emission factor**. So biking 30 km counts
+more than biking 2 km — the earlier flat-per-action model is gone.
 
-| Category   | CO₂ saved (kg) | Green Points | Notes |
-|------------|:--------------:|:------------:|-------|
-| Transport  | 2.4            | 24           | e.g. biking instead of driving |
-| Food       | 1.5            | 15           | e.g. a meatless meal |
-| Energy     | 1.2            | 20           | e.g. cutting usage |
-| Waste      | 0.8            | 18           | e.g. composting |
-| Lifestyle  | 0.6            | 12           | general sustainable choices |
-| Ocean      | 0.5            | 15           | e.g. beach cleanup |
-| Policy     | 0.0            | 20           | advocacy — **no CO₂**, still earns GP |
-| Education  | 0.0            | 10           | learning — **no CO₂**, still earns GP |
-| General    | 0.5            | 10           | fallback |
+```
+CO₂ (kg)      = quantity × factorKgPerUnit
+Green Points  = max(5, round(quantity × gpPerUnit))
+```
 
-Two design choices to note:
-- **CO₂ values are category estimates, not measured.** They're deliberate
-  averages so the ledger is meaningful without asking users for exact figures.
-  They're easy to tune in one place (see §10).
-- **Some categories earn GP but 0 kg CO₂** (Policy, Education). Advocacy and
-  learning matter, but they don't directly avoid emissions — so they're rewarded
-  with points, not carbon.
+The factor table is the single source of truth (`lib/impact.ts` →
+`ACTION_IMPACTS`), and the factors are anchored to widely-cited averages:
 
-There's also a **daily-task grid** with named tasks (`TASK_IMPACTS`) that map to
-the same model, e.g. `Bike commute → 2.4 kg / 24 GP (Transport)`,
-`10 min education → 0 kg / 50 GP (Education)`.
+| Category   | Unit                | kg CO₂e / unit | GP / unit | Source |
+|------------|---------------------|:--------------:|:---------:|--------|
+| Transport  | km not driven       | 0.17           | 2         | avg petrol car ≈0.17 kg/km (EPA/DEFRA) |
+| Food       | meat-free meal      | 2.0            | 8         | meat→plant swap ≈2 kg (Poore & Nemecek 2018) |
+| Energy     | kWh saved           | 0.43           | 3         | US grid avg ≈0.43 kg/kWh (EPA eGRID) |
+| Waste      | kg diverted         | 0.5            | 6         | compost/recycle vs landfill ≈0.5 kg/kg |
+| Ocean      | kg litter removed   | 0.0            | 10        | no direct CO₂ — GP only |
+| Lifestyle  | eco-friendly swap   | 0.6            | 10        | rough estimate |
+| Policy     | advocacy action     | 0.0            | 20        | no direct CO₂ — GP only |
+| Education  | 30-min session      | 0.0            | 10        | no direct CO₂ — GP only |
+| General    | action              | 0.3            | 8         | generic fallback |
+
+So *"biked 12 km"* → `12 × 0.17 = 2.04 kg CO₂` and `12 × 2 = 24 GP`.
+
+Design choices:
+- **Factors are cited averages, not per-user measurements.** Real emissions vary
+  by region, grid mix, vehicle, diet, etc. — these are honest ballparks, tunable
+  in one place (§10). The `source` field on each category documents the basis.
+- **Some categories are GP-only (0 kg CO₂)** — Ocean cleanup, Policy/advocacy,
+  Education. They're genuinely valuable but don't *avoid emissions*, so it would
+  be dishonest to assign them carbon. They earn Green Points instead.
+- **GP scale with quantity** too, with a floor of 5 so a tiny or zero-CO₂ log
+  still rewards effort.
+
+There's also a **daily-task grid** with named presets (`TASK_IMPACTS`) — specific
+actions with fixed, pre-computed values derived from these factors (e.g.
+`Bike commute ≈ 2.0 kg / 24 GP`).
 
 ---
 
@@ -63,14 +75,18 @@ the same model, e.g. `Bike commute → 2.4 kg / 24 GP (Transport)`,
 Entry point: the **"Log an action"** modal (`MLogAction`) → `createImpactAction()`
 in `lib/impact.ts`. Steps:
 
-1. You pick a **category**, describe what you did, optionally **attach a proof
-   photo**, and choose whether to **share it to the feed** (on by default).
-2. If a photo is attached, it's uploaded to storage; its URL becomes `proof_url`.
-3. If "share to feed" is on, a **feed post** is created first (so the log can link
+1. You pick a **category**, enter a **quantity** (in that category's unit, e.g.
+   "12 km not driven" — a live readout shows the resulting CO₂ + GP), describe
+   what you did, optionally **attach a proof photo**, and choose whether to
+   **share it to the feed** (on by default).
+2. `computeImpact(category, quantity)` calculates the authoritative `co2` and
+   `pts` **server-side in the data layer** (not trusted from the UI).
+3. If a photo is attached, it's uploaded to storage; its URL becomes `proof_url`.
+4. If "share to feed" is on, a **feed post** is created first (so the log can link
    to it). Importantly, that post starts with **`co2_saved_kg = 0`** — it does
    *not* count as verified impact yet.
-4. A row is inserted into **`impact_logs`** with:
-   - `category`, `co2_saved_kg`, `points` (from the table above)
+5. A row is inserted into **`impact_logs`** with:
+   - `category`, `quantity`, `unit`, `co2_saved_kg`, `points` (computed)
    - `proof_url`, `post_id` (link to the feed post), `description`
    - `status`: `'pending'` if it has proof or a post, otherwise `'unverified'`
 
@@ -189,7 +205,8 @@ at least one action. Any gap ends the streak.
 | Table / column | Purpose |
 |---|---|
 | `impact_logs` | one row per logged action |
-| `impact_logs.co2_saved_kg`, `.points` | the category's CO₂ + GP for this log |
+| `impact_logs.quantity`, `.unit` | how much was done (e.g. 12 "km not driven") |
+| `impact_logs.co2_saved_kg`, `.points` | computed `quantity × factor` CO₂ + GP |
 | `impact_logs.status`, `.vouch_count` | verification state (unverified/pending/verified) |
 | `impact_logs.proof_url`, `.post_id`, `.description` | proof photo, linked feed post, note |
 | `impact_vouches` | one row per community vouch (log_id, user_id) |
@@ -205,14 +222,15 @@ log; `handle_impact_vouch` (migration 018) handles the vouch → verified transi
 
 ## 9. End-to-end example
 
-1. You bike to work and open **Log an action** → **Transport**, add a photo of
-   your bike, keep "share to feed" on.
-2. Instantly: `+24 GP` and `+2.4 kg` land on your profile (trigger). A feed post
+1. You bike to work and open **Log an action** → **Transport**, set the quantity
+   to **12 km**, add a photo of your bike, keep "share to feed" on. The modal
+   shows a live **2.04 kg CO₂ · +24 GP**.
+2. Instantly: `+24 GP` and `+2.04 kg` land on your profile (trigger). A feed post
    appears with a vouch bar reading **0/3**. The post's `co2_saved_kg` is 0 for now.
 3. Three colleagues who saw you bike hit **Vouch**.
-4. On the 3rd vouch: your log flips to **verified**, the post gains its **2.4 kg**,
+4. On the 3rd vouch: your log flips to **verified**, the post gains its **2.04 kg**,
    and it shows up in the **"Verified impact"** feed. Your dashboard moves that
-   2.4 kg from "pending" to "community-verified."
+   2.04 kg from "pending" to "community-verified."
 
 ---
 
@@ -220,8 +238,10 @@ log; `handle_impact_vouch` (migration 018) handles the vouch → verified transi
 
 Everything is intentionally centralised so the economy is easy to adjust:
 
-- **CO₂ + GP per category:** `lib/impact.ts` → `ACTION_IMPACTS` (and
-  `TASK_IMPACTS` for the daily-task grid).
+- **Emission factors, units, GP-per-unit, defaults:** `lib/impact.ts` →
+  `ACTION_IMPACTS` (each entry documents its `source`). The `computeImpact()`
+  function right below it is the single formula used for both the live preview
+  and the DB write. `TASK_IMPACTS` holds the fixed daily-task presets.
 - **Vouches required to verify:** `lib/impact.ts` → `VOUCH_THRESHOLD` (3) and the
   matching `>= 3` checks in migration `018`'s trigger (change both).
 - **Auto-verify CO₂ threshold (500 kg):** migration `002`'s trigger.
@@ -233,7 +253,9 @@ Everything is intentionally centralised so the economy is easy to adjust:
 - **Dashboard:** `components/screens/impact.tsx`.
 
 ### Honest caveats
-- CO₂ figures are **category estimates**, not measured emissions.
+- CO₂ figures are `quantity × cited-average factor`, not per-user measured
+  emissions. The quantity is self-reported and the factors are ballparks — real
+  numbers vary by region, grid, vehicle, diet, etc.
 - The profile "verified" badge at 500 kg is a **volume-based auto-grant**,
   distinct from per-action community verification.
 - The 30-day **2× streak multiplier is display-only** right now.

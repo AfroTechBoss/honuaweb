@@ -3,7 +3,7 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
-import { logImpact, TASK_IMPACTS } from "@/lib/impact";
+import { logImpact, TASK_IMPACTS, ACTION_IMPACTS, computeImpact, VOUCH_THRESHOLD } from "@/lib/impact";
 import { QuoteCard } from "./communities";
 
 // Hashtag pool - seeded from MOCK trends + common sustainability tags
@@ -523,27 +523,31 @@ export function MLogAction({ close }) {
     ['repost', 'Waste'], ['droplet', 'Ocean'], ['sparkles', 'Lifestyle'],
   ];
   const [sel, setSel] = React.useState(0);
+  const cat = opts[sel][1];
+  const c = ACTION_IMPACTS[cat] ?? ACTION_IMPACTS.General;
+
+  const [qty, setQty] = React.useState<number>(c.defaultQty);
   const [desc, setDesc] = React.useState('');
   const [proofFile, setProofFile] = React.useState<File | null>(null);
   const [proofPreview, setProofPreview] = React.useState<string | null>(null);
   const [shareToFeed, setShareToFeed] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const [impacts, setImpacts] = React.useState<Record<string, { co2: number; pts: number }>>({});
-  React.useEffect(() => {
-    import('@/lib/impact').then(({ ACTION_IMPACTS }) => setImpacts(ACTION_IMPACTS));
-  }, []);
-  const cat = opts[sel][1];
-  const impact = impacts[cat] ?? { co2: 0, pts: 0 };
+
+  // Reset quantity to the category default when switching category
+  const selectCat = (i: number) => { setSel(i); setQty(ACTION_IMPACTS[opts[i][1]]?.defaultQty ?? 1); };
+
+  // Live impact preview (computeImpact is the same function the DB write uses)
+  const impact = computeImpact(cat, qty);
 
   const handleLog = async () => {
     if (!desc.trim()) return;
     if (!app.user?.id) { close(); app.toast({ msg: 'Sign in to log actions', icon: 'user' }); return; }
     setSaving(true);
     try {
-      const { createImpactAction, VOUCH_THRESHOLD } = await import('@/lib/impact');
-      const { log, error } = await createImpactAction(app.user.id, {
-        action: desc.trim(), category: cat, co2: impact.co2, pts: impact.pts,
+      const { createImpactAction } = await import('@/lib/impact');
+      const { log, co2, pts, error } = await createImpactAction(app.user.id, {
+        action: desc.trim(), category: cat, quantity: qty,
         description: desc.trim(), proofFile, shareToFeed, userName: app.user?.name,
       });
       if (!log) throw new Error(error || 'insert failed');
@@ -551,10 +555,10 @@ export function MLogAction({ close }) {
       close();
       const willVerify = proofFile || shareToFeed;
       app.openModal('celebrate', {
-        title: `Action logged · +${impact.pts} GP`,
+        title: `Action logged · +${pts} GP`,
         sub: willVerify
-          ? `${impact.co2} kg CO₂ recorded. It counts as verified once ${VOUCH_THRESHOLD} community members vouch for it.`
-          : `${impact.co2} kg CO₂ recorded on your ledger. Add proof next time to get it community-verified.`,
+          ? `${co2} kg CO₂ recorded. It counts as verified once ${VOUCH_THRESHOLD} community members vouch for it.`
+          : `${co2} kg CO₂ recorded on your ledger. Add proof next time to get it community-verified.`,
       });
     } catch (e: any) {
       app.toast({ msg: 'Could not log action', sub: e?.message, kind: 'error', icon: 'close' });
@@ -568,18 +572,41 @@ export function MLogAction({ close }) {
         <span className="fld-label">Category</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 16 }}>
           {opts.map(([ic, l], i) => {
-            const im = impacts[l] ?? { co2: 0, pts: 0 };
+            const ci = ACTION_IMPACTS[l];
             return (
-              <button key={l} onClick={() => setSel(i)} className={'opt-row ' + (sel === i ? 'sel' : '')} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+              <button key={l} onClick={() => selectCat(i)} className={'opt-row ' + (sel === i ? 'sel' : '')} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
                 <span style={{ color: sel === i ? 'var(--green)' : 'var(--ink-3)' }}><Icon name={ic} size={18} stroke={2} /></span>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{l}</span>
-                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>+{im.pts} GP · {im.co2} kg</span>
+                <span style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{ci ? `per ${ci.unit.split(' ')[0]}` : ''}</span>
               </button>
             );
           })}
         </div>
+
+        {/* Quantity — drives the CO₂ + GP calculation */}
+        <span className="fld-label">How much? <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>({c.unit})</span></span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
+            <button onClick={() => setQty(q => Math.max(0, Math.round((q - c.step) * 100) / 100))} style={{ width: 38, height: 40, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', fontSize: 18, color: 'var(--ink-2)' }}>−</button>
+            <input type="number" value={qty} min={0} step={c.step}
+              onChange={e => setQty(Math.max(0, Number(e.target.value) || 0))}
+              style={{ width: 72, height: 40, border: 'none', borderLeft: '1px solid var(--line)', borderRight: '1px solid var(--line)', textAlign: 'center', fontSize: 15, fontWeight: 600, background: 'var(--surface)', color: 'var(--ink)', outline: 'none' }} />
+            <button onClick={() => setQty(q => Math.round((q + c.step) * 100) / 100)} style={{ width: 38, height: 40, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', fontSize: 18, color: 'var(--ink-2)' }}>+</button>
+          </div>
+          <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{c.unit}</span>
+          {/* live readout */}
+          <span style={{ marginLeft: 'auto', fontSize: 13, fontFamily: 'JetBrains Mono', fontWeight: 600, color: 'var(--green)' }}>
+            {impact.co2 > 0 ? `${impact.co2} kg CO₂ · ` : ''}+{impact.pts} GP
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 14, lineHeight: 1.4 }}>
+          {impact.co2 > 0
+            ? `${qty} × ${c.factorKgPerUnit} kg/${c.unit.split(' ')[0]} — ${c.source}`
+            : `No direct CO₂ — earns Green Points. ${c.source}`}
+        </div>
+
         <span className="fld-label">What did you do?</span>
-        <input className="fld" autoFocus value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Biked to work instead of driving (8 km)" style={{ marginBottom: 14 }} />
+        <input className="fld" autoFocus value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. Biked to work instead of driving" style={{ marginBottom: 14 }} />
 
         <span className="fld-label">Proof <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(photo — optional, but needed for verification)</span></span>
         <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
