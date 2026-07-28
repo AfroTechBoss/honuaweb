@@ -27,6 +27,13 @@ Open <http://localhost:3000>.
 > Screens gracefully fall back to demo data when a table is empty or a migration
 > hasn't been run yet, so the app is always runnable.
 
+## How the impact system works
+
+Logging actions, CO₂ (kg), Green Points, streaks, levels, and the community
+**verification loop** are documented in detail in
+[`docs/IMPACT.md`](docs/IMPACT.md) — including the exact per-category numbers,
+the DB triggers, and where to tune them.
+
 ## Routes
 
 | Path | Screen |
