@@ -82,8 +82,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets and Next internals; everything else is checked.
+  // Skip API routes (they self-guard and must return JSON/status codes, never an
+  // HTML login redirect — this is critical for /api/checkout and the Stripe
+  // webhook), plus static assets and Next internals. Everything else is checked.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.png|opengraph-image.png|logo.png|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|css|js|map)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|opengraph-image.png|logo.png|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|css|js|map)$).*)",
   ],
 };
