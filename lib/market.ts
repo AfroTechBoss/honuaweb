@@ -15,6 +15,7 @@ export type Product = {
   rating: number; review_count: number; featured: boolean; compare_at_cents: number | null;
   // real seller identity (null for the seeded demo catalogue)
   sellerId: string | null; sellerHandle: string | null; sellerName: string | null;
+  sellerLogo: string | null;
 };
 
 function mapProduct(row: any): Product {
@@ -36,11 +37,28 @@ function mapProduct(row: any): Product {
     sellerId: row.seller_id ?? null,
     sellerHandle: row.seller?.handle ?? null,
     sellerName: row.seller?.full_name ?? null,
+    sellerLogo: null, // filled in by attachShopLogos
   };
 }
 
 // Join the seller's real profile so products carry a messageable handle
 const PRODUCT_SELECT = '*, seller:profiles!products_seller_id_fkey(handle, full_name)';
+
+// Attach each product's shop logo (from seller_applications) in one batched query
+async function attachShopLogos(products: Product[]): Promise<Product[]> {
+  const ids = [...new Set(products.map(p => p.sellerId).filter(Boolean))] as string[];
+  if (!ids.length) return products;
+  try {
+    const { data } = await supabase
+      .from('seller_applications')
+      .select('user_id, logo_url')
+      .in('user_id', ids)
+      .not('logo_url', 'is', null);
+    const byOwner: Record<string, string> = {};
+    for (const r of data ?? []) if (r.logo_url && !byOwner[r.user_id]) byOwner[r.user_id] = r.logo_url;
+    return products.map(p => p.sellerId && byOwner[p.sellerId] ? { ...p, sellerLogo: byOwner[p.sellerId] } : p);
+  } catch { return products; }
+}
 
 export async function getProducts(): Promise<Product[]> {
   try {
@@ -51,7 +69,8 @@ export async function getProducts(): Promise<Product[]> {
       .order('created_at', { ascending: true });
     if (error || !data) return [];
     // Ignore junk rows from any leftover pre-migration table
-    return data.filter((r: any) => r.name && r.price_cents != null).map(mapProduct);
+    const products = data.filter((r: any) => r.name && r.price_cents != null).map(mapProduct);
+    return attachShopLogos(products);
   } catch { return []; }
 }
 
@@ -59,7 +78,8 @@ export async function getProductById(id: string): Promise<Product | null> {
   try {
     const { data, error } = await supabase.from('products').select(PRODUCT_SELECT).eq('id', id).maybeSingle();
     if (error || !data) return null;
-    return mapProduct(data);
+    const [product] = await attachShopLogos([mapProduct(data)]);
+    return product;
   } catch { return null; }
 }
 

@@ -101,7 +101,10 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
                 }}><Icon name="bookmark" size={13} stroke={wished ? 2.4 : 1.75} /></button>
               </div>
               <div style={{ padding: mob ? 10 : 14 }}>
-                <div style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.brand.toUpperCase()}</div>
+                <div style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {p.sellerLogo && <img src={p.sellerLogo} alt="" style={{ width: 14, height: 14, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.brand.toUpperCase()}</span>
+                </div>
                 <div style={{ fontSize: mob ? 13 : 14, fontWeight: 600, marginTop: 3 }}>{p.name}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Lora' }}>{p.price}</span>
