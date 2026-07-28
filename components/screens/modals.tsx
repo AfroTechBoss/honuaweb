@@ -515,19 +515,21 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
 };
 
 // --- Log an action ---
-export function MLogAction({ close }) {
+export function MLogAction({ close, data }: { close: () => void; data?: { category?: string; quantity?: number; description?: string } }) {
   const app = useApp();
   // icon, category (must match ACTION_IMPACTS in lib/impact.ts)
   const opts: [string, string][] = [
     ['leaf', 'Transport'], ['plant', 'Food'], ['bolt', 'Energy'],
     ['repost', 'Waste'], ['droplet', 'Ocean'], ['sparkles', 'Lifestyle'],
+    ['comment', 'Policy'], ['bookmark', 'Education'],
   ];
-  const [sel, setSel] = React.useState(0);
+  const initialSel = Math.max(0, opts.findIndex(([, l]) => l === data?.category));
+  const [sel, setSel] = React.useState(initialSel);
   const cat = opts[sel][1];
   const c = ACTION_IMPACTS[cat] ?? ACTION_IMPACTS.General;
 
-  const [qty, setQty] = React.useState<number>(c.defaultQty);
-  const [desc, setDesc] = React.useState('');
+  const [qty, setQty] = React.useState<number>(data?.quantity ?? c.defaultQty);
+  const [desc, setDesc] = React.useState(data?.description ?? '');
   const [proofFile, setProofFile] = React.useState<File | null>(null);
   const [proofPreview, setProofPreview] = React.useState<string | null>(null);
   const [shareToFeed, setShareToFeed] = React.useState(true);
@@ -642,17 +644,112 @@ export function MLogAction({ close }) {
 };
 
 // --- Export report ---
+function inRange(iso: string | undefined, range: string): boolean {
+  if (!iso) return false;
+  if (range === 'All time') return true;
+  const d = new Date(iso); const now = new Date();
+  if (range === 'This year') return d.getFullYear() === now.getFullYear();
+  // This month
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+function downloadBlob(content: BlobPart, type: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function MExport({ close }) {
   const app = useApp();
-  const [fmt, setFmt] = React.useState('PDF');
+  const [fmt, setFmt] = React.useState('CSV');
   const [range, setRange] = React.useState('This month');
+  const [busy, setBusy] = React.useState(false);
+
+  const handleExport = async () => {
+    if (!app.user?.id) { close(); app.toast({ msg: 'Sign in to export', icon: 'user' }); return; }
+    setBusy(true);
+    try {
+      const { getAllLogs } = await import('@/lib/impact');
+      const all = await getAllLogs(app.user.id);
+      const logs = all.filter(l => inRange(l.logged_at, range));
+      if (logs.length === 0) {
+        app.toast({ msg: 'Nothing to export', sub: `No actions in "${range}".`, icon: 'leaf' });
+        setBusy(false); return;
+      }
+      const totalCo2 = logs.reduce((s, l) => s + Number(l.co2_saved_kg ?? 0), 0);
+      const totalGp = logs.reduce((s, l) => s + Number(l.points ?? 0), 0);
+      const verified = logs.filter(l => l.status === 'verified').length;
+      const name = app.user?.name || 'You';
+      const stamp = new Date().toISOString().substring(0, 10);
+      const slug = range.toLowerCase().replace(/\s+/g, '-');
+
+      if (fmt === 'CSV') {
+        const cell = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const header = ['Date', 'Category', 'Action', 'Quantity', 'Unit', 'CO2 (kg)', 'Green Points', 'Status'];
+        const body = logs.map(l => [
+          (l.logged_at ?? '').substring(0, 10), l.category, l.action,
+          l.quantity ?? '', l.unit ?? '', l.co2_saved_kg ?? 0, l.points ?? 0, l.status ?? 'unverified',
+        ].map(cell).join(','));
+        const totals = ['', '', 'TOTAL', '', '', totalCo2.toFixed(2), totalGp, `${verified} verified`].map(cell).join(',');
+        downloadBlob([header.map(cell).join(','), ...body, totals].join('\n'), 'text/csv;charset=utf-8', `honua-impact-${slug}.csv`);
+      } else if (fmt === 'PDF') {
+        // Print-friendly report → the browser's "Save as PDF"
+        const rows = logs.map(l => `<tr><td>${(l.logged_at ?? '').substring(0, 10)}</td><td>${l.category}</td><td>${l.action}</td><td>${l.quantity ?? ''} ${l.unit ?? ''}</td><td style="text-align:right">${Number(l.co2_saved_kg ?? 0).toFixed(2)}</td><td style="text-align:right">${l.points ?? 0}</td><td>${l.status ?? 'unverified'}</td></tr>`).join('');
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Honua Impact — ${range}</title>
+          <style>body{font-family:system-ui,sans-serif;color:#0a0d0b;padding:40px;max-width:820px;margin:auto}
+          h1{font-size:26px;margin:0}.sub{color:#666;font-size:13px;margin:4px 0 24px}
+          .kpis{display:flex;gap:24px;margin-bottom:24px}.kpi{background:#f2f5f2;border-radius:12px;padding:14px 18px}
+          .kpi b{display:block;font-size:24px}.kpi span{font-size:12px;color:#666}
+          table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #eee}
+          th{font-size:11px;text-transform:uppercase;color:#888}</style></head><body>
+          <h1>🌱 Honua Impact Report</h1><div class="sub">${name} · ${range} · generated ${stamp}</div>
+          <div class="kpis"><div class="kpi"><b>${totalCo2.toFixed(1)} kg</b><span>CO₂ avoided</span></div>
+          <div class="kpi"><b>${totalGp}</b><span>Green Points</span></div>
+          <div class="kpi"><b>${logs.length}</b><span>actions (${verified} verified)</span></div></div>
+          <table><thead><tr><th>Date</th><th>Category</th><th>Action</th><th>Quantity</th><th style="text-align:right">CO₂ kg</th><th style="text-align:right">GP</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+          <script>window.onload=()=>{window.print()}</script></body></html>`;
+        const w = window.open('', '_blank');
+        if (w) { w.document.write(html); w.document.close(); }
+        else { app.toast({ msg: 'Allow pop-ups to export PDF', icon: 'close' }); }
+      } else {
+        // PNG summary card
+        const scale = 2, W = 600, Hc = 340;
+        const cv = document.createElement('canvas'); cv.width = W * scale; cv.height = Hc * scale;
+        const ctx = cv.getContext('2d')!; ctx.scale(scale, scale);
+        const grad = ctx.createLinearGradient(0, 0, W, Hc); grad.addColorStop(0, '#1f6f3f'); grad.addColorStop(1, '#2e9a5b');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, Hc);
+        ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.font = '600 15px system-ui'; ctx.fillText('🌱 HONUA IMPACT', 40, 52);
+        ctx.font = '700 40px Georgia,serif'; ctx.fillStyle = '#fff';
+        ctx.fillText(totalCo2 >= 1000 ? `${(totalCo2 / 1000).toFixed(1)} tonnes CO₂` : `${Math.round(totalCo2)} kg CO₂`, 40, 120);
+        ctx.font = '400 14px system-ui'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(`avoided · ${range}`, 40, 148);
+        const stats: [string, string][] = [[`${totalGp}`, 'Green Points'], [`${logs.length}`, 'Actions'], [`${verified}`, 'Verified']];
+        stats.forEach(([v, l], i) => {
+          const x = 40 + i * 180;
+          ctx.font = '700 30px Georgia,serif'; ctx.fillStyle = '#fff'; ctx.fillText(v, x, 240);
+          ctx.font = '400 13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillText(l, x, 262);
+        });
+        ctx.font = '400 12px system-ui'; ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(`${name} · honua.green · ${stamp}`, 40, 310);
+        cv.toBlob(b => { if (b) downloadBlob(b, 'image/png', `honua-impact-${slug}.png`); }, 'image/png');
+      }
+      close();
+      app.toast({ kind: 'success', msg: `${fmt} report exported`, sub: `${range} · ${logs.length} actions`, icon: 'download' });
+    } catch (e: any) {
+      app.toast({ msg: 'Export failed', sub: e?.message, kind: 'error', icon: 'close' });
+    } finally { setBusy(false); }
+  };
+
   return (
     <Modal onClose={close} width={460}>
-      <ModalHead icon="download" iconColor="var(--sky)" title="Export impact report" sub="Download a verified summary of your impact." onClose={close} />
+      <ModalHead icon="download" iconColor="var(--sky)" title="Export impact report" sub="Download a summary of your logged impact." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
         <span className="fld-label">Format</span>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {['PDF', 'CSV', 'PNG card'].map(f => <button key={f} onClick={() => setFmt(f)} className={'chip ' + (fmt === f ? 'chip-green' : '')} style={{ cursor: 'pointer', border: fmt === f ? 'none' : undefined }}>{f}</button>)}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+          {['CSV', 'PDF', 'PNG card'].map(f => <button key={f} onClick={() => setFmt(f)} className={'chip ' + (fmt === f ? 'chip-green' : '')} style={{ cursor: 'pointer', border: fmt === f ? 'none' : undefined }}>{f}</button>)}
+        </div>
+        <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginBottom: 16 }}>
+          {fmt === 'CSV' ? 'Spreadsheet of every logged action.' : fmt === 'PDF' ? 'Printable report — opens your browser\'s print dialog (choose “Save as PDF”).' : 'A shareable summary image.'}
         </div>
         <span className="fld-label">Date range</span>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -660,8 +757,8 @@ export function MExport({ close }) {
         </div>
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-primary" onClick={() => { close(); app.toast({ kind: 'success', msg: `${fmt} report exported`, sub: `${range} · downloaded to your device.`, icon: 'download' }); }}>Export {fmt}</button>
+        <button className="btn btn-ghost" onClick={close} disabled={busy}>Cancel</button>
+        <button className="btn btn-primary" onClick={handleExport} disabled={busy}>{busy ? 'Exporting…' : `Export ${fmt}`}</button>
       </ModalFoot>
     </Modal>
   );

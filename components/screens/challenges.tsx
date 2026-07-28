@@ -16,20 +16,24 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
   const [dbLoaded, setDbLoaded] = React.useState(false);
   const [loggedToday, setLoggedToday] = React.useState<Set<string>>(new Set());
 
-  React.useEffect(() => {
+  const loadToday = React.useCallback(async () => {
     if (!app.user?.id) return;
     const todayStr = new Date().toISOString().substring(0, 10);
-    import('@/lib/supabase').then(async ({ supabase }) => {
-      const { data: todayLogs } = await supabase
-        .from('impact_logs')
-        .select('action')
-        .eq('user_id', app.user.id)
-        .gte('logged_at', todayStr);
-      if (todayLogs) {
-        setLoggedToday(new Set(todayLogs.map((l: any) => l.action)));
-      }
-    }).catch(() => {});
+    const { supabase } = await import('@/lib/supabase');
+    const { data: todayLogs } = await supabase
+      .from('impact_logs')
+      .select('action')
+      .eq('user_id', app.user.id)
+      .gte('logged_at', todayStr);
+    if (todayLogs) setLoggedToday(new Set(todayLogs.map((l: any) => l.action)));
   }, [app.user?.id]);
+
+  React.useEffect(() => { loadToday(); }, [loadToday]);
+  // Refresh after logging from the pre-filled modal
+  React.useEffect(() => {
+    window.addEventListener('honua:impact-logged', loadToday);
+    return () => window.removeEventListener('honua:impact-logged', loadToday);
+  }, [loadToday]);
 
   React.useEffect(() => {
     if (!app.user?.id) return;
@@ -54,18 +58,15 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
     }).catch(() => {});
   }, [app.user?.id]);
 
-  const handleLogTask = async (taskName: string) => {
+  const handleLogTask = (taskName: string) => {
     if (loggedToday.has(taskName)) {
       app.toast({ msg: `${taskName} — already logged today ✓`, icon: 'check' });
       return;
     }
+    // Open the log modal pre-filled — so you can just hit Log, or add a proof
+    // photo + share it to the feed for community vouching.
     const im = taskImpact(taskName);
-    setLoggedToday(prev => new Set([...prev, taskName]));
-    app.toast({ msg: `${taskName} logged!`, sub: `${im.quantity} ${im.unit} · +${im.pts} GP${im.co2 > 0 ? ` · −${im.co2} kg CO₂` : ''}`, kind: 'success', icon: 'check' });
-    if (app.user?.id) {
-      await logTaskImpact(app.user.id, taskName);
-      window.dispatchEvent(new Event('honua:impact-logged'));
-    }
+    app.openModal?.('logaction', { category: im.cat, quantity: im.quantity, description: taskName });
   };
 
   const handleToggleChallenge = async (c: any) => {
