@@ -252,20 +252,20 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
   const [review, setReview] = React.useState<any | null>(null);
 
   React.useEffect(() => {
-    const orders = loadOrders();
-    const found = orders.find((o: any) => o.id === orderId);
-    if (found) setOrder(found);
-    else {
-      // Not in localStorage — try Supabase (order placed on another device)
-      Promise.all([import('@/lib/market'), import('@/lib/supabase')]).then(async ([{ getDbOrders }, { supabase }]) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        const userId = session?.user?.id;
-        if (!userId) { setNotFound(true); return; }
-        const dbOrders = await getDbOrders(userId);
-        const dbFound = dbOrders.find((o: any) => o.id === orderId);
-        if (dbFound) setOrder(dbFound); else setNotFound(true);
-      }).catch(() => setNotFound(true));
-    }
+    // Show the localStorage copy immediately, but the DB is the source of truth
+    // for status/payment (the seller advances fulfilment server-side).
+    const local = loadOrders().find((o: any) => o.id === orderId);
+    if (local) setOrder(local);
+
+    Promise.all([import('@/lib/market'), import('@/lib/supabase')]).then(async ([{ getDbOrders }, { supabase }]) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) { if (!local) setNotFound(true); return; }
+      const dbFound = (await getDbOrders(userId)).find((o: any) => o.id === orderId);
+      if (dbFound) setOrder((prev: any) => ({ ...(prev ?? {}), ...dbFound }));
+      else if (!local) setNotFound(true);
+    }).catch(() => { if (!local) setNotFound(true); });
+
     const reviews = loadReviews();
     if (reviews[orderId]) setReview(reviews[orderId]);
   }, [orderId]);
