@@ -493,27 +493,85 @@ export function DesktopCheckout() {
       .catch(() => setStripeMode('mock'));
   }, []);
 
-  const handleSuccess = () => {
-    const orderId = orderIdRef.current;
-    const address = { firstName, lastName, street, city, zip, country, email };
-    const snapshot = { id: orderId, total, itemCount, items: [...cart], address };
-    saveOrder({ ...snapshot, subtotal, shipping, createdAt: new Date().toISOString(), status: 'processing' });
-    // Persist to Supabase too, so orders survive across devices. In live Stripe
-    // mode the client already saw payment succeed; the webhook is the
-    // authoritative confirmation (and covers closed tabs).
-    if (app.user?.id) {
+  const [paymentFailed, setPaymentFailed] = React.useState(false);
+
+  const buildSnapshot = () => ({
+    orderId: orderIdRef.current,
+    items: [...cart], subtotal, shipping, total, itemCount,
+    address: { firstName, lastName, street, city, zip, country, email }, email,
+    paymentIntentId: paymentIntentIdRef.current, userId: app.user?.id ?? null,
+  });
+
+  // Persist a pending-order snapshot so a redirect-based payment (3D Secure)
+  // can finalize the order on return — React state is wiped by the redirect.
+  React.useEffect(() => {
+    if (!cart.length) return;
+    try { localStorage.setItem('honua_pending_checkout', JSON.stringify(buildSnapshot())); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, firstName, lastName, street, city, zip, country, email, subtotal, shipping, total]);
+
+  const finalize = (snap: any, paid: boolean) => {
+    const address = snap.address;
+    saveOrder({ id: snap.orderId, total: snap.total, itemCount: snap.itemCount, items: snap.items, address, subtotal: snap.subtotal, shipping: snap.shipping, createdAt: new Date().toISOString(), status: 'processing' });
+    if (snap.userId) {
       import('@/lib/market')
-        .then(({ createDbOrder }) => createDbOrder(app.user.id, {
-          id: orderId, items: [...cart], subtotal, shipping, total, email, address,
-          paymentIntentId: paymentIntentIdRef.current,
-          paymentStatus: stripeMode === 'live' ? 'paid' : 'unpaid',
+        .then(({ createDbOrder }) => createDbOrder(snap.userId, {
+          id: snap.orderId, items: snap.items, subtotal: snap.subtotal, shipping: snap.shipping, total: snap.total, email: snap.email, address,
+          paymentIntentId: snap.paymentIntentId, paymentStatus: paid ? 'paid' : 'unpaid',
         }))
         .catch(() => {});
     }
-    setOrderSnapshot(snapshot);
+    setOrderSnapshot({ id: snap.orderId, total: snap.total, itemCount: snap.itemCount, items: snap.items, address });
     clearCart?.();
     setSuccess(true);
+    try { localStorage.removeItem('honua_pending_checkout'); } catch {}
   };
+
+  // Live Stripe mode: the client already saw payment succeed; the webhook is
+  // the authoritative confirmation (and covers closed tabs).
+  const handleSuccess = () => finalize(buildSnapshot(), stripeMode === 'live');
+
+  // Handle return from a redirect-based payment (e.g. 3D Secure). Stripe appends
+  // ?redirect_status=succeeded|failed to the return_url.
+  React.useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get('redirect_status');
+    if (!status) return;
+    // Clean the query so a refresh doesn't re-trigger this
+    try { window.history.replaceState({}, '', '/checkout'); } catch {}
+    if (status === 'succeeded') {
+      try {
+        const snap = JSON.parse(localStorage.getItem('honua_pending_checkout') || 'null');
+        if (snap) finalize(snap, true);
+      } catch {}
+    } else {
+      // failed / canceled — card wasn't charged
+      setPaymentFailed(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (paymentFailed) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+        <CheckoutNav onBack={() => router.push('/marketplace')} />
+        <div style={{ flex: 1, display: 'grid', placeItems: 'center', padding: 24 }}>
+          <div style={{ maxWidth: 440, textAlign: 'center' }}>
+            <div style={{ width: 60, height: 60, borderRadius: 18, background: 'color-mix(in srgb, var(--clay) 12%, transparent)', color: 'var(--clay)', display: 'inline-grid', placeItems: 'center' }}>
+              <Icon name="close" size={26} stroke={2.2} />
+            </div>
+            <h1 className="font-display" style={{ fontSize: 26, fontWeight: 600, margin: '18px 0 0', letterSpacing: '-0.02em' }}>Payment didn't go through</h1>
+            <p style={{ fontSize: 14.5, color: 'var(--ink-3)', lineHeight: 1.6, margin: '10px 0 22px' }}>
+              Your card wasn't charged. This can happen if the payment was declined or the card authentication failed. Your cart is still here — try again with the same or a different card.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button className="btn btn-ghost" onClick={() => router.push('/marketplace')} style={{ padding: '11px 18px' }}>Back to shop</button>
+              <button className="btn btn-primary" onClick={() => setPaymentFailed(false)} style={{ padding: '11px 20px' }}>Try again</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (success && orderSnapshot) {
     return (
