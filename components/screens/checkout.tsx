@@ -1,6 +1,8 @@
 "use client";
 import React from "react";
 import { useRouter } from "next/navigation";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import { useApp } from "@/components/app-context";
 import { Icon, Logo, sMoney } from "@/components/shared";
 
@@ -78,139 +80,67 @@ function AddressSuggestions({ suggestions, onSelect }: {
   );
 }
 
-// Lazy-load Stripe so the bundle only fetches it on the checkout page
-let stripePromise: any = null;
-function getStripe(publishableKey: string) {
-  if (!stripePromise) {
-    stripePromise = import('@stripe/stripe-js').then(m => m.loadStripe(publishableKey));
-  }
-  return stripePromise;
+// Memoize the Stripe.js loader per publishable key (module-level, stable)
+let _stripePromise: ReturnType<typeof loadStripe> | null = null;
+function getStripePromise(publishableKey: string) {
+  if (!_stripePromise) _stripePromise = loadStripe(publishableKey);
+  return _stripePromise;
 }
 
-// ---- Payment form (inner, inside <Elements>) ----
-function PaymentForm({ total, onSuccess }: { total: number; onSuccess: () => void }) {
+// Stable, module-level payment form. It MUST NOT be redefined on each render —
+// otherwise React remounts the PaymentElement and confirmPayment can't find its
+// mounted Element ("could not retrieve data from the specified Element").
+function StripePaymentForm({ total, onSuccess }: { total: number; onSuccess: () => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const elementsRef = React.useRef<any>(null);
-  const stripeRef = React.useRef<any>(null);
+  const [ready, setReady] = React.useState(false);
 
-  // We receive these from parent via context-like ref forwarding
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripeRef.current || !elementsRef.current) return;
+    if (!stripe || !elements) return;
     setLoading(true);
     setError('');
-    const { error: stripeError } = await stripeRef.current.confirmPayment({
-      elements: elementsRef.current,
-      confirmParams: { return_url: window.location.origin + '/checkout?success=1' },
+    const { error: stripeError } = await stripe.confirmPayment({
+      elements,
+      // Stripe appends ?payment_intent=…&redirect_status=succeeded|failed on return
+      confirmParams: { return_url: window.location.origin + '/checkout' },
       redirect: 'if_required',
     });
     if (stripeError) {
-      setError(stripeError.message || 'Payment failed');
+      setError(stripeError.message || 'Payment failed. Please try again.');
       setLoading(false);
     } else {
       onSuccess();
     }
   };
 
-  // This component is rendered inside <StripeElements> which provides context
-  // We pull stripe/elements from the hook via dynamic require
-  React.useEffect(() => {
-    const loadHooks = async () => {
-      const { useStripe, useElements } = await import('@stripe/react-stripe-js');
-      // Can't use hooks outside component — handled in StripePaymentForm below
-    };
-  }, []);
-
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>
-      {/* The Stripe PaymentElement is mounted by StripePaymentForm below */}
-      <div id="stripe-payment-element" />
+      <PaymentElement options={{ layout: 'tabs' }} onReady={() => setReady(true)} />
       {error && (
         <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(220,38,38,.08)', border: '1px solid rgba(220,38,38,.2)', fontSize: 13, color: '#dc2626' }}>{error}</div>
       )}
       <button
         type="submit"
-        disabled={loading}
+        disabled={loading || !stripe || !ready}
         className="btn btn-primary"
-        style={{ justifyContent: 'center', padding: '15px', fontSize: 15, fontWeight: 700, opacity: loading ? 0.7 : 1 }}
+        style={{ justifyContent: 'center', padding: '15px', fontSize: 15, fontWeight: 700, opacity: (loading || !ready) ? 0.7 : 1, marginTop: 4 }}
       >
-        {loading ? 'Processing…' : `Pay ${sMoney(total)}`}
+        {loading ? 'Processing…' : ready ? `Pay ${sMoney(total)}` : 'Loading payment…'}
       </button>
+      <StripeBadge />
     </form>
   );
 }
 
 // ---- Stripe-aware payment section ----
 function StripeCheckout({ clientSecret, publishableKey, total, onSuccess }: { clientSecret: string; publishableKey: string; total: number; onSuccess: () => void }) {
-  const [Elements, setElements] = React.useState<any>(null);
-  const [PaymentElement, setPaymentElement] = React.useState<any>(null);
-  const [useStripe, setUseStripe] = React.useState<any>(null);
-  const [useElements, setUseElements] = React.useState<any>(null);
-  const [stripe, setStripe] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState('');
-
-  React.useEffect(() => {
-    import('@stripe/react-stripe-js').then(m => {
-      setElements(() => m.Elements);
-      setPaymentElement(() => m.PaymentElement);
-      setUseStripe(() => m.useStripe);
-      setUseElements(() => m.useElements);
-    });
-    getStripe(publishableKey).then(setStripe);
-  }, [publishableKey]);
-
-  if (!Elements || !PaymentElement || !stripe) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {[1, 2, 3].map(i => <div key={i} style={{ height: 48, borderRadius: 10, background: 'var(--bg-2)', border: '1px solid var(--line)', animation: 'skelPulse 1.4s ease-in-out infinite' }} />)}
-      </div>
-    );
-  }
-
-  function InnerForm() {
-    const stripeHook = useStripe();
-    const elementsHook = useElements();
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!stripeHook || !elementsHook) return;
-      setLoading(true);
-      setError('');
-      const { error: stripeError } = await stripeHook.confirmPayment({
-        elements: elementsHook,
-        confirmParams: { return_url: window.location.origin + '/checkout?success=1' },
-        redirect: 'if_required',
-      });
-      if (stripeError) {
-        setError(stripeError.message || 'Payment failed. Please try again.');
-        setLoading(false);
-      } else {
-        onSuccess();
-      }
-    };
-    return (
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 16 }}>
-        <PaymentElement options={{ layout: 'tabs' }} />
-        {error && (
-          <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(220,38,38,.08)', border: '1px solid rgba(220,38,38,.2)', fontSize: 13, color: '#dc2626' }}>{error}</div>
-        )}
-        <button
-          type="submit"
-          disabled={loading || !stripeHook}
-          className="btn btn-primary"
-          style={{ justifyContent: 'center', padding: '15px', fontSize: 15, fontWeight: 700, opacity: loading ? 0.7 : 1, marginTop: 4 }}
-        >
-          {loading ? 'Processing…' : `Pay ${sMoney(total)}`}
-        </button>
-        <StripeBadge />
-      </form>
-    );
-  }
-
+  const stripePromise = React.useMemo(() => getStripePromise(publishableKey), [publishableKey]);
   return (
-    <Elements stripe={stripe} options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#22c55e', borderRadius: '10px', fontFamily: 'Satoshi, sans-serif' } } }}>
-      <InnerForm />
+    <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#22c55e', borderRadius: '10px', fontFamily: 'Satoshi, sans-serif' } } }}>
+      <StripePaymentForm total={total} onSuccess={onSuccess} />
     </Elements>
   );
 }
