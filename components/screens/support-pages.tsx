@@ -59,7 +59,7 @@ export function ContactSupportPage() {
 
   if (sent) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
         <PageNav back={backHref} backLabel="Back to order" />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ width: 64, height: 64, borderRadius: 20, background: 'var(--green-tint)', border: '2px solid var(--green)', display: 'grid', placeItems: 'center' }}>
@@ -80,7 +80,7 @@ export function ContactSupportPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <PageNav back={backHref} backLabel={orderRef ? 'Back to order' : 'My orders'} />
 
       <main style={{ flex: 1, maxWidth: 620, margin: '0 auto', width: '100%', padding: '40px 24px 80px' }}>
@@ -188,7 +188,7 @@ export function ReportIssuePage() {
   if (sent) {
     const ticketId = 'TKT-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
         <PageNav back={backHref} backLabel="Back to order" />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ width: 64, height: 64, borderRadius: 20, background: 'rgba(220,38,38,.08)', border: '2px solid rgba(220,38,38,.3)', display: 'grid', placeItems: 'center' }}>
@@ -210,7 +210,7 @@ export function ReportIssuePage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
       <PageNav back={backHref} backLabel={orderRef ? 'Back to order' : 'My orders'} />
 
       <main style={{ flex: 1, maxWidth: 620, margin: '0 auto', width: '100%', padding: '40px 24px 80px' }}>
@@ -327,7 +327,7 @@ export function ReturnsPolicyPage() {
   const fromOrder = params.get('order') || '';
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
       <PageNav back={fromOrder ? `/orders/${fromOrder}` : '/orders'} backLabel={fromOrder ? 'Back to order' : 'My orders'} />
 
       <main style={{ flex: 1, maxWidth: 720, margin: '0 auto', width: '100%', padding: '44px 24px 80px' }}>

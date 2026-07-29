@@ -80,8 +80,7 @@ export default function PropositionPage() {
       {/* Header */}
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--bg)", borderBottom: "1px solid var(--line)", padding: "0 24px", height: 58, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <span style={{ width: 30, height: 30, borderRadius: 8, background: "var(--green)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 17, fontFamily: "Lora, sans-serif", letterSpacing: "-0.05em" }}>h</span>
-          <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink)", fontFamily: "Lora, sans-serif" }}>honua</span>
+          <span style={{ fontWeight: 600, fontSize: 16, color: "var(--ink)", fontFamily: "Lora, sans-serif" }}>Honua</span>
         </Link>
         <span style={{ fontSize: 13, color: "var(--ink-4)", fontFamily: "JetBrains Mono, monospace" }}>Strategic Proposition · July 2026</span>
       </header>

@@ -687,8 +687,15 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           <TrendingPanel />
           <SuggestedFollows />
           <div style={{ padding: '12px 4px', fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', lineHeight: 1.7 }}>
-            ABOUT · HELP · API · PRIVACY · TERMS<br/>
-            © 2026 honua coop
+            {[['ABOUT', '/proposition'], ['HELP', '/support'], ['API', '/api'], ['PRIVACY', '/terms#privacy'], ['TERMS', '/terms']].map(([label, href], i) => (
+              <React.Fragment key={label}>
+                {i > 0 && <span style={{ margin: '0 5px' }}>·</span>}
+                <a href={href} style={{ color: 'var(--ink-4)', textDecoration: 'none' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--ink)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--ink-4)')}>{label}</a>
+              </React.Fragment>
+            ))}
+            <br/>© 2026 Honua
           </div>
         </div>
       </main>

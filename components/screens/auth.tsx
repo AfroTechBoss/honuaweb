@@ -32,7 +32,7 @@ function BrandPanel() {
           ))}
         </div>
       </div>
-      <div style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: 'JetBrains Mono' }}>© 2026 Honua Coop. All rights reserved.</div>
+      <div style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: 'JetBrains Mono' }}>© 2026 Honua. All rights reserved.</div>
     </div>
   );
 }

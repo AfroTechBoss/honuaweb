@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   "/terms",
   "/seller-policy",
   "/proposition",
+  "/api",
   "/support",
   "/report",
   "/returns",
