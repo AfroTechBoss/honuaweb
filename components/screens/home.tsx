@@ -610,7 +610,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
   const muted: string[] = app.mutedUsers ?? [];
   const blocked: string[] = app.blockedUsers ?? [];
   const blockedBy: string[] = app.blockedByUsers ?? [];
-  const feed = (dbPosts.length > 0 ? dbPosts : MOCK.posts).filter((p: any) => {
+  const feed = dbPosts.filter((p: any) => {
     const authorId = p.profile?.id ?? p.user_id;
     return !muted.includes(authorId) && !blocked.includes(authorId) && !blockedBy.includes(authorId);
   });
@@ -658,14 +658,13 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
             <>{[1,2,3,4,5].map(i => <PostCardSkeleton key={i} />)}</>
           ) : feed.length > 0 ? (
             <>
-              {feed.map(p => dbPosts.length > 0
-                ? <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onStoryShared={loadStories}
-                    impactLog={impactLogs[p.id]}
-                    vouched={impactLogs[p.id] ? myVouches.includes(impactLogs[p.id].id) : false}
-                    onVouch={handleVouch}
-                    onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
-                : <PostCard key={p.id} post={p} />
-              )}
+              {feed.map(p => (
+                <RealFeedCard key={p.id} post={p} onNav={onNav} onRefresh={fetchFeed} onStoryShared={loadStories}
+                  impactLog={impactLogs[p.id]}
+                  vouched={impactLogs[p.id] ? myVouches.includes(impactLogs[p.id].id) : false}
+                  onVouch={handleVouch}
+                  onHideUser={(userId: string) => setDbPosts(prev => prev.filter(dp => (dp.profile?.id ?? dp.user_id) !== userId))} />
+              ))}
             </>
           ) : (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-3)' }}>
@@ -1099,9 +1098,10 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impac
         <p style={{ margin: '0 0 10px', fontSize: 15, lineHeight: 1.6, color: 'var(--ink-2)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
           {displayContent.split('\n').map((line: string, li: number, arr: string[]) => (
             <React.Fragment key={li}>
-              {line.split(/(@\w+|#\w+)/).map((part: string, i: number) => {
+              {line.split(/(https?:\/\/[^\s]+|@\w+|#\w+)/).map((part: string, i: number) => {
                 if (/^@\w+$/.test(part)) return <HomeMentionSpan key={i} handle={part.slice(1)} onNav={onNav} />;
                 if (/^#\w+$/.test(part)) return <span key={i} onClick={stop(() => onNav?.('explore', { tag: part.slice(1) }))} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{part}</span>;
+                if (/^https?:\/\//.test(part)) return <a key={i} href={part} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--sky)', textDecoration: 'none', wordBreak: 'break-all' }}>{part}</a>;
                 return <React.Fragment key={i}>{part}</React.Fragment>;
               })}
               {li < arr.length - 1 && <br />}
@@ -1221,10 +1221,8 @@ function HomeSearch({ onNav }: { onNav: any }) {
         supabase.from('profiles').select('id, handle, full_name, avatar_url, verified').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(5),
         supabase.from('posts').select('id, content, created_at, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url)').ilike('content', `%${term}%`).is('community_id', null).order('created_at', { ascending: false }).limit(5),
       ]);
-      const communities = MOCK.communities?.filter((c: any) =>
-        c.name?.toLowerCase().includes(term.toLowerCase()) || c.cat?.toLowerCase().includes(term.toLowerCase())
-      ).slice(0, 5) ?? [];
-      setResults({ users: users ?? [], posts: posts ?? [], communities });
+      const { data: communities } = await supabase.from('communities').select('id, name, cat, member_count, slug').or(`name.ilike.%${term}%,cat.ilike.%${term}%`).limit(5);
+      setResults({ users: users ?? [], posts: posts ?? [], communities: communities ?? [] });
     } catch {}
     setLoading(false);
   }, []);
@@ -1356,6 +1354,43 @@ function HomeSearch({ onNav }: { onNav: any }) {
   );
 }
 
+// =============== Real tag cloud ===============
+function RealTagCloud({ onSelect }: { onSelect: (tag: string) => void }) {
+  const [tags, setTags] = React.useState<{ tag: string; count: number }[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data } = await supabase.from('posts').select('tags, content').gte('created_at', since).limit(500);
+      if (data?.length) {
+        const counts: Record<string, number> = {};
+        for (const p of data) {
+          const fromTags: string[] = Array.isArray(p.tags) ? p.tags : [];
+          const fromContent = ((p.content ?? '').match(/#(\w+)/g) ?? []).map((t: string) => t.slice(1));
+          for (const t of new Set([...fromTags, ...fromContent])) {
+            if (t) counts[t] = (counts[t] ?? 0) + 1;
+          }
+        }
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([tag, count]) => ({ tag, count }));
+        setTags(sorted);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>{[1,2,3,4,5].map(i => <div key={i} style={{ height: 38, width: 90, borderRadius: 20, background: 'var(--line)', animation: 'skelPulse 1.4s ease-in-out infinite' }} />)}</div>;
+  if (!tags.length) return <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--ink-3)' }}><div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)', marginBottom: 8 }}>No hashtags yet</div><p style={{ fontSize: 14, margin: 0 }}>Start using #hashtags in your posts to see them here.</p></div>;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+      {tags.map(t => (
+        <button key={t.tag} onClick={() => onSelect(t.tag)} className="chip" style={{ cursor: 'pointer', fontSize: 14, padding: '8px 16px' }}>
+          #{t.tag} <span style={{ color: 'var(--ink-3)', fontSize: 12, marginLeft: 6 }}>{t.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // =============== Desktop Explore ===============
 export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const incomingTag = params?.tag as string | undefined;
@@ -1364,6 +1399,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
   const [tagPosts, setTagPosts] = React.useState<any[]>([]);
   const [tagLoading, setTagLoading] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [realCommunities, setRealCommunities] = React.useState<any[]>([]);
   const [searching, setSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<{ users: any[]; posts: any[]; communities: any[] } | null>(null);
   const searchDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1376,17 +1412,24 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
     if (incomingTag) { setActiveTag(incomingTag); setTab('tags'); }
   }, [incomingTag]);
 
+  React.useEffect(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase.from('communities').select('id, name, cat, member_count, cover_url, slug').order('member_count', { ascending: false }).limit(3);
+      if (data?.length) setRealCommunities(data);
+    }).catch(() => {});
+  }, []);
+
   const runSearch = React.useCallback(async (q: string) => {
     if (!q.trim()) { setSearchResults(null); return; }
     setSearching(true);
     const { supabase } = await import('@/lib/supabase');
     const term = q.trim();
-    const [{ data: users }, { data: posts }] = await Promise.all([
+    const [{ data: users }, { data: posts }, { data: communities }] = await Promise.all([
       supabase.from('profiles').select('id, handle, full_name, avatar_url, verified, bio, impact_score').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(6),
       supabase.from('posts').select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)').ilike('content', `%${term}%`).is('community_id', null).order('created_at', { ascending: false }).limit(8),
+      supabase.from('communities').select('id, name, cat, member_count, slug').or(`name.ilike.%${term}%,cat.ilike.%${term}%`).limit(5),
     ]);
-    const communities = MOCK.communities.filter(c => c.name.toLowerCase().includes(term.toLowerCase()) || c.cat.toLowerCase().includes(term.toLowerCase()));
-    setSearchResults({ users: users ?? [], posts: posts ?? [], communities });
+    setSearchResults({ users: users ?? [], posts: posts ?? [], communities: communities ?? [] });
     setSearching(false);
   }, []);
 
@@ -1529,13 +1572,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
         {!isSearching && tab === 'tags' && (
           <div>
             {!activeTag ? (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
-                {MOCK.trends.map(t => (
-                  <button key={t.tag} onClick={() => setActiveTag(t.tag)} className="chip" style={{ cursor: 'pointer', fontSize: 14, padding: '8px 16px' }}>
-                    #{t.tag} <span style={{ color: 'var(--ink-3)', fontSize: 12, marginLeft: 6 }}>{t.posts}</span>
-                  </button>
-                ))}
-              </div>
+              <RealTagCloud onSelect={setActiveTag} />
             ) : (
               <>
                 <button onClick={() => setActiveTag(null)} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, cursor: 'pointer', fontSize: 13, marginBottom: 16, padding: 0 }}>← All tags</button>
@@ -1617,7 +1654,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
             ['Transport', 'bolt', '#e6b450'],
             ['Policy', 'globe', '#5c635e'],
           ].map(([label, icon, col]) => (
-            <div key={label} onClick={() => app.openModal?.('list', { title: label + ' on Honua', icon, sub: 'Recent posts and projects in this category', items: MOCK.posts.slice(0, 4).map(p => ({ icon, title: p.content.slice(0, 48) + '…', sub: '@' + MOCK.users[p.user].handle + ' · ' + p.time })) })} style={{
+            <div key={label} onClick={() => { setTab('tags'); setActiveTag(label.toLowerCase()); }} style={{
               background: 'var(--surface)', borderRadius: 14, padding: 16,
               border: '1px solid var(--line)', cursor: 'pointer',
             }} className="post-card">
@@ -1641,19 +1678,23 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           <button style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 500, cursor: 'pointer', fontSize: 13 }} onClick={() => onNav?.('forum')}>See all →</button>
         </div>
         <div className="explore-community-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
-          {MOCK.communities.slice(0, 3).map(c => {
+          {realCommunities.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '32px 0', color: 'var(--ink-3)', fontSize: 14 }}>No communities yet — <button onClick={() => onNav?.('forum')} style={{ background: 'none', border: 'none', color: 'var(--green)', fontWeight: 600, cursor: 'pointer', fontSize: 14, padding: 0 }}>create one</button></div>
+          ) : realCommunities.map((c: any) => {
             const joined = app.community?.has(c.name);
             return (
-            <div key={c.name} onClick={() => onNav?.('communities', { slug: (c as any).slug || c.name })} className="post-card" style={{
+            <div key={c.id ?? c.name} onClick={() => onNav?.('communities', { slug: c.slug || c.name })} className="post-card" style={{
               background: 'var(--surface)', borderRadius: 16,
               border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer',
             }}>
-              <ImagePlaceholder label={c.cover} height={120} />
+              {c.cover_url
+                ? <img src={c.cover_url} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                : <ImagePlaceholder label={c.name} height={120} />}
               <div style={{ padding: 14 }}>
                 <span className="chip">{c.cat}</span>
                 <h3 style={{ margin: '8px 0 4px', fontSize: 16, fontWeight: 600 }}>{c.name}</h3>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.members} members</div>
-                <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.community.toggle(c.name); app.toast?.(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}`, kind: 'success', icon: 'users' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join community'}</button>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{(c.member_count ?? 0).toLocaleString()} members</div>
+                <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); app.community?.toggle(c.name); app.toast?.(joined ? { msg: `Left ${c.name}`, icon: 'users' } : { msg: `Joined ${c.name}`, kind: 'success', icon: 'users' }); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join community'}</button>
               </div>
             </div>
             );

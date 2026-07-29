@@ -20,7 +20,13 @@ export async function GET(req: NextRequest) {
       html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ??
       null;
     const description = meta('description');
-    const image = meta('image');
+    const rawImage = meta('image');
+    // Resolve relative or protocol-relative image URLs
+    const image = rawImage
+      ? rawImage.startsWith('//') ? `https:${rawImage}`
+        : rawImage.startsWith('http') ? rawImage
+        : new URL(rawImage, url).href
+      : null;
     const siteName = meta('site_name') ?? new URL(url).hostname.replace(/^www\./, '');
 
     return NextResponse.json({ title, description, image, siteName, url });

@@ -498,7 +498,7 @@ export function formatCount(n) {
 let _trendsCache: { tag: string; posts: string }[] | null = null;
 export function TrendingPanel() {
   const app = useApp();
-  const [trends, setTrends] = React.useState<{ tag: string; posts: string }[]>(_trendsCache ?? MOCK.trends);
+  const [trends, setTrends] = React.useState<{ tag: string; posts: string }[]>(_trendsCache ?? []);
   const [isReal, setIsReal] = React.useState(!!_trendsCache);
 
   React.useEffect(() => {
@@ -530,6 +530,8 @@ export function TrendingPanel() {
       }
     }).catch(() => {});
   }, []);
+
+  if (!trends.length) return null;
 
   return (
     <div style={{
@@ -644,21 +646,17 @@ export function SuggestedFollows() {
         .select('id, handle, full_name, avatar_url, verified, impact_score')
         .order('impact_score', { ascending: false })
         .limit(20);
-      if (!data?.length) return;
       const followedHandles: string[] = app.state?.following ?? [];
-      const filtered = data
+      const filtered = (data ?? [])
         .filter((p: any) => p.id !== app.user?.id && p.handle && !followedHandles.includes(p.handle))
         .slice(0, 3);
-      if (filtered.length) setPeople(filtered);
+      setPeople(filtered);
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app.user?.id]);
 
-  // Fall back to demo users until real profiles exist
-  const list = people ?? ['okafor', 'maya', 'greentech'].map(k => {
-    const u = MOCK.users[k];
-    return { handle: u.handle, full_name: u.name, avatar_url: u.avatar, verified: u.verified, impact_score: u.score, _mock: true };
-  });
+  if (!people || people.length === 0) return null;
+  const list = people;
 
   return (
     <div style={{

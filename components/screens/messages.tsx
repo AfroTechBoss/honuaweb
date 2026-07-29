@@ -3,6 +3,35 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
 
+const _ogMsgCache: Record<string, any> = {};
+function MsgOgPreview({ content }: { content?: string | null }) {
+  const urls = (content?.match(/https?:\/\/[^\s]+/g) ?? []).filter((u: string) => {
+    try { const h = new URL(u).hostname; return !h.includes('supabase') && !h.includes('localhost'); } catch { return false; }
+  });
+  const url = urls[0];
+  const [og, setOg] = React.useState<any>(_ogMsgCache[url ?? ''] ?? null);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    if (!url) return;
+    if (_ogMsgCache[url]) { setOg(_ogMsgCache[url]); return; }
+    fetch(`/api/og?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => { if (d.title) { _ogMsgCache[url] = d; setOg(d); } else setFailed(true); })
+      .catch(() => setFailed(true));
+  }, [url]);
+  if (!url || failed || !og) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      style={{ display: 'block', maxWidth: 280, border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', textDecoration: 'none', color: 'inherit', background: 'var(--bg)' }}>
+      {og.image && <img src={og.image} alt="" style={{ width: '100%', maxHeight: 140, objectFit: 'cover', display: 'block' }} />}
+      <div style={{ padding: '8px 12px' }}>
+        <div style={{ fontSize: 10, color: 'var(--ink-4)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{og.siteName}</div>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ink)', lineHeight: 1.3 }}>{og.title}</div>
+      </div>
+    </a>
+  );
+}
+
 function msgTimeAgo(ts: string) {
   const normalized = ts.endsWith('Z') || ts.includes('+') ? ts : ts + 'Z';
   const s = Math.floor((Date.now() - new Date(normalized).getTime()) / 1000);
@@ -533,7 +562,12 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
                               padding: '10px 14px',
                               borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                               fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                            }}>{m.content}</div>
+                            }}>{(m.content ?? '').split(/(https?:\/\/[^\s]+)/).map((part: string, i: number) =>
+                              /^https?:\/\//.test(part)
+                                ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: isMe ? 'rgba(255,255,255,0.9)' : 'var(--sky)', textDecoration: 'underline', wordBreak: 'break-all' }}>{part}</a>
+                                : <React.Fragment key={i}>{part}</React.Fragment>
+                            )}</div>
+                            <MsgOgPreview content={m.content} />
                             <div className={isLast ? '' : 'msg-time-hover'} style={{ fontSize: 10, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
                               {msgTimeAgo(m.created_at)}
                               {isMe && isAccepted && m.seen_at && ' · Seen'}

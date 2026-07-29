@@ -668,6 +668,38 @@ export function Stat({ n, l, green, light, onClick }: { n: any; l: any; green?: 
   );
 };
 
+// ── OG link previews for post detail ─────────────────────────────────────────
+const _ogDetailCache: Record<string, any> = {};
+function PostDetailOgCard({ url }: { url: string }) {
+  const [og, setOg] = React.useState<any>(_ogDetailCache[url] ?? null);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    if (_ogDetailCache[url]) { setOg(_ogDetailCache[url]); return; }
+    fetch(`/api/og?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(d => { if (d.title) { _ogDetailCache[url] = d; setOg(d); } else setFailed(true); })
+      .catch(() => setFailed(true));
+  }, [url]);
+  if (failed || !og) return null;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      style={{ display: 'block', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden', marginBottom: 16, textDecoration: 'none', color: 'inherit', background: 'var(--bg)' }}>
+      {og.image && <img src={og.image} alt="" style={{ width: '100%', maxHeight: 220, objectFit: 'cover', display: 'block' }} />}
+      <div style={{ padding: '10px 14px' }}>
+        <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{og.siteName}</div>
+        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', lineHeight: 1.4, marginBottom: og.description ? 4 : 0 }}>{og.title}</div>
+        {og.description && <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{og.description}</div>}
+      </div>
+    </a>
+  );
+}
+function PostDetailOgPreviews({ content }: { content?: string | null }) {
+  const urls = (content?.match(/https?:\/\/[^\s]+/g) ?? []) as string[];
+  const external = urls.filter(u => { try { const h = new URL(u).hostname; return !h.includes('supabase') && !h.includes('localhost'); } catch { return false; } });
+  if (!external.length) return null;
+  return <>{external.map(u => <PostDetailOgCard key={u} url={u} />)}</>;
+}
+
 // =============== Desktop Post Detail ===============
 export function DesktopPostDetail({ onNav, params }) {
   const app = useApp();
@@ -686,19 +718,13 @@ export function DesktopPostDetail({ onNav, params }) {
       .then(({ data, error }) => { if (error) console.error('[PostDetail]', error); setDbPost(data); setLoading(false); });
   }, [params?.id]);
 
-  const post = dbPost || MOCK.posts.find(p => p.id === params?.id) || MOCK.posts[0];
-  const isMock = !dbPost;
-  const user = isMock ? MOCK.users[(post as any).user] : null;
-  const displayProfile = isMock ? user : post.profile;
-  const liked = app.like?.has(post.id);
-  const saved = app.save?.has(post.id);
-  const following = isMock ? app.follow?.has(user?.handle) : app.follow?.has(displayProfile?.handle);
-  const [tree, setTree] = React.useState<any[]>(isMock ? makeCommentSeed() : []);
+  const [tree, setTree] = React.useState<any[]>([]);
   const [reply, setReply] = React.useState('');
   const [showBookmark, setShowBookmark] = React.useState(false);
+  const [liveCommentCount, setLiveCommentCount] = React.useState<number | null>(null);
 
   // Build a nested tree from flat DB rows
-  const buildTree = (rows: any[]) => {
+  const buildTree = React.useCallback((rows: any[]) => {
     const map: Record<string, any> = {};
     rows.forEach(r => { map[r.id] = { ...r, replies: [] }; });
     const roots: any[] = [];
@@ -707,9 +733,7 @@ export function DesktopPostDetail({ onNav, params }) {
       else roots.push(map[r.id]);
     });
     return roots;
-  };
-
-  const [liveCommentCount, setLiveCommentCount] = React.useState<number | null>(null);
+  }, []);
 
   // Load real comments from DB
   const loadComments = React.useCallback(async (postId: string) => {
@@ -722,28 +746,32 @@ export function DesktopPostDetail({ onNav, params }) {
       setTree(buildTree(data));
       setLiveCommentCount(data.length);
     }
-  }, []);
+  }, [buildTree]);
 
   React.useEffect(() => {
-    if (isMock || !post?.id) return;
-    loadComments(post.id);
-    const ch = supabase.channel(`comments-${post.id}-${Math.random().toString(36).slice(2)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: `post_id=eq.${post.id}` },
-        () => loadComments(post.id))
+    if (!dbPost?.id) return;
+    loadComments(dbPost.id);
+    const ch = supabase.channel(`comments-${dbPost.id}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: `post_id=eq.${dbPost.id}` },
+        () => loadComments(dbPost.id))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [isMock, post?.id, loadComments]);
+  }, [dbPost?.id, loadComments]);
+
+  if (loading) return <PostDetailSkeleton />;
+  if (!dbPost) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-3)' }}>Post not found.</div>;
+
+  const post = dbPost;
+  const isMock = false;
+  const displayProfile = post.profile;
+  const liked = app.like?.has(post.id);
+  const saved = app.save?.has(post.id);
+  const following = app.follow?.has(displayProfile?.handle);
 
   const postReply = async () => {
     if (!reply.trim()) return;
     const text = reply.trim();
     setReply('');
-    if (isMock) {
-      setTree(c => [{ id: Date.now(), user: app.user?.handle || 'you', text, time: 'now', likes: 0, replies: [] }, ...c]);
-      setDbPost((p: any) => p ? { ...p, comments_count: (p.comments_count ?? 0) + 1 } : p);
-      app.toast?.({ msg: 'Comment posted', kind: 'success', icon: 'comment' });
-      return;
-    }
     if (!app.user?.id) return;
     // Optimistic insert — shows 'now' immediately; realtime will replace with DB row
     const optimisticId = `opt-${Date.now()}`;
@@ -763,7 +791,6 @@ export function DesktopPostDetail({ onNav, params }) {
   };
 
   const postReplyToComment = async (parentId: string | number, text: string) => {
-    if (isMock) return;
     if (!app.user?.id) return;
     // Optimistic count bump; tree is already updated locally by CommentThread
     setLiveCommentCount(n => (n ?? 0) + 1);
@@ -805,13 +832,13 @@ export function DesktopPostDetail({ onNav, params }) {
           {lightbox && <ImageLightbox label={lightbox} onClose={() => setLightbox(null)} />}
           <article className="post-detail-article" style={{ background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)', padding: 28, marginBottom: 16 }}>
             <header style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-              <span onClick={() => onNav?.('profile', { handle: displayProfile?.handle })} style={{ cursor: 'pointer' }}><Avatar src={isMock ? displayProfile?.avatar : displayProfile?.avatar_url} name={displayProfile?.full_name || displayProfile?.name} size={56} verified={displayProfile?.verified} /></span>
+              <span onClick={() => onNav?.('profile', { handle: displayProfile?.handle })} style={{ cursor: 'pointer' }}><Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={56} verified={displayProfile?.verified} /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontWeight: 600, fontSize: 17 }}>{displayProfile?.full_name || displayProfile?.name}</span>
                   {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 16, height: 16, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 10 }}>✓</span>}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle} {isMock ? `· ${(post as any).time} ago · ${(post as any).location}` : ''}</div>
+                <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle}</div>
               </div>
               {app.user?.id !== (dbPost?.user_id) && displayProfile?.handle !== app.user?.handle && (
                 <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={() => { app.follow.toggle(displayProfile?.handle); app.toast?.(following ? { msg: `Unfollowed ${displayProfile?.full_name || displayProfile?.name}`, icon: 'user' } : { msg: `Following ${displayProfile?.full_name || displayProfile?.name}`, kind: 'success', icon: 'user' }); }}>{following ? 'Following' : 'Follow'}</button>
@@ -819,25 +846,26 @@ export function DesktopPostDetail({ onNav, params }) {
               <PostMoreMenu
                 profile={displayProfile}
                 postId={post.id}
-                isOwn={!isMock && (dbPost?.user_id === app.user?.id || displayProfile?.handle === app.user?.handle)}
-                postContent={isMock ? '' : (post.content ?? '')}
-                postCreatedAt={isMock ? '' : (dbPost?.created_at ?? post.created_at ?? '')}
+                isOwn={dbPost?.user_id === app.user?.id || displayProfile?.handle === app.user?.handle}
+                postContent={post.content ?? ''}
+                postCreatedAt={dbPost?.created_at ?? ''}
               />
             </header>
             <p style={{ fontSize: 19, lineHeight: 1.55, margin: '0 0 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {(isMock ? (post as any).content : post.content)?.split('\n').map((line: string, li: number, arr: string[]) => (
+              {post.content?.split('\n').map((line: string, li: number, arr: string[]) => (
                 <React.Fragment key={li}>
-                  {line.split(/(\s+)/).map((word: string, i: number) => {
-                    const match = word.match(/^(#\w+)(.*)/);
-                    if (match) return <React.Fragment key={i}><span onClick={() => onNav?.('explore', { tag: match[1].slice(1) })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{match[1]}</span>{match[2]}</React.Fragment>;
-                    return word;
+                  {line.split(/(https?:\/\/[^\s]+|@\w+|#\w+)/).map((part: string, i: number) => {
+                    if (/^#\w+$/.test(part)) return <span key={i} onClick={() => onNav?.('explore', { tag: part.slice(1) })} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{part}</span>;
+                    if (/^@\w+$/.test(part)) return <span key={i} style={{ color: 'var(--sky)', fontWeight: 500, cursor: 'pointer' }}>{part}</span>;
+                    if (/^https?:\/\//.test(part)) return <a key={i} href={part} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--sky)', textDecoration: 'none', wordBreak: 'break-all' }}>{part}</a>;
+                    return <React.Fragment key={i}>{part}</React.Fragment>;
                   })}
                   {li < arr.length - 1 && <br />}
                 </React.Fragment>
               ))}
             </p>
-            {isMock && (post as any).image && <ImagePlaceholder label={(post as any).image} height={420} src={(post as any).imageUrl} />}
-            {!isMock && post.image_url && (
+            <PostDetailOgPreviews content={post.content} />
+            {post.image_url && (
               <img
                 src={post.image_url}
                 alt=""
@@ -847,36 +875,13 @@ export function DesktopPostDetail({ onNav, params }) {
             )}
             {/* Demo posts keep the illustrative stat strip; real posts show the
                 actual community-verification state of their linked impact log. */}
-            {isMock ? (
-              <div className="post-detail-stats" style={{
-                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10,
-                marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12,
-              }}>
-                <div>
-                  <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>VERIFIED IMPACT</div>
-                  <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>−1.4 t</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>CO₂ /yr · oracle-verified May 19</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>ENERGY SAVED</div>
-                  <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>3.2 MWh</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>vs 2024 baseline</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.05em' }}>$ SAVED</div>
-                  <div style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>$3,012</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>annual co-op savings</div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ marginTop: 18 }}>
-                <PostImpactVouch postId={post.id} isOwn={dbPost?.user_id === app.user?.id} />
-              </div>
-            )}
+            <div style={{ marginTop: 18 }}>
+              <PostImpactVouch postId={post.id} isOwn={dbPost?.user_id === app.user?.id} />
+            </div>
             <footer style={{ display: 'flex', gap: 28, marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-              <ActionBtn icon="heart" count={(isMock ? (post as any).likes : (post.likes_count ?? 0)) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
-              <ActionBtn icon="comment" count={isMock ? (post as any).comments : (liveCommentCount ?? post.comments_count ?? 0)} onClick={() => document.getElementById('pd-reply')?.focus()} />
-              <ActionBtn icon="repost" count={(isMock ? (post as any).reposts : (post.reposts_count ?? 0)) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
+              <ActionBtn icon="heart" count={(post.likes_count ?? 0) + (app.realtimeDeltas?.[post.id]?.likes ?? 0)} active={liked} activeColor="var(--clay)" onClick={() => app.like.toggle(post.id)} />
+              <ActionBtn icon="comment" count={liveCommentCount ?? post.comments_count ?? 0} onClick={() => document.getElementById('pd-reply')?.focus()} />
+              <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
                 <ActionBtn icon="bookmark" active={saved} onClick={() => setShowBookmark(true)} />
                 <ActionBtn icon="share" onClick={() => app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' })} />
@@ -898,19 +903,14 @@ export function DesktopPostDetail({ onNav, params }) {
             <Avatar src={app.user?.avatar} name={app.user?.name || 'Y'} size={40} />
             <div style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 12 }}>
               <input id="pd-reply" value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') postReply(); }} placeholder="Add a comment…" style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontSize: 14 }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 8, color: 'var(--ink-3)' }}>
-                  <Icon name="image" size={16} />
-                  <Icon name="pin" size={16} />
-                  <Icon name="leaf" size={16} />
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
                 <button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={postReply}>Reply</button>
               </div>
             </div>
           </div>
 
           {/* Comments */}
-          <CommentThread tree={tree} setTree={setTree} onNav={onNav} onDbReply={isMock ? undefined : postReplyToComment} />
+          <CommentThread tree={tree} setTree={setTree} onNav={onNav} onDbReply={postReplyToComment} />
         </div>
 
         {/* Right rail */}

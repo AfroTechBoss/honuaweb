@@ -25,7 +25,11 @@ export function ImpactVouchBar({ log, vouched, isOwn, onVouch }: { log: any; vou
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
-          {Number(log.co2_saved_kg ?? 0)} kg CO₂ · {log.category}
+          {Number(log.co2_saved_kg ?? 0) > 0
+            ? `${Number(log.co2_saved_kg).toFixed(2).replace(/\.?0+$/, '')} kg CO₂ · ${log.category}`
+            : log.quantity && log.unit
+              ? `${log.quantity} ${log.unit} · ${log.category}`
+              : log.category}
         </div>
         <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', letterSpacing: '.04em', color: verified ? 'var(--green)' : 'var(--ink-3)', marginTop: 2 }}>
           {verified
