@@ -173,7 +173,7 @@ export function MCommunityCompose({ close, data }: { close: () => void; data?: {
 export function MCompose({ close, data }: { close: () => void; data?: { community?: string; communityId?: string } }) {
   const app = useApp();
   const [text, setText] = React.useState('');
-  const [cat, setCat] = React.useState('Energy');
+  const [cat, setCat] = React.useState('General');
   const [postKind, setPostKind] = React.useState<string | null>(null);
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
@@ -475,26 +475,9 @@ export function MCompose({ close, data }: { close: () => void; data?: { communit
           </div>
         )}
         <div style={{ marginTop: 14 }}>
-          <span className="fld-label">Post type <span style={{ fontWeight: 400, color: 'var(--ink-3)' }}>(optional)</span></span>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {[
-              { kind: 'tip', label: '💡 Tip', color: 'var(--green)' },
-              { kind: 'question', label: '❓ Question', color: 'var(--sky)' },
-              { kind: 'win', label: '🏆 Win', color: '#f59e0b' },
-              { kind: 'discussion', label: '💬 Discussion', color: 'var(--ink-2)' },
-            ].map(({ kind, label, color }) => (
-              <button key={kind} onClick={() => setPostKind(postKind === kind ? null : kind)}
-                className="chip"
-                style={{ cursor: 'pointer', background: postKind === kind ? color + '20' : undefined, color: postKind === kind ? color : undefined, border: postKind === kind ? `1px solid ${color}40` : undefined, fontWeight: postKind === kind ? 700 : undefined }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ marginTop: 14 }}>
           <span className="fld-label">Category</span>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {['Energy', 'Waste', 'Transport', 'Food', 'Nature', 'Policy'].map(c => (
+            {['General', 'Energy', 'Waste', 'Transport', 'Food', 'Nature', 'Policy'].map(c => (
               <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>
             ))}
           </div>
