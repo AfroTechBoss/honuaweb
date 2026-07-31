@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
 
 export function Toggle({ on }) {
@@ -181,7 +181,13 @@ export function MCredit({ data, close }) {
   const handleBuy = async () => {
     setBuying(true);
     try {
-      // Record the retirement in Supabase when signed in and the credit is real
+      // A retirement is only recordable against a credit that exists in the registry.
+      // Without an id there is nothing to retire, so don't write a record or claim one.
+      if (!data.id) {
+        app.toast?.({ msg: 'This credit is no longer listed', kind: 'error', icon: 'leaf' });
+        close();
+        return;
+      }
       if (app.user?.id) {
         const { purchaseCredit } = await import('@/lib/market');
         await purchaseCredit(app.user.id, { id: data.id, name: data.name }, qty, Math.round(unit * qty * 100));
@@ -274,9 +280,9 @@ export function MDiscussion({ data, close }) {
           const cu = MOCK.users[k];
           return (
             <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
-              <Avatar src={cu.avatar} name={cu.name} size={34} verified={cu.verified} />
+              <Avatar src={cu.avatar} name={cu.name} size={34} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13 }}><strong>{cu.name}</strong> <span style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>· {t}</span></div>
+                <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><strong>{cu.name}</strong>{cu.verified && <VerifiedTick size={12} />} <span style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>· {t}</span></div>
                 <p style={{ margin: '3px 0 0', fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>{c}</p>
               </div>
             </div>

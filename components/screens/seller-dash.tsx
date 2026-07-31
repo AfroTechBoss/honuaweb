@@ -159,7 +159,7 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
         {/* Seller header strip */}
         <div style={{ padding: '18px 32px 0', background: 'var(--surface)', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Avatar src={shopLogo} name={shop.name} size={46} verified />
+            <Avatar src={shopLogo} name={shop.name} size={46} />
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <h1 className="font-display" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>{shop.name}</h1>
@@ -952,7 +952,7 @@ function StorefrontTab({ shop }) {
         </div>
         <div style={{ padding: '0 24px 24px' }}>
           <div style={{ marginTop: -32, display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-            <Avatar name={shop.name} size={72} verified />
+            <Avatar name={shop.name} size={72} />
             <div style={{ paddingBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="font-display" style={{ fontSize: 22, fontWeight: 600 }}>{shop.name}</span>

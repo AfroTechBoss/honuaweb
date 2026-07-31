@@ -164,7 +164,8 @@ function UserDrawer({ u, onClose, onStatus, onRole }) {
         </div>
         <div style={{ padding: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Avatar name={u.name} size={56} verified={u.role === 'Seller' || u.role === 'Moderator'} />
+            {/* No tick here — <RoleChip> below already states Seller/Moderator outright. */}
+            <Avatar name={u.name} size={56} />
             <div>
               <div className="font-display" style={{ fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em' }}>{u.name}</div>
               <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>

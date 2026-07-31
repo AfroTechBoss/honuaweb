@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS } from "@/lib/impact";
@@ -30,9 +30,12 @@ function BookmarkPostCard({ post, onNav }: { post: any; onNav: any }) {
         </div>
         <div style={{ padding: '0 16px 14px' }}>
           <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 8 }}>
-            <Avatar src={profile?.avatar_url} name={profile?.full_name} size={28} verified={profile?.verified} />
+            <Avatar src={profile?.avatar_url} name={profile?.full_name} size={28} />
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>{profile?.full_name}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                {profile?.full_name}
+                {profile?.verified && <VerifiedTick size={12} />}
+              </div>
               <div style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</div>
             </div>
           </div>
@@ -54,9 +57,12 @@ function BookmarkPostCard({ post, onNav }: { post: any; onNav: any }) {
   return (
     <div onClick={handleClick} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 18, cursor: 'pointer' }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-        <Avatar src={profile?.avatar_url} name={profile?.full_name} size={32} verified={profile?.verified} />
+        <Avatar src={profile?.avatar_url} name={profile?.full_name} size={32} />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{profile?.full_name}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            {profile?.full_name}
+            {profile?.verified && <VerifiedTick size={12} />}
+          </div>
           <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</div>
         </div>
       </div>

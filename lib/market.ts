@@ -442,7 +442,8 @@ export async function getDbOrders(userId: string): Promise<any[]> {
 // ---- Carbon credits ----
 export type CarbonCredit = {
   id: string; name: string; region: string; type: string; verifier: string;
-  vintage: string; price: string; price_cents: number; volume: string; tag: string; color: string;
+  vintage: string; price: string; price_cents: number; volume: string; volume_t: number;
+  tag: string; color: string;
 };
 
 export async function getCarbonCredits(): Promise<CarbonCredit[]> {
@@ -462,7 +463,8 @@ export async function getCarbonCredits(): Promise<CarbonCredit[]> {
       vintage: c.vintage ?? '',
       price: cents(c.price_cents),
       price_cents: c.price_cents,
-      volume: `${Number(c.volume_t).toLocaleString()} tCO₂`,
+      volume: `${Number(c.volume_t ?? 0).toLocaleString()} tCO₂`,
+      volume_t: Number(c.volume_t ?? 0),
       tag: c.tag ?? 'Verified',
       color: c.tag === 'Removal' ? 'var(--sky)' : c.tag === 'Premium' ? 'var(--green)' : 'var(--green-2)',
     }));

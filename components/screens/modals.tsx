@@ -1483,27 +1483,153 @@ export function MAutoOffset({ close }) {
 // --- Offset my year ---
 export function MOffsetYear({ close }) {
   const app = useApp();
+  const year = new Date().getFullYear();
+  const [credits, setCredits] = React.useState<any[] | null>(null);
+  const [pickId, setPickId] = React.useState<string | null>(null);
+  const [tonnes, setTonnes] = React.useState(1);
+  const [buying, setBuying] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    import('@/lib/market')
+      .then(({ getCarbonCredits }) => getCarbonCredits())
+      .then(all => {
+        if (cancelled) return;
+        // Only credits with something left to retire, cheapest first
+        const open = all.filter(c => c.volume_t > 0).sort((a, b) => a.price_cents - b.price_cents);
+        setCredits(open);
+        setPickId(open[0]?.id ?? null);
+      })
+      .catch(() => { if (!cancelled) setCredits([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const loading = credits === null;
+  const pick = credits?.find(c => c.id === pickId) ?? null;
+  const maxT = pick ? Math.max(1, Math.floor(pick.volume_t)) : 1;
+  const qty = Math.min(tonnes, maxT);
+  const unit = pick ? pick.price_cents / 100 : 0;
+  const total = unit * qty;
+  const signedIn = !!app.user?.id;
+
+  const confirm = async () => {
+    if (!pick || !signedIn) return;
+    setBuying(true);
+    try {
+      const { purchaseCredit } = await import('@/lib/market');
+      const ok = await purchaseCredit(app.user.id, { id: pick.id, name: pick.name }, qty, Math.round(total * 100));
+      if (!ok) {
+        app.toast?.({ msg: "Couldn't record that retirement", kind: 'error', icon: 'leaf' });
+        return;
+      }
+      window.dispatchEvent(new Event('honua:offset-purchased'));
+      close();
+      app.openModal('celebrate', {
+        title: `Offset ${qty} t CO₂`,
+        sub: `You retired ${qty} tonne${qty === 1 ? '' : 's'} via ${pick.name} for $${total.toFixed(2)}. Certificate added to your wallet.`,
+      });
+    } finally { setBuying(false); }
+  };
+
   return (
     <Modal onClose={close} width={480}>
-      <ModalHead icon="globe" title="Offset your 2026 footprint" sub="Based on your tracked actions, here's your estimated remaining footprint." onClose={close} />
-      <div style={{ padding: '18px 24px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, justifyContent: 'center', padding: '6px 0 14px' }}>
-          <span style={{ fontSize: 46, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>1.4 t</span>
-          <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>CO₂ to offset</span>
+      {/* The app logs CO₂ saved, never CO₂ emitted — so there is no footprint to
+          estimate, and claiming one would be inventing it. The user picks instead. */}
+      <ModalHead
+        icon="globe"
+        title={`Offset your ${year}`}
+        sub="Honua tracks the CO₂ you save, not the CO₂ you emit — so choose how much you'd like to retire."
+        onClose={close}
+      />
+
+      {loading ? (
+        <div style={{ padding: '28px 24px' }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ height: 14, borderRadius: 4, background: 'var(--line)', marginBottom: 12, width: `${[70, 90, 45][i - 1]}%` }} />
+          ))}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--line)', fontSize: 14 }}>
-          <span style={{ color: 'var(--ink-3)' }}>1.4 t × $24.10 spot</span><span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600 }}>$33.74</span>
+      ) : !pick ? (
+        <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+          <div style={{ width: 46, height: 46, borderRadius: 14, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center', margin: '0 auto 12px' }}>
+            <Icon name="leaf" size={20} stroke={2} />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Nothing available to retire</div>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+            Every listed credit is sold out right now. When new volume is listed it'll show up in the carbon market.
+          </p>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--line)', fontSize: 16, fontWeight: 600 }}>
-          <span>Total</span><span style={{ fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>$33.74</span>
+      ) : (
+        <div style={{ padding: '18px 24px 0' }}>
+          {/* Amount */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>Tonnes to retire</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button className="btn btn-ghost" style={stepBtn} disabled={qty <= 1} onClick={() => setTonnes(t => Math.max(1, t - 1))}>−</button>
+              <span style={{ fontSize: 22, fontWeight: 600, fontFamily: 'Lora', minWidth: 46, textAlign: 'center' }}>{qty} t</span>
+              <button className="btn btn-ghost" style={stepBtn} disabled={qty >= maxT} onClick={() => setTonnes(t => Math.min(maxT, t + 1))}>+</button>
+            </div>
+          </div>
+          {qty >= maxT && (
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'right', marginTop: 4 }}>
+              All {maxT} t available from this credit
+            </div>
+          )}
+
+          {/* Which credit it retires against */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', marginBottom: 8 }}>RETIRE AGAINST</div>
+            {credits.map(c => (
+              <button
+                key={c.id}
+                onClick={() => { setPickId(c.id); setTonnes(1); }}
+                style={{
+                  width: '100%', textAlign: 'left', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                  borderRadius: 10, marginBottom: 6, background: 'var(--surface)',
+                  border: `1px solid ${c.id === pickId ? 'var(--green)' : 'var(--line)'}`,
+                }}
+              >
+                <span style={{
+                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${c.id === pickId ? 'var(--green)' : 'var(--line)'}`,
+                  background: c.id === pickId ? 'var(--green)' : 'transparent',
+                }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{c.name}</span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--ink-3)' }}>
+                    {[c.type, c.region].filter(Boolean).join(' · ') || 'Verified credit'} · {Math.floor(c.volume_t).toLocaleString()} t left
+                  </span>
+                </span>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600 }}>{c.price}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Total */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--line)', marginTop: 6, fontSize: 14 }}>
+            <span style={{ color: 'var(--ink-3)' }}>{qty} t × ${unit.toFixed(2)}</span>
+            <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600 }}>${total.toFixed(2)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid var(--line)', fontSize: 16, fontWeight: 600 }}>
+            <span>Total</span><span style={{ fontFamily: 'JetBrains Mono', color: 'var(--green)' }}>${total.toFixed(2)}</span>
+          </div>
         </div>
-      </div>
+      )}
+
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: 'Year offset — you\'re net zero!', sub: '1.4 t CO₂ retired across your project mix. Certificate added to your wallet.' }); }}>Offset 1.4 t · $33.74</button>
+        <button className="btn btn-ghost" onClick={close}>{pick ? 'Cancel' : 'Close'}</button>
+        {pick && (
+          <button className="btn btn-green" disabled={buying || !signedIn} onClick={confirm}>
+            {buying ? 'Retiring…' : !signedIn ? 'Sign in to offset' : `Offset ${qty} t · $${total.toFixed(2)}`}
+          </button>
+        )}
       </ModalFoot>
     </Modal>
   );
+};
+
+const stepBtn: React.CSSProperties = {
+  width: 32, height: 32, padding: 0, justifyContent: 'center', fontSize: 17, lineHeight: 1,
 };
 
 // --- Delete account (two-step) ---

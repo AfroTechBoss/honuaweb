@@ -1,13 +1,29 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { PostDetailSkeleton } from "@/components/primitives";
 import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
+import { getAllLogs } from "@/lib/impact";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
 import { ALL_PRODUCTS } from "@/components/screens/product-detail";
 import { loadOrders } from "@/components/screens/orders";
 import { ImpactVouchBar, useImpactVouches, PostImpactVouch } from "@/components/impact-vouch";
+
+// Lifetime totals, summed from the impact ledger itself. `profiles` carries
+// co2_avoided_kg / green_points columns, but nothing in the app ever writes to
+// them — reading those is how this card sat at zero for every account.
+export type ImpactTotals = { co2: number; verifiedCo2: number; pendingCount: number; points: number; actions: number };
+
+function totalsFromLogs(logs: any[]): ImpactTotals {
+  return {
+    co2: logs.reduce((s, l) => s + Number(l.co2_saved_kg ?? 0), 0),
+    verifiedCo2: logs.filter(l => l.status === 'verified').reduce((s, l) => s + Number(l.co2_saved_kg ?? 0), 0),
+    pendingCount: logs.filter(l => l.status === 'pending').length,
+    points: logs.reduce((s, l) => s + Number(l.points ?? 0), 0),
+    actions: logs.length,
+  };
+}
 
 function useProfileData(handleOrId: string | undefined, currentUserId: string | undefined) {
   const [profile, setProfile] = React.useState<any>(null);
@@ -16,6 +32,7 @@ function useProfileData(handleOrId: string | undefined, currentUserId: string | 
   const [followingCount, setFollowingCount] = React.useState(0);
   const [achievements, setAchievements] = React.useState<any[]>([]);
   const [projects, setProjects] = React.useState<any[]>([]);
+  const [impact, setImpact] = React.useState<ImpactTotals | null>(null);
   const [following, setFollowing] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
@@ -26,18 +43,20 @@ function useProfileData(handleOrId: string | undefined, currentUserId: string | 
       getProfile(handleOrId),
     ]).then(async ([p]) => {
       setProfile(p);
-      const [postsData, fc, fwc, ach, proj] = await Promise.all([
+      const [postsData, fc, fwc, ach, proj, logs] = await Promise.all([
         getProfilePosts(p.id),
         getFollowerCount(p.id),
         getFollowingCount(p.id),
         getAchievements(p.id),
         getProjects(p.id),
+        getAllLogs(p.id),
       ]);
       setPosts(postsData);
       setFollowerCount(fc);
       setFollowingCount(fwc);
       setAchievements(ach);
       setProjects(proj);
+      setImpact(totalsFromLogs(logs));
       if (currentUserId && currentUserId !== p.id) {
         setFollowing(await isFollowing(currentUserId, p.id));
       }
@@ -45,7 +64,15 @@ function useProfileData(handleOrId: string | undefined, currentUserId: string | 
     }).catch(() => setLoading(false));
   }, [handleOrId, currentUserId]);
 
-  return { profile, posts, followerCount, followingCount, achievements, projects, following, setFollowing, loading };
+  return { profile, posts, followerCount, followingCount, achievements, projects, impact, following, setFollowing, loading };
+}
+
+// kg up to a tonne, then tonnes. Keeps one decimal under 10 kg so a first small
+// action doesn't round away to "0kg".
+function kgLabel(kg: number): string {
+  if (kg >= 1000) return `${(kg / 1000).toFixed(1)}t`;
+  if (kg >= 10 || kg === 0) return `${Math.round(kg)}kg`;
+  return `${Math.round(kg * 10) / 10}kg`;
 }
 
 // =============== Desktop Profile ===============
@@ -58,7 +85,7 @@ export function DesktopProfile({ onNav, params }) {
   const lookupKey = (!handle || handle === 'you') ? app.user?.handle : handle;
   const isOwn = !handle || handle === 'you' || handle === app.user?.handle;
 
-  const { profile, posts, followerCount, followingCount, achievements, projects, following, setFollowing, loading } =
+  const { profile, posts, followerCount, followingCount, achievements, projects, impact, following, setFollowing, loading } =
     useProfileData(lookupKey, app.user?.id);
 
   // Check if this profile has blocked the current viewer
@@ -170,7 +197,7 @@ export function DesktopProfile({ onNav, params }) {
           {/* Avatar + actions row */}
           <div className="profile-avatar-row" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -52, marginBottom: 14, position: 'relative', zIndex: 1 }}>
             <div className="profile-avatar-wrap" style={{ borderRadius: '50%', overflow: 'hidden', width: 104, height: 104, flexShrink: 0, boxShadow: '0 2px 16px rgba(0,0,0,.2)' }}>
-              <Avatar src={profile.avatar_url} name={profile.full_name} size={104} verified={profile.verified} noBorder />
+              <Avatar src={profile.avatar_url} name={profile.full_name} size={104} noBorder />
             </div>
             <div className="profile-actions" style={{ display: 'flex', gap: 8, paddingBottom: 4 }}>
               {isOwn ? (
@@ -192,7 +219,7 @@ export function DesktopProfile({ onNav, params }) {
           <div className="profile-identity-row" style={{ marginBottom: 18, paddingTop: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <h1 className="font-display profile-name" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
-              {profile.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 22, height: 22, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 12 }}>✓</span>}
+              {profile.verified && <VerifiedTick size={22} />}
               {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
             </div>
             <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
@@ -222,32 +249,35 @@ export function DesktopProfile({ onNav, params }) {
                 <Stat n={followerCount.toLocaleString()} l="Followers" onClick={() => onNav?.('followers', { handle: profile.handle })} />
                 <Stat n={followingCount.toLocaleString()} l="Following" onClick={() => onNav?.('following', { handle: profile.handle })} />
                 <Stat n={profile.impact_score || 0} l="Impact score" green />
-                <Stat n={profile.co2_avoided_kg >= 1000 ? `${(profile.co2_avoided_kg / 1000).toFixed(1)}t` : `${profile.co2_avoided_kg || 0}kg`} l="CO₂ avoided" green />
+                <Stat n={impact ? kgLabel(impact.co2) : '—'} l="CO₂ avoided" green />
               </div>
             </div>
 
             <div style={{ background: 'linear-gradient(135deg, #1f6f3f, #2e9a5b)', color: '#fff', borderRadius: 16, padding: 20, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .85, letterSpacing: '.05em' }}>VERIFIED IMPACT · LIFETIME</div>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .85, letterSpacing: '.05em' }}>IMPACT LEDGER · LIFETIME</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
-                <Stat n={profile.co2_avoided_kg >= 1000 ? `${(profile.co2_avoided_kg / 1000).toFixed(1)}t` : `${profile.co2_avoided_kg || 0}kg`} l="CO₂ avoided" light />
-                <Stat n={profile.green_points?.toLocaleString() || 0} l="Green points" light />
+                <Stat n={impact ? kgLabel(impact.co2) : '—'} l="CO₂ avoided" light />
+                <Stat n={impact ? impact.points.toLocaleString() : '—'} l="Green points" light />
                 <Stat n={projects.length} l="Projects led" light />
                 <Stat n={achievements.length} l="Achievements" light />
+              </div>
+              {/* How much of that total the community has actually vouched for —
+                  the card used to claim "verified" over numbers nobody had checked. */}
+              <div style={{ fontSize: 11.5, marginTop: 12, opacity: .9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {impact === null
+                  ? <span>Couldn't load the ledger.</span>
+                  : impact.actions === 0
+                    ? <span>{isOwn ? 'Log your first action to start the ledger.' : 'No actions logged yet.'}</span>
+                    : impact.verifiedCo2 > 0
+                      ? <span>✓ {kgLabel(impact.verifiedCo2)} community-verified{impact.pendingCount ? ` · ${impact.pendingCount} pending` : ''}</span>
+                      : <span>{impact.actions} action{impact.actions === 1 ? '' : 's'} logged{impact.pendingCount ? ` · ${impact.pendingCount} awaiting vouches` : ' · none verified yet'}</span>
+                }
               </div>
               <button className="btn" style={{ background: 'rgba(255,255,255,.18)', color: '#fff', marginTop: 14, padding: '7px 12px', fontSize: 12 }} onClick={() => onNav?.('impact')}>
                 See full impact ledger →
               </button>
             </div>
           </div>
-
-          {/* Interests */}
-          {profile.interests?.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
-              {profile.interests.map((it: string) => (
-                <span key={it} style={{ fontSize: 12, background: 'var(--green-tint)', color: 'var(--green)', padding: '3px 10px', borderRadius: 999, fontWeight: 500 }}>{it}</span>
-              ))}
-            </div>
-          )}
 
           {/* Tabs */}
           <div className="profile-tabs" style={{ borderBottom: '1px solid var(--line)', marginBottom: 18, display: 'flex', gap: 4 }}>
@@ -357,7 +387,6 @@ export function DesktopProfile({ onNav, params }) {
 
             {/* Sidebar */}
             <div className="right-panel">
-              {/* Interests */}
               {achievements.length > 0 && (
                 <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
                   <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Achievements</h3>
@@ -383,7 +412,7 @@ export function DesktopProfile({ onNav, params }) {
               )}
 
               {profile.interests?.length > 0 && (
-                <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18 }}>
+                <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
                   <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>Interests</h3>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {profile.interests.map((it: string) => (
@@ -392,6 +421,8 @@ export function DesktopProfile({ onNav, params }) {
                   </div>
                 </div>
               )}
+
+              <SuggestedFollows />
             </div>
           </div>
         </div>
@@ -596,10 +627,11 @@ function RealPostCard({ post, onNav, isRepost = false, impact }: { post: any; on
         </div>
       )}
       <div style={{ display: 'flex', gap: 12 }}>
-        <span onClick={stop}><Avatar src={profile?.avatar_url} name={profile?.full_name} size={40} verified={profile?.verified} /></span>
+        <span onClick={stop}><Avatar src={profile?.avatar_url} name={profile?.full_name} size={40} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name}</span>
+            {profile?.verified && <VerifiedTick />}
             <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile?.handle} · {timeAgo(post.created_at)}</span>
             <PostMoreMenu profile={profile} postId={post.id} isOwn={isOwnPost} postContent={post.content ?? ''} postCreatedAt={post.created_at ?? ''} />
           </div>
@@ -639,10 +671,11 @@ export function CommentRow({ usr, text, time, likes, onNav }) {
   const [liked, setLiked] = React.useState(false);
   return (
     <div style={{ display: 'flex', gap: 12, padding: '14px 0', borderTop: '1px solid var(--line)' }}>
-      <span onClick={() => onNav?.('profile', { handle: usr.handle })} style={{ cursor: 'pointer' }}><Avatar src={usr.avatar} name={usr.name} size={36} verified={usr.verified} /></span>
+      <span onClick={() => onNav?.('profile', { handle: usr.handle })} style={{ cursor: 'pointer' }}><Avatar src={usr.avatar} name={usr.name} size={36} /></span>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{usr.name}</span>
+          {usr.verified && <VerifiedTick size={13} />}
           <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {time}</span>
         </div>
         <p style={{ margin: '4px 0 6px', fontSize: 14, lineHeight: 1.55 }}>{text}</p>
@@ -700,6 +733,67 @@ function PostDetailOgPreviews({ content }: { content?: string | null }) {
   return <>{external.map(u => <PostDetailOgCard key={u} url={u} />)}</>;
 }
 
+// ── About the author (real profile behind the post) ──────────────────────────
+function PostAuthorCard({ profile, onNav }: { profile: any; onNav: any }) {
+  const app = useApp();
+  const [stats, setStats] = React.useState<{ followers: number; posts: number } | null>(null);
+
+  React.useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    Promise.all([
+      getFollowerCount(profile.id),
+      supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', profile.id),
+    ]).then(([followers, { count }]) => {
+      if (!cancelled) setStats({ followers, posts: count ?? 0 });
+    }).catch(() => { if (!cancelled) setStats({ followers: 0, posts: 0 }); });
+    return () => { cancelled = true; };
+  }, [profile?.id]);
+
+  if (!profile?.handle) return null;
+
+  const name = profile.full_name || profile.name || `@${profile.handle}`;
+  const following = app.follow?.has(profile.handle);
+  const isSelf = profile.handle === app.user?.handle || profile.id === app.user?.id;
+  const openProfile = () => onNav?.('profile', { handle: profile.handle });
+
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
+      <h3 className="font-display" style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 600 }}>About the author</h3>
+      <div onClick={openProfile} className="row-hover" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', margin: '0 -8px', padding: '6px 8px', borderRadius: 10 }}>
+        <Avatar src={profile.avatar_url} name={name} size={48} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+            {profile.verified && <VerifiedTick />}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{profile.handle}</div>
+        </div>
+      </div>
+      {profile.bio && <p style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.55, color: 'var(--ink-2)' }}>{profile.bio}</p>}
+      {profile.location && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{profile.location}</div>}
+      <div style={{ display: 'flex', gap: 20, marginTop: 14 }}>
+        <Stat n={stats ? formatCount(stats.posts) : '—'} l="Posts" onClick={openProfile} />
+        <Stat n={stats ? formatCount(stats.followers) : '—'} l="Followers" />
+        <Stat n={formatCount(profile.impact_score ?? 0)} l="Impact" green />
+      </div>
+      {!isSelf && (
+        <button
+          className={following ? 'btn btn-ghost' : 'btn btn-primary'}
+          style={{ marginTop: 14, width: '100%', justifyContent: 'center' }}
+          onClick={() => {
+            app.follow?.toggle(profile.handle);
+            app.toast?.(following
+              ? { msg: `Unfollowed ${name}`, icon: 'user' }
+              : { msg: `Following ${name}`, kind: 'success', icon: 'user' });
+          }}
+        >{following ? 'Following' : 'Follow'}</button>
+      )}
+      <button className="btn btn-ghost" style={{ marginTop: 8, width: '100%', justifyContent: 'center' }} onClick={openProfile}>View profile →</button>
+    </div>
+  );
+}
+
 // =============== Desktop Post Detail ===============
 export function DesktopPostDetail({ onNav, params }) {
   const app = useApp();
@@ -712,7 +806,7 @@ export function DesktopPostDetail({ onNav, params }) {
     if (!id) { setLoading(false); return; }
     supabase
       .from('posts')
-      .select('*, profile:profiles!posts_user_id_fkey(full_name, handle, avatar_url, verified)')
+      .select('*, profile:profiles!posts_user_id_fkey(id, full_name, handle, avatar_url, verified, bio, location, impact_score)')
       .eq('id', id)
       .single()
       .then(({ data, error }) => { if (error) console.error('[PostDetail]', error); setDbPost(data); setLoading(false); });
@@ -762,7 +856,6 @@ export function DesktopPostDetail({ onNav, params }) {
   if (!dbPost) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-3)' }}>Post not found.</div>;
 
   const post = dbPost;
-  const isMock = false;
   const displayProfile = post.profile;
   const liked = app.like?.has(post.id);
   const saved = app.save?.has(post.id);
@@ -832,11 +925,11 @@ export function DesktopPostDetail({ onNav, params }) {
           {lightbox && <ImageLightbox label={lightbox} onClose={() => setLightbox(null)} />}
           <article className="post-detail-article" style={{ background: 'var(--surface)', borderRadius: 20, border: '1px solid var(--line)', padding: 28, marginBottom: 16 }}>
             <header style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-              <span onClick={() => onNav?.('profile', { handle: displayProfile?.handle })} style={{ cursor: 'pointer' }}><Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={56} verified={displayProfile?.verified} /></span>
+              <span onClick={() => onNav?.('profile', { handle: displayProfile?.handle })} style={{ cursor: 'pointer' }}><Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={56} /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontWeight: 600, fontSize: 17 }}>{displayProfile?.full_name || displayProfile?.name}</span>
-                  {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 16, height: 16, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 10 }}>✓</span>}
+                  {displayProfile?.verified && <VerifiedTick size={16} />}
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle}</div>
               </div>
@@ -915,17 +1008,7 @@ export function DesktopPostDetail({ onNav, params }) {
 
         {/* Right rail */}
         <div style={{ width: 340, padding: 20, overflow: 'auto', flexShrink: 0 }} className="no-scrollbar right-panel">
-          <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 18, marginBottom: 12 }}>
-            <h3 className="font-display" style={{ margin: '0 0 12px', fontSize: 17, fontWeight: 600 }}>About this project</h3>
-            <ImagePlaceholder label="project hero" height={140} />
-            <div style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-2)' }}>Sunhill Coop · Community solar installation, Portland.</div>
-            <div style={{ display: 'flex', gap: 14, marginTop: 12 }}>
-              <Stat n="20" l="Panels" />
-              <Stat n="14kW" l="Capacity" />
-              <Stat n="34" l="Members" />
-            </div>
-            <button className="btn btn-ghost" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }} onClick={() => app.openModal('project', { id: 99, t: 'Sunhill rooftop solar', cat: 'Energy', when: 'Ongoing · weekly builds', host: 'Sunhill Coop', going: 34, color: 'var(--sun)' })}>Support project →</button>
-          </div>
+          <PostAuthorCard profile={displayProfile} onNav={onNav} />
           <TrendingPanel />
         </div>
       </main>

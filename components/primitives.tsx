@@ -125,18 +125,25 @@ export function Logo({ size = 28 }: any) {
   );
 }
 
-export function Avatar({ src, name = "U", size = 36, verified = false, score, noBorder = false }: any) {
+// No verified badge here on purpose — the tick belongs beside the display name,
+// where it reads as a claim about the person. Welded to the picture it follows
+// the avatar into every thumbnail and turns into decoration. Use <VerifiedTick />.
+export function Avatar({ src, name = "U", size = 36, score, noBorder = false }: any) {
   const initial = (name || "U").charAt(0).toUpperCase();
   return (
     <span style={{ position: "relative", width: size, height: size, display: "inline-block", flexShrink: 0 }}>
       <span style={{ width: size, height: size, borderRadius: "50%", background: src ? `url(${src}) center/cover` : "var(--green)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 600, fontSize: size * 0.4, fontFamily: "Satoshi", border: noBorder ? "none" : "2px solid var(--surface)" }}>{!src && initial}</span>
-      {verified && (
-        <span style={{ position: "absolute", bottom: -2, right: -2, width: size * 0.36, height: size * 0.36, borderRadius: "50%", background: "var(--sky)", display: "grid", placeItems: "center", color: "#fff", fontSize: size * 0.18, border: "2px solid var(--surface)" }}>✓</span>
-      )}
-      {typeof score === "number" && !verified && (
+      {typeof score === "number" && (
         <span style={{ position: "absolute", bottom: -3, right: -3, padding: "1px 5px", borderRadius: 8, background: "var(--green)", color: "#fff", fontSize: 9, fontFamily: "JetBrains Mono", fontWeight: 600, border: "2px solid var(--surface)" }}>{score}</span>
       )}
     </span>
+  );
+}
+
+// The verified badge. Always sits next to a name, sized to the text beside it.
+export function VerifiedTick({ size = 14 }: { size?: number }) {
+  return (
+    <span title="Verified" style={{ background: "var(--sky)", color: "#fff", width: size, height: size, borderRadius: "50%", display: "inline-grid", placeItems: "center", fontSize: size * 0.64, flexShrink: 0 }}>✓</span>
   );
 }
 
