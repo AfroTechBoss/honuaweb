@@ -1,7 +1,7 @@
 ﻿"use client";
 import React from "react";
 import { createPortal } from "react-dom";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, ShareSheet, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, PostCardSkeleton, ActionBtn, ShareSheet, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { ImageLightbox } from "@/components/post-card";
 import { ImpactVouchBar, useImpactVouches } from "@/components/impact-vouch";
 
@@ -172,10 +172,13 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 16px' }}>
         <span onClick={() => { onClose(); onNav?.('profile', { handle: u.handle }); }} style={{ cursor: 'pointer' }}>
-          <Avatar src={u.avatar_url} name={u.full_name} size={36} verified={u.verified} />
+          <Avatar src={u.avatar_url} name={u.full_name} size={36} />
         </span>
         <div style={{ flex: 1 }}>
-          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>{u.full_name}</div>
+          <div style={{ color: '#fff', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+            {u.full_name}
+            {u.verified && <VerifiedTick size={13} />}
+          </div>
           <div style={{ color: 'rgba(255,255,255,.65)', fontSize: 11, fontFamily: 'JetBrains Mono' }}>@{u.handle} · {timeAgo(story.created_at)}</div>
         </div>
         {/* Group navigation dots */}
@@ -236,9 +239,12 @@ function StoryViewer({ groups, startGroup, onClose, onNav }: {
                 <img src={story.post.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 14, objectFit: 'cover', maxHeight: 220 }} />
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <Avatar src={story.post.profile?.avatar_url} name={story.post.profile?.full_name || 'User'} size={32} verified={story.post.profile?.verified} />
+                <Avatar src={story.post.profile?.avatar_url} name={story.post.profile?.full_name || 'User'} size={32} />
                 <div>
-                  <div style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{story.post.profile?.full_name}</div>
+                  <div style={{ color: '#fff', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {story.post.profile?.full_name}
+                    {story.post.profile?.verified && <VerifiedTick size={12} />}
+                  </div>
                   <div style={{ color: 'rgba(255,255,255,.6)', fontSize: 11, fontFamily: 'JetBrains Mono' }}>@{story.post.profile?.handle}</div>
                 </div>
               </div>
@@ -992,12 +998,12 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impac
       )}
       <header style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
         <span style={{ cursor: 'pointer' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>
-          <Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={42} verified={displayProfile?.verified} />
+          <Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={42} />
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>{displayProfile?.full_name}</span>
-            {displayProfile?.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9 }}>✓</span>}
+            {displayProfile?.verified && <VerifiedTick />}
             <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{displayProfile?.handle}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· {timeAgo(post.created_at)}</span>
           </div>
@@ -1294,9 +1300,12 @@ function HomeSearch({ onNav }: { onNav: any }) {
                   <div style={{ padding: '10px 14px 6px', fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>PEOPLE</div>
                   {results.users.map(u => (
                     <div key={u.id} onClick={() => { clear(); onNav?.('profile', { handle: u.handle }); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer' }} className="row-hover">
-                      <Avatar src={u.avatar_url} name={u.full_name} size={32} verified={u.verified} />
+                      <Avatar src={u.avatar_url} name={u.full_name} size={32} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name}</span>
+                          {u.verified && <VerifiedTick size={12} />}
+                        </div>
                         <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
                       </div>
                     </div>
@@ -1391,6 +1400,158 @@ function RealTagCloud({ onSelect }: { onSelect: (tag: string) => void }) {
   );
 }
 
+// =============== Explore: trending spotlight (real posts) ===============
+const EXPLORE_CATEGORIES: [string, string, string][] = [
+  ['Energy', 'leaf', '#1f6f3f'],
+  ['Water', 'droplet', '#1d6dc4'],
+  ['Food', 'plant', '#2e9a5b'],
+  ['Waste', 'repost', '#c4623a'],
+  ['Transport', 'bolt', '#e6b450'],
+  ['Policy', 'globe', '#5c635e'],
+];
+
+// Weighted by effort: a like is one tap, a comment takes writing, a repost
+// stakes your own feed on it.
+const engagement = (p: any) =>
+  (p.likes_count ?? 0) + (p.comments_count ?? 0) * 2 + (p.reposts_count ?? 0) * 3;
+
+// How fast a post's score decays with age. 1.5 ≈ a day-scale turnover: a post
+// needs roughly 2.8x the engagement to hold its rank against one half its age.
+const GRAVITY = 1.5;
+
+const ageHours = (ts?: string) => {
+  const t = ts ? new Date(ts).getTime() : NaN;
+  // Undated rows sink rather than float to the top on a NaN comparison
+  if (!Number.isFinite(t)) return 24 * 365;
+  return Math.max(0, (Date.now() - t) / 3_600_000);
+};
+
+// Hacker News-style gravity: engagement / (age + 2)^GRAVITY. The +2 keeps a
+// brand-new post from dividing by ~0 and running away with the top slot.
+const trendScore = (p: any) => engagement(p) / Math.pow(ageHours(p.created_at) + 2, GRAVITY);
+
+const exploreAgo = (ts?: string) => {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86_400)}d ago`;
+};
+
+// Tags from the tags[] column plus any #hashtags typed into the body
+const postTags = (p: any): string[] => {
+  const fromTags: string[] = Array.isArray(p.tags) ? p.tags : [];
+  const fromContent = ((p.content ?? '').match(/#(\w+)/g) ?? []).map((t: string) => t.slice(1));
+  return [...new Set([...fromTags, ...fromContent])].filter(Boolean) as string[];
+};
+
+// First line reads as the headline, the rest as the standfirst
+const splitContent = (content?: string | null) => {
+  const lines = (content ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+  return { headline: lines[0] ?? 'Untitled post', body: lines.slice(1).join(' ') };
+};
+
+const plural = (n: number, word: string) => `${formatCount(n)} ${word}${n === 1 ? '' : 's'}`;
+
+const clamp = (lines: number) => ({
+  display: '-webkit-box' as const, WebkitLineClamp: lines, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' as const,
+});
+
+function TrendingSpotlight({ posts, loading, onNav }: { posts: any[]; loading: boolean; onNav: any }) {
+  if (loading) return (
+    <div className="explore-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginBottom: 24 }}>
+      <div style={{ height: 420, borderRadius: 20, background: 'var(--line)', animation: 'skelPulse 1.4s ease-in-out infinite' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {[1, 2, 3].map(i => <div key={i} style={{ height: 112, borderRadius: 14, background: 'var(--line)', animation: 'skelPulse 1.4s ease-in-out infinite' }} />)}
+      </div>
+    </div>
+  );
+
+  if (!posts.length) return (
+    <div style={{ border: '1px solid var(--line)', borderRadius: 20, background: 'var(--surface)', padding: '56px 24px', textAlign: 'center', marginBottom: 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>Nothing trending yet</div>
+      <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '0 0 16px' }}>The most liked and discussed posts of the last 30 days show up here.</p>
+      <button className="btn btn-primary" onClick={() => onNav?.('home')}>Go to the feed <Icon name="arrow" size={14} /></button>
+    </div>
+  );
+
+  const [hero, ...rest] = posts;
+  const heroText = splitContent(hero.content);
+  const heroTag = postTags(hero)[0];
+  const heroEngaged = engagement(hero) > 0;
+  // Only the signals the post actually has — including reposts, which carry the
+  // most weight in the ranking and so shouldn't be the one that goes unshown.
+  const heroCounts = ([
+    [hero.likes_count ?? 0, 'like'],
+    [hero.comments_count ?? 0, 'comment'],
+    [hero.reposts_count ?? 0, 'repost'],
+  ] as [number, string][])
+    .filter(([n]) => n > 0)
+    .map(([n, w]) => plural(n, w))
+    .join(' · ');
+
+  return (
+    <div className="explore-hero-grid" style={{
+      display: 'grid', gridTemplateColumns: rest.length ? '1.4fr 1fr' : '1fr', gap: 18, marginBottom: 24,
+    }}>
+      <div className="post-card" onClick={() => onNav?.('post', { id: hero.id })} style={{
+        background: 'var(--surface)', borderRadius: 20,
+        overflow: 'hidden', border: '1px solid var(--line)',
+        display: 'grid', gridTemplateRows: '260px 1fr', cursor: 'pointer',
+      }}>
+        {hero.image_url
+          ? <img src={hero.image_url} alt="" style={{ width: '100%', height: 260, objectFit: 'cover', display: 'block' }} />
+          : <ImagePlaceholder label={heroTag ? `#${heroTag}` : 'Honua'} height={260} />}
+        <div style={{ padding: 20 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span className="chip chip-green">{heroEngaged ? 'Trending' : 'Latest'}</span>
+            {heroTag && <span className="chip">#{heroTag}</span>}
+            {heroEngaged && <span className="chip">{heroCounts}</span>}
+          </div>
+          <h2 className="font-display" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', ...clamp(3) }}>{heroText.headline}</h2>
+          {heroText.body && <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6, ...clamp(2) }}>{heroText.body}</p>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+            <Avatar src={hero.profile?.avatar_url} name={hero.profile?.full_name} size={32} />
+            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontWeight: 600 }}>{hero.profile?.full_name ?? `@${hero.profile?.handle ?? 'someone'}`}</span>
+              {hero.profile?.verified && <VerifiedTick size={12} />}
+              <span style={{ color: 'var(--ink-3)' }}> · {exploreAgo(hero.created_at)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {rest.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {rest.map(p => {
+            const t = splitContent(p.content);
+            const tag = postTags(p)[0];
+            return (
+              <div key={p.id} className="row-hover" onClick={() => onNav?.('post', { id: p.id })} style={{
+                background: 'var(--surface)', borderRadius: 14,
+                border: '1px solid var(--line)', padding: 14,
+                display: 'grid', gridTemplateColumns: '92px 1fr', gap: 14, cursor: 'pointer',
+              }}>
+                {p.image_url
+                  ? <img src={p.image_url} alt="" style={{ width: 92, height: 84, objectFit: 'cover', borderRadius: 10, display: 'block' }} />
+                  : <ImagePlaceholder label={tag ? `#${tag}` : 'Honua'} height={84} />}
+                <div style={{ minWidth: 0 }}>
+                  {tag && <span className="chip chip-green" style={{ marginBottom: 6 }}>#{tag}</span>}
+                  <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.35, marginTop: 6, ...clamp(2) }}>{t.headline}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>
+                    by @{p.profile?.handle ?? 'someone'} · {exploreAgo(p.created_at)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // =============== Desktop Explore ===============
 export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const incomingTag = params?.tag as string | undefined;
@@ -1400,12 +1561,13 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
   const [tagLoading, setTagLoading] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [realCommunities, setRealCommunities] = React.useState<any[]>([]);
+  const [postPool, setPostPool] = React.useState<any[] | null>(null);
+  const [projectCount, setProjectCount] = React.useState<number | null>(null);
   const [searching, setSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<{ users: any[]; posts: any[]; communities: any[] } | null>(null);
   const searchDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = React.useRef<HTMLInputElement>(null);
   const app = useApp();
-  const openArticle = (a: any) => app.openModal?.('article', a);
   const isSearching = query.trim().length > 0;
 
   React.useEffect(() => {
@@ -1418,6 +1580,45 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
       if (data?.length) setRealCommunities(data);
     }).catch(() => {});
   }, []);
+
+  // Recent public posts — powers both the trending spotlight and the category counts
+  React.useEffect(() => {
+    let cancelled = false;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data } = await supabase
+        .from('posts')
+        .select('id, content, image_url, tags, likes_count, comments_count, reposts_count, created_at, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)')
+        .gte('created_at', since)
+        .is('community_id', null)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!cancelled) setPostPool(data ?? []);
+    }).catch(() => { if (!cancelled) setPostPool([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { count } = await supabase.from('projects').select('id', { count: 'exact', head: true }).eq('status', 'active');
+      if (!cancelled) setProjectCount(count ?? 0);
+    }).catch(() => { if (!cancelled) setProjectCount(0); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const trending = React.useMemo(
+    () => [...(postPool ?? [])].sort((a, b) => trendScore(b) - trendScore(a)).slice(0, 4),
+    [postPool],
+  );
+
+  const categoryCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of postPool ?? []) {
+      for (const t of postTags(p)) counts[t.toLowerCase()] = (counts[t.toLowerCase()] ?? 0) + 1;
+    }
+    return counts;
+  }, [postPool]);
 
   const runSearch = React.useCallback(async (q: string) => {
     if (!q.trim()) { setSearchResults(null); return; }
@@ -1517,11 +1718,11 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
                       {searchResults.users.map(u => (
                         <div key={u.id} onClick={() => { onNav?.('profile', { handle: u.handle }); clearSearch(); }} className="row-hover"
                           style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, cursor: 'pointer' }}>
-                          <Avatar src={u.avatar_url} name={u.full_name} size={48} verified={u.verified} />
+                          <Avatar src={u.avatar_url} name={u.full_name} size={48} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 }}>
                               {u.full_name}
-                              {u.verified && <span style={{ background: 'var(--sky)', color: '#fff', width: 14, height: 14, borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 8 }}>✓</span>}
+                              {u.verified && <VerifiedTick />}
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
                             {u.bio && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.bio}</div>}
@@ -1593,67 +1794,15 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
 
         {!isSearching && tab !== 'tags' && (<>
 
-        {/* Hero: editorial featured story */}
-        <div className="explore-hero-grid" style={{
-          display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18, marginBottom: 24,
-        }}>
-          <div style={{
-            background: 'var(--surface)', borderRadius: 20,
-            overflow: 'hidden', border: '1px solid var(--line)',
-            display: 'grid', gridTemplateRows: '260px 1fr', cursor: 'pointer',
-          }} className="post-card" onClick={() => openArticle({ tag: 'Energy', title: 'How a Nairobi co-op put 4,200 homes on solar in 18 months', author: 'Dr. Adaeze Okafor', img: 'hero · solar farm at dawn' })}>
-            <ImagePlaceholder label="hero · solar farm at dawn" height={260} />
-            <div style={{ padding: 20 }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                <span className="chip chip-green">Editor's pick</span>
-                <span className="chip">Energy</span>
-                <span className="chip">12 min read</span>
-              </div>
-              <h2 className="font-display" style={{ margin: '0 0 8px', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em' }}>How a Nairobi co-op put 4,200 homes on solar in 18 months</h2>
-              <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>A community-funded model that beat the utility on price, ran on local labor, and is now being replicated in three more cities.</p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-                <Avatar src={MOCK.users.okafor.avatar} name="Dr. Okafor" size={32} verified />
-                <div style={{ fontSize: 13 }}>
-                  <span style={{ fontWeight: 600 }}>Dr. Adaeze Okafor</span>
-                  <span style={{ color: 'var(--ink-3)' }}> · May 19</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { tag: 'Policy', t: 'EU Carbon Border Adjustment — what it means for steel', a: 'Climate Action Net.', img: 'steel mill' },
-              { tag: 'Energy', t: 'Heat pumps overtook gas boilers in 9 European markets', a: 'GreenTech', img: 'heat pump unit' },
-              { tag: 'Ocean', t: 'Inside the 2026 North Sea kelp restoration trial', a: 'Sea Forests', img: 'kelp underwater' },
-            ].map((s, i) => (
-              <div key={i} className="row-hover" onClick={() => openArticle({ tag: s.tag, title: s.t, author: s.a, img: s.img })} style={{
-                background: 'var(--surface)', borderRadius: 14,
-                border: '1px solid var(--line)', padding: 14,
-                display: 'grid', gridTemplateColumns: '92px 1fr', gap: 14, cursor: 'pointer',
-              }}>
-                <ImagePlaceholder label={s.img} height={84} />
-                <div>
-                  <span className="chip chip-green" style={{ marginBottom: 6 }}>{s.tag}</span>
-                  <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.35, marginTop: 6 }}>{s.t}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'JetBrains Mono' }}>by {s.a}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Trending spotlight — top posts of the last 30 days */}
+        <TrendingSpotlight posts={trending} loading={postPool === null} onNav={onNav} />
 
         {/* Categories strip */}
         <h2 className="font-display" style={{ fontSize: 20, fontWeight: 600, margin: '0 0 12px' }}>Browse by category</h2>
         <div className="explore-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
-          {[
-            ['Energy', 'leaf', '#1f6f3f'],
-            ['Water', 'droplet', '#1d6dc4'],
-            ['Food', 'plant', '#2e9a5b'],
-            ['Waste', 'repost', '#c4623a'],
-            ['Transport', 'bolt', '#e6b450'],
-            ['Policy', 'globe', '#5c635e'],
-          ].map(([label, icon, col]) => (
+          {EXPLORE_CATEGORIES.map(([label, icon, col]) => {
+            const n = categoryCounts[label.toLowerCase()] ?? 0;
+            return (
             <div key={label} onClick={() => { setTab('tags'); setActiveTag(label.toLowerCase()); }} style={{
               background: 'var(--surface)', borderRadius: 14, padding: 16,
               border: '1px solid var(--line)', cursor: 'pointer',
@@ -1666,10 +1815,11 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
               </div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
               <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
-                {Math.floor(Math.random() * 9 + 2)}.{Math.floor(Math.random() * 9)}k posts
+                {postPool === null ? '—' : plural(n, 'post')}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Communities grid */}
@@ -1710,8 +1860,16 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           <MapPreview />
           <div style={{ padding: 24 }}>
             <span className="chip chip-sky">Action map</span>
-            <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>147 verified projects near you</h2>
-            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>Beach cleanups, community gardens, repair cafés, energy co-ops — find something to do this weekend.</p>
+            <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>
+              {projectCount === null ? 'Projects on the map'
+                : projectCount === 0 ? 'Put the first project on the map'
+                : `${plural(projectCount, 'active project')} to join`}
+            </h2>
+            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>
+              {projectCount === 0
+                ? 'Beach cleanups, community gardens, repair cafés, energy co-ops — start one and put it on the map for people near you.'
+                : 'Beach cleanups, community gardens, repair cafés, energy co-ops — find something to do this weekend.'}
+            </p>
             <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={() => onNav?.('map')}>Open map <Icon name="arrow" size={14} /></button>
           </div>
         </div>

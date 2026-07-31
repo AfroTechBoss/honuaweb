@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import dynamic from "next/dynamic";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, ImagePlaceholder, DesktopSidebar, useApp } from "@/components/shared";
 
 // Leaflet CSS (loaded once globally)
 import "leaflet/dist/leaflet.css";
@@ -42,15 +42,22 @@ const CAT_EMOJI: Record<string, string> = {
   Waste:   '♻️',
 };
 
-// Sample projects with real-ish lat/lng offsets — replaced by Supabase later
-const SAMPLE_PROJECTS = [
-  { id: 1, t: 'Prospect Park cleanup', cat: 'Cleanup', when: 'Sat, Jul 26 · 9am', host: 'Local Green Crew', going: 84, latOff: 0.008, lngOff: -0.004 },
-  { id: 2, t: 'Neighborhood repair café', cat: 'Repair', when: 'Sun, Jul 27 · 11am', host: 'Fix-it Collective', going: 32, latOff: -0.005, lngOff: 0.009 },
-  { id: 3, t: 'Solar panel barn-raising', cat: 'Energy', when: 'Sat, Aug 2 · 8am', host: 'Sunhill Coop', going: 12, latOff: 0.012, lngOff: 0.006 },
-  { id: 4, t: 'Community garden plot signups', cat: 'Garden', when: 'Open enrollment', host: 'Local Garden Club', going: 64, latOff: -0.010, lngOff: -0.007 },
-  { id: 5, t: 'Compost drop-off (Saturdays)', cat: 'Waste', when: 'Every Sat · 10am–2pm', host: 'City Composts', going: 240, latOff: 0.003, lngOff: 0.014 },
-  { id: 6, t: 'Climate policy phonebank', cat: 'Policy', when: 'Wed, Jul 30 · 6pm', host: 'Climate Action Net.', going: 48, latOff: -0.007, lngOff: -0.012 },
-];
+// Great-circle distance in km. Used to order the list nearest-first — projects are
+// never filtered out by distance, since a sparse map is worse than a far-away pin.
+function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6371;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+const fmtDistance = (km: number) =>
+  km < 1 ? `${Math.round(km * 1000)} m away`
+    : km < 10 ? `${km.toFixed(1)} km away`
+    : `${Math.round(km).toLocaleString()} km away`;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 
 function makeCatIcon(cat: string) {
@@ -133,10 +140,14 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   // Fix Leaflet icons on mount
   React.useEffect(() => { fixLeafletIcons(); setMapReady(true); }, []);
 
-  // Real projects from Supabase (created via "Start a project")
-  const [dbProjects, setDbProjects] = React.useState<any[]>([]);
+  // Real projects from Supabase (created via "Start a project").
+  // null = still loading, [] = loaded and genuinely empty — the two need different UI.
+  const [dbProjects, setDbProjects] = React.useState<any[] | null>(null);
   const loadDbProjects = React.useCallback(() => {
-    import('@/lib/market').then(({ getMapProjects }) => getMapProjects()).then(setDbProjects).catch(() => {});
+    import('@/lib/market')
+      .then(({ getMapProjects }) => getMapProjects())
+      .then(setDbProjects)
+      .catch(() => setDbProjects([]));
   }, []);
   React.useEffect(() => { loadDbProjects(); }, [loadDbProjects]);
 
@@ -232,24 +243,35 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     );
   }, []);
 
-  // Build projects: real DB projects (absolute coords) + demo samples placed near the user
+  const projectsLoading = dbProjects === null;
+  const located = userLat !== null && userLng !== null;
+
+  // Real projects carry absolute coords, so they render with or without a fix on
+  // the user — knowing where you are only changes the order, not the contents.
   const projects = React.useMemo(() => {
-    if (userLat === null || userLng === null) return [];
-    const samples = SAMPLE_PROJECTS.map(p => ({
-      ...p,
-      lat: userLat + p.latOff,
-      lng: userLng + p.lngOff,
-      color: CAT_COLORS[p.cat] || '#22c55e',
-    }));
-    const real = dbProjects.map(p => ({ ...p, color: CAT_COLORS[p.cat] || '#22c55e' }));
-    return [...real, ...samples];
-  }, [userLat, userLng, dbProjects]);
+    const list = (dbProjects ?? []).map(p => ({ ...p, color: CAT_COLORS[p.cat] || '#22c55e' }));
+    if (userLat === null || userLng === null) return list;
+    return list
+      .map(p => ({ ...p, distKm: distanceKm(userLat, userLng, p.lat, p.lng) }))
+      .sort((a, b) => a.distKm - b.distKm);
+  }, [dbProjects, userLat, userLng]);
 
   const filtered = projects.filter(p => {
-    const catMatch = filter === 'all' || p.cat.toLowerCase() === filter;
-    const searchMatch = !search || p.t.toLowerCase().includes(search.toLowerCase()) || p.host.toLowerCase().includes(search.toLowerCase());
+    const catMatch = filter === 'all' || (p.cat ?? '').toLowerCase() === filter;
+    const q = search.trim().toLowerCase();
+    const searchMatch = !q || (p.t ?? '').toLowerCase().includes(q) || (p.host ?? '').toLowerCase().includes(q);
     return catMatch && searchMatch;
   });
+
+  // Centre on the user when we have them, otherwise on the closest thing to a
+  // subject the page has — the first project. Without either there is nothing to show.
+  const center = React.useMemo<[number, number] | null>(() => {
+    if (userLat !== null && userLng !== null) return [userLat, userLng];
+    const first = projects.find(p => typeof p.lat === 'number' && typeof p.lng === 'number');
+    return first ? [first.lat, first.lng] : null;
+  }, [userLat, userLng, projects]);
+
+  const totalGoing = projects.reduce((s, p) => s + (p.going ?? 0), 0);
 
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -346,9 +368,17 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
             </div>
 
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em' }}>
-              {filtered.length} projects near you
+              {projectsLoading ? 'Loading projects…'
+                : projects.length === 0 ? 'Nothing on the map yet'
+                : plural(filtered.length, 'project')}
             </h1>
-            <p style={{ margin: '4px 0 12px', color: 'var(--ink-3)', fontSize: 13 }}>Find something to do this weekend — or start your own.</p>
+            <p style={{ margin: '4px 0 12px', color: 'var(--ink-3)', fontSize: 13 }}>
+              {projects.length === 0
+                ? 'Be the first to put something here — a cleanup, a garden, a repair café.'
+                : located
+                  ? 'Nearest first. Find something to do this weekend — or start your own.'
+                  : 'Find something to do this weekend — or start your own.'}
+            </p>
 
             <div style={{
               background: 'var(--bg-2)', borderRadius: 999, padding: '8px 12px',
@@ -372,7 +402,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
           </div>
 
           <div style={{ borderTop: '1px solid var(--line)' }}>
-            {geoLoading ? (
+            {projectsLoading ? (
               [1, 2, 3].map(i => (
                 <div key={i} style={{ padding: '14px 24px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 12 }}>
                   <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--line)', flexShrink: 0 }} />
@@ -383,6 +413,17 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                   </div>
                 </div>
               ))
+            ) : projects.length === 0 ? (
+              <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+                <div style={{ fontSize: 30, marginBottom: 10 }}>📍</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No projects on the map yet</div>
+                <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+                  Beach cleanups, community gardens, repair cafés, energy co-ops — start one and people near you will see it here.
+                </p>
+                <button className="btn btn-primary" onClick={() => app.openModal?.('startproject')}>
+                  <Icon name="plus" size={14} stroke={2.2} /> Start a project
+                </button>
+              </div>
             ) : filtered.length === 0 ? (
               <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>
                 No projects match this filter.
@@ -401,20 +442,29 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                     <Icon name="pin" size={20} stroke={2.2} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{p.cat.toUpperCase()} · {p.when}</div>
+                    <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{(p.cat ?? '').toUpperCase()} · {p.when}</div>
                     <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{p.t}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>by {p.host}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
+                      by {p.host}{p.distKm !== undefined ? ` · ${fmtDistance(p.distKm)}` : ''}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                      <div style={{ display: 'flex' }}>
-                        {[0, 1, 2].map(i => (
-                          <span key={i} style={{
-                            width: 22, height: 22, borderRadius: '50%', marginLeft: i ? -8 : 0,
-                            background: ['var(--green)', 'var(--sky)', 'var(--sun)'][i],
-                            border: '2px solid var(--surface)',
-                          }} />
-                        ))}
-                      </div>
-                      <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.going} going</span>
+                      {p.going > 0 ? (
+                        <>
+                          {/* One dot per attendee, up to three — never more faces than people */}
+                          <div style={{ display: 'flex' }}>
+                            {Array.from({ length: Math.min(p.going, 3) }).map((_, i) => (
+                              <span key={i} style={{
+                                width: 22, height: 22, borderRadius: '50%', marginLeft: i ? -8 : 0,
+                                background: ['var(--green)', 'var(--sky)', 'var(--sun)'][i],
+                                border: '2px solid var(--surface)',
+                              }} />
+                            ))}
+                          </div>
+                          <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.going} going</span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>Be the first to join</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -425,12 +475,12 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
 
         {/* Map column */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {mapReady && userLat !== null && userLng !== null ? (
+          {mapReady && center ? (
             <MapContainer
               key={mapKey}
               ref={mapRef}
-              center={[userLat, userLng]}
-              zoom={14}
+              center={center}
+              zoom={located ? 14 : 11}
               style={{ width: '100%', height: '100%' }}
               zoomControl={false}
             >
@@ -439,13 +489,15 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                 url={'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'}
               />
               {/* User location marker */}
-              <Marker position={[userLat, userLng]} icon={makeUserIcon()}>
-                <Popup>
-                  <div style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>
-                    📍 You are here
-                  </div>
-                </Popup>
-              </Marker>
+              {userLat !== null && userLng !== null && (
+                <Marker position={[userLat, userLng]} icon={makeUserIcon()}>
+                  <Popup>
+                    <div style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>
+                      📍 You are here
+                    </div>
+                  </Popup>
+                </Marker>
+              )}
               {/* Project markers */}
               {filtered.map(p => (
                 <Marker
@@ -468,7 +520,9 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                       <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{p.when}</div>
                       <div style={{ fontSize: 12, color: '#888' }}>by {p.host}</div>
                       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12, color: '#666', fontFamily: 'JetBrains Mono, monospace' }}>{p.going} going</span>
+                        <span style={{ fontSize: 12, color: '#666', fontFamily: 'JetBrains Mono, monospace' }}>
+                          {p.going > 0 ? `${p.going} going` : 'Be the first to join'}
+                        </span>
                         <button
                           onClick={() => app.openModal?.('project', p)}
                           style={{
@@ -489,9 +543,11 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
               display: 'grid', placeItems: 'center',
               background: 'var(--bg-2)',
             }}>
-              <div style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>
+              <div style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 14, maxWidth: 320, padding: 24 }}>
                 <div style={{ marginBottom: 8, fontSize: 28 }}>📍</div>
-                {geoLoading ? 'Getting your location…' : 'Map loading…'}
+                {geoLoading || projectsLoading
+                  ? 'Getting your location…'
+                  : 'We couldn’t place you and there are no projects to centre on yet. Set a location above to start browsing.'}
               </div>
             </div>
           )}
@@ -524,25 +580,29 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
             <Icon name="plus" size={16} stroke={2.2} /> Start a project
           </button>
 
-          {/* Floating area summary */}
-          <div style={{
-            position: 'absolute', bottom: 24, left: 24, zIndex: 1000,
-            background: 'var(--surface)', borderRadius: 14,
-            border: '1px solid var(--line)', padding: '12px 16px',
-            display: 'flex', alignItems: 'center', gap: 16,
-            boxShadow: '0 10px 30px -10px rgba(0,0,0,.15)',
-          }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center' }}>
-              <Icon name="globe" size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>RIGHT NOW IN {locationName.toUpperCase()}</div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>
-                {projects.length} project{projects.length === 1 ? '' : 's'} · {projects.reduce((s, p) => s + (p.going ?? 0), 0)} people taking part
-                {dbProjects.length > 0 && ` · ${dbProjects.length} community-created`}
+          {/* Floating area summary — nothing to summarise until something is on the map */}
+          {projects.length > 0 && (
+            <div style={{
+              position: 'absolute', bottom: 24, left: 24, zIndex: 1000,
+              background: 'var(--surface)', borderRadius: 14,
+              border: '1px solid var(--line)', padding: '12px 16px',
+              display: 'flex', alignItems: 'center', gap: 16,
+              boxShadow: '0 10px 30px -10px rgba(0,0,0,.15)',
+            }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center' }}>
+                <Icon name="globe" size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>
+                  {located && locationName ? `NEAREST TO ${locationName.toUpperCase()}` : 'ON THE MAP'}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  {plural(projects.length, 'project')}
+                  {totalGoing > 0 && ` · ${totalGoing} ${totalGoing === 1 ? 'person' : 'people'} taking part`}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>
@@ -564,23 +624,16 @@ export function BigMap({ projects = [], onPick }: { projects?: any[]; onPick?: (
 export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [filter, setFilter] = React.useState('All credits');
-  const FALLBACK_CREDITS = [
-    { name: 'Mau Forest restoration', region: 'Kenya', type: 'Forestry', verifier: 'Verra VCS', vintage: '2025', price: '$18.20', volume: '12,400 tCO₂', tag: 'Premium', color: 'var(--green)' },
-    { name: 'Borneo peatland protection', region: 'Indonesia', type: 'Wetland', verifier: 'Gold Standard', vintage: '2024', price: '$24.80', volume: '8,200 tCO₂', tag: 'Verified', color: 'var(--green-2)' },
-    { name: 'Patagonia rewilding', region: 'Chile', type: 'Rewilding', verifier: 'Plan Vivo', vintage: '2025', price: '$31.50', volume: '4,100 tCO₂', tag: 'Premium', color: 'var(--green)' },
-    { name: 'Direct air capture (Hellisheiði)', region: 'Iceland', type: 'DAC', verifier: 'Puro.Earth', vintage: '2026', price: '$420', volume: '120 tCO₂', tag: 'Removal', color: 'var(--sky)' },
-    { name: 'Mangrove blue carbon', region: 'Senegal', type: 'Coastal', verifier: 'Verra VCS', vintage: '2024', price: '$22.00', volume: '6,800 tCO₂', tag: 'Verified', color: 'var(--green-2)' },
-    { name: 'Biochar (Sonoma Coop)', region: 'USA', type: 'Soil', verifier: 'Puro.Earth', vintage: '2025', price: '$118', volume: '900 tCO₂', tag: 'Removal', color: 'var(--sky)' },
-  ];
-  const [dbCredits, setDbCredits] = React.useState<any[]>([]);
+  // null = still loading, [] = no credits listed. Never a stand-in list: a credit
+  // here is buyable, and buying one writes a retirement record against its name.
+  const [credits, setCredits] = React.useState<any[] | null>(null);
   const [myOffsets, setMyOffsets] = React.useState<{ tonnes: number; totalCents: number } | null>(null);
 
   const refresh = React.useCallback(() => {
     import('@/lib/market').then(async ({ getCarbonCredits, getMyOffsets }) => {
-      const credits = await getCarbonCredits();
-      setDbCredits(credits);
+      setCredits(await getCarbonCredits());
       if (app.user?.id) setMyOffsets(await getMyOffsets(app.user.id));
-    }).catch(() => {});
+    }).catch(() => setCredits([]));
   }, [app.user?.id]);
   React.useEffect(() => { refresh(); }, [refresh]);
   React.useEffect(() => {
@@ -589,16 +642,22 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
     return () => window.removeEventListener('honua:offset-purchased', handler);
   }, [refresh]);
 
-  const credits = dbCredits.length > 0 ? dbCredits : FALLBACK_CREDITS;
+  const creditsLoading = credits === null;
+  const listed = credits ?? [];
   const matches = (c) => filter === 'All credits' ? true : filter === 'Removal' ? c.tag === 'Removal' : c.type === filter;
-  const shown = credits.filter(matches);
+  const shown = listed.filter(matches);
   const yearLabel = new Date().getFullYear();
   const offsetsDisplay = myOffsets ? `${myOffsets.tonnes % 1 === 0 ? myOffsets.tonnes : myOffsets.tonnes.toFixed(1)} t` : '0 t';
   const offsetsSub = myOffsets ? `$${(myOffsets.totalCents / 100).toFixed(0)} retired` : 'none yet';
   // Real market stats computed from the listed credits
   const parsePrice = (c: any) => c.price_cents ? c.price_cents / 100 : parseFloat(String(c.price).replace(/[^0-9.]/g, '')) || 0;
-  const avgPrice = credits.length ? credits.reduce((s, c) => s + parsePrice(c), 0) / credits.length : 0;
-  const totalVolume = credits.reduce((s, c) => s + (parseFloat(String(c.volume).replace(/[^0-9.]/g, '')) || 0), 0);
+  const avgPrice = listed.length ? listed.reduce((s, c) => s + parsePrice(c), 0) / listed.length : 0;
+  const totalVolume = listed.reduce((s, c) => s + (parseFloat(String(c.volume).replace(/[^0-9.]/g, '')) || 0), 0);
+  const hasListings = !creditsLoading && listed.length > 0;
+  // Listings with nothing left to retire are a closed market, not a live one
+  const marketOpen = hasListings && totalVolume > 0;
+  // An em dash beats "$0.00" — no listings means no price, not a free market
+  const stat = (v: string) => creditsLoading ? '—' : listed.length === 0 ? '—' : v;
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="carbon" onNav={onNav} />
@@ -606,22 +665,25 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
         <div className="carbon-inner" style={{ padding: '24px 32px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 6 }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CARBON MARKET · LIVE</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>
+              CARBON MARKET{marketOpen ? ' · LIVE' : ''}
+            </div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Offset what you can't avoid.</h1>
             <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Every credit on Honua is on-chain verified, third-party audited, and traceable to a project you can actually visit.</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-ghost" onClick={() => app.openModal?.('wallet')}>Wallet{myOffsets && myOffsets.tonnes > 0 ? ` · ${offsetsDisplay} retired` : ''}</button>
-            <button className="btn btn-primary" onClick={() => app.openModal?.('offsetyear')}>Offset my year</button>
+            {/* Nothing to buy with an empty book — don't offer a checkout */}
+            {marketOpen && <button className="btn btn-primary" onClick={() => app.openModal?.('offsetyear')}>Offset my year</button>}
           </div>
         </div>
 
         {/* Stat strip */}
         <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '20px 0 18px' }}>
           {[
-            ['AVG PRICE · tCO₂', `$${avgPrice.toFixed(2)}`, 'across listed credits'],
-            ['AVAILABLE VOLUME', `${Math.round(totalVolume).toLocaleString()} t`, 'ready to retire'],
-            ['PROJECTS LISTED', String(credits.length), 'live credits'],
+            ['AVG PRICE · tCO₂', stat(`$${avgPrice.toFixed(2)}`), hasListings ? 'across listed credits' : 'no credits listed'],
+            ['AVAILABLE VOLUME', stat(`${Math.round(totalVolume).toLocaleString()} t`), marketOpen ? 'ready to retire' : 'nothing to retire yet'],
+            ['PROJECTS LISTED', creditsLoading ? '—' : String(listed.length), !hasListings ? 'market not open' : marketOpen ? 'live credits' : 'all sold out'],
             [`YOUR OFFSETS · ${yearLabel}`, offsetsDisplay, offsetsSub],
           ].map(([l, v, d]) => (
             <div key={l} style={{
@@ -635,21 +697,50 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
           ))}
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div className="pill-nav">
-            {['All credits', 'Forestry', 'Removal', 'Wetland', 'Soil', 'Coastal'].map((t) => (
-              <button key={t} className={filter === t ? 'active' : ''} onClick={() => setFilter(t)}>{t}</button>
-            ))}
+        {/* Filters — only meaningful once there is something to filter */}
+        {hasListings && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div className="pill-nav">
+              {['All credits', 'Forestry', 'Removal', 'Wetland', 'Soil', 'Coastal'].map((t) => (
+                <button key={t} className={filter === t ? 'active' : ''} onClick={() => setFilter(t)}>{t}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
+              {shown.length === listed.length ? `${listed.length} listed` : `${shown.length} of ${listed.length}`}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <span className="chip">Sort: Price ↑</span>
-            <span className="chip">Vintage 2024+</span>
-            <span className="chip">+ filter</span>
-          </div>
-        </div>
+        )}
 
         {/* Table */}
+        {creditsLoading ? (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '18px', borderBottom: i === 4 ? 'none' : '1px solid var(--line)' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--line)', flexShrink: 0 }} />
+                <div style={{ height: 12, borderRadius: 4, background: 'var(--line)', flex: 2 }} />
+                <div style={{ height: 12, borderRadius: 4, background: 'var(--line)', flex: 1 }} />
+                <div style={{ height: 12, borderRadius: 4, background: 'var(--line)', flex: 1 }} />
+              </div>
+            ))}
+          </div>
+        ) : listed.length === 0 ? (
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16,
+            padding: '56px 24px', textAlign: 'center',
+          }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center', margin: '0 auto 14px' }}>
+              <Icon name="leaf" size={22} stroke={2} />
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>No credits listed yet</div>
+            <p style={{ margin: '0 auto', maxWidth: 460, fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+              The market opens once verified projects are listed. Every credit here has to be traceable to a real
+              registry entry, so there's nothing to show until then — your tracked actions keep counting in the meantime.
+            </p>
+            <button className="btn btn-ghost" style={{ marginTop: 18 }} onClick={() => onNav?.('impact')}>
+              See your impact <Icon name="arrow" size={14} />
+            </button>
+          </div>
+        ) : (
         <div className="carbon-table-scroll" style={{ overflowX: 'auto' }}>
         <div className="carbon-credits-table" style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', minWidth: 720 }}>
           <div style={{
@@ -668,10 +759,12 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
             <span></span>
           </div>
           {shown.map((c, i) => (
-            <div key={i} className="row-hover" onClick={() => app.openModal?.('credit', c)} style={{
+            <div key={c.id ?? i} className="row-hover" onClick={() => c.volume_t > 0 && app.openModal?.('credit', c)} style={{
               display: 'grid', gridTemplateColumns: '2.4fr 1fr 1fr 1fr 1fr 1fr 1fr 110px',
               padding: '14px 18px', borderBottom: i === shown.length - 1 ? 'none' : '1px solid var(--line)',
-              gap: 12, alignItems: 'center', fontSize: 13, cursor: 'pointer',
+              gap: 12, alignItems: 'center', fontSize: 13,
+              cursor: c.volume_t > 0 ? 'pointer' : 'default',
+              opacity: c.volume_t > 0 ? 1 : .6,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{
@@ -685,19 +778,29 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
                   <span className="verified-impact" style={{ marginTop: 4 }}>on-chain · {c.tag}</span>
                 </div>
               </div>
-              <span>{c.type}</span>
-              <span>{c.region}</span>
-              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{c.verifier}</span>
-              <span style={{ fontFamily: 'JetBrains Mono' }}>{c.vintage}</span>
+              <span>{c.type || '—'}</span>
+              <span>{c.region || '—'}</span>
+              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>{c.verifier || '—'}</span>
+              <span style={{ fontFamily: 'JetBrains Mono' }}>{c.vintage || '—'}</span>
               <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{c.price}</span>
-              <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{c.volume}</span>
-              <button className="btn btn-green" onClick={(e) => { e.stopPropagation(); app.openModal?.('credit', c); }} style={{ padding: '6px 12px', fontSize: 12, justifyContent: 'center' }}>Buy</button>
+              <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>
+                {c.volume_t > 0 ? c.volume : 'none left'}
+              </span>
+              {/* Nothing to retire means nothing to sell, whatever the price says */}
+              {c.volume_t > 0 ? (
+                <button className="btn btn-green" onClick={(e) => { e.stopPropagation(); app.openModal?.('credit', c); }} style={{ padding: '6px 12px', fontSize: 12, justifyContent: 'center' }}>Buy</button>
+              ) : (
+                <button className="btn btn-ghost" disabled style={{ padding: '6px 12px', fontSize: 12, justifyContent: 'center', opacity: .55, cursor: 'not-allowed' }}>Sold out</button>
+              )}
             </div>
           ))}
           {shown.length === 0 && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No credits match this filter.</div>}
         </div>
         </div>
+        )}
 
+        {/* Both cards sell against the order book — hide them while it's empty */}
+        {marketOpen && (
         <div className="two-col-grid" style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 }}>
           <div style={{
             background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)',
@@ -728,6 +831,7 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
             </div>
           </div>
         </div>
+        )}
         </div>
       </main>
     </div>

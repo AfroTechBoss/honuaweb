@@ -3,6 +3,7 @@
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { AdminProducts, AdminUsers, AdminSellers, AdminActivity } from "./admin-manage";
+import { AdminCarbonCredits } from "./admin-carbon";
 import { useAdminUser } from "@/components/admin-auth";
 
 // =====================================================================
@@ -26,6 +27,7 @@ const ADMIN_NAV_GROUPS = [
       ['appeals', 'Appeals', 'flag'],
       ['challenges', 'Challenges', 'award'],
       ['products', 'Products', 'bag'],
+      ['carbon', 'Carbon Credits', 'co2'],
       ['users', 'Users', 'users'],
       ['sellers', 'Sellers', 'leaf'],
       ['payouts', 'Payouts', 'coin'],
@@ -93,7 +95,7 @@ const MOCK_SENT_NOTIFICATIONS = [
 
 export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
-  const { email: adminEmail, logout: adminLogout } = useAdminUser();
+  const { email: adminEmail, logout: adminLogout, getAccessToken: adminToken } = useAdminUser();
   const [isMobile, setIsMobile] = React.useState(false);
   React.useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768);
@@ -510,6 +512,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
           {section === 'appeals' && <AdminAppeals appeals={appeals} onResolve={resolveAppeal} />}
           {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
           {section === 'products' && <AdminProducts products={products} onStatus={setProductStatus} />}
+          {section === 'carbon' && <AdminCarbonCredits getToken={adminToken} log={log} />}
           {section === 'users' && <AdminUsers users={users} onStatus={setUserStatus} onRole={setUserRole} />}
           {section === 'sellers' && <AdminSellers onNav={onNav} />}
           {section === 'payouts' && <AdminPayouts payouts={payouts} onAction={setPayoutStatus} />}

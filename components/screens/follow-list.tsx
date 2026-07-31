@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Avatar, DesktopSidebar, useApp, MOCK } from "@/components/shared";
+import { Icon, Avatar, VerifiedTick, DesktopSidebar, useApp, MOCK } from "@/components/shared";
 
 // Follower / following relationships (mirrors the mobile + backend follow graph).
 const FOLLOW_LISTS: Record<string, { followers: string[]; following: string[] }> = {
@@ -41,9 +41,12 @@ export function DesktopFollowList({ onNav, params, mode }: { onNav?: any; params
               <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}><Icon name="arrow" size={14} /></span> Back to @{owner.handle}
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Avatar src={owner.avatar} name={owner.name} size={48} verified={owner.verified} />
+              <Avatar src={owner.avatar} name={owner.name} size={48} />
               <div>
-                <h1 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em" }}>{owner.name}</h1>
+                <h1 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 8 }}>
+                  {owner.name}
+                  {owner.verified && <VerifiedTick size={18} />}
+                </h1>
                 <div style={{ fontSize: 13, color: "var(--ink-3)", fontFamily: "JetBrains Mono" }}>@{owner.handle}</div>
               </div>
             </div>
@@ -75,11 +78,11 @@ export function DesktopFollowList({ onNav, params, mode }: { onNav?: any; params
               return (
                 <div key={k} className="row-hover" style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 8px", margin: "0 -8px", borderRadius: 12, cursor: "pointer" }}
                   onClick={() => onNav?.("profile", { handle: u.handle })}>
-                  <Avatar src={u.avatar} name={u.name} size={48} verified={u.verified} />
+                  <Avatar src={u.avatar} name={u.name} size={48} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: 15, fontWeight: 600 }}>{u.name}</span>
-                      {u.verified && <span style={{ background: "var(--sky)", color: "#fff", width: 14, height: 14, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 9 }}>✓</span>}
+                      {u.verified && <VerifiedTick />}
                     </div>
                     <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontFamily: "JetBrains Mono" }}>@{u.handle} · {u.score} impact</div>
                     <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 3, maxWidth: 440, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

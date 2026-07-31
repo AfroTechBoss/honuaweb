@@ -47,10 +47,13 @@ export function AdminAuthGate({ children }: { children: React.ReactNode }) {
 
 // ── Hook: access Privy user from within admin screens ────────────────
 export function useAdminUser() {
-  const { user, logout } = usePrivy();
+  const { user, logout, getAccessToken } = usePrivy();
   return {
     email: user?.email?.address ?? null,
     logout,
+    // Admin writes go through server routes that verify this token — the console
+    // has no Supabase session, so it can't satisfy RLS on its own.
+    getAccessToken,
   };
 }
 

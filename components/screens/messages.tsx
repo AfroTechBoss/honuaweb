@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
 
 const _ogMsgCache: Record<string, any> = {};
@@ -472,12 +472,13 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
               const unread = false; // TODO: track unread per convo
               return (
                 <div key={c.id} onClick={() => setActiveConvoId(c.id)} className="row-hover" style={{ padding: '12px 20px', display: 'flex', gap: 12, cursor: 'pointer', background: isActive ? 'var(--green-tint)' : 'transparent', borderLeft: isActive ? '3px solid var(--green)' : '3px solid transparent' }}>
-                  <Avatar src={disp.avatar} name={disp.name} size={44} verified={disp.verified} />
+                  <Avatar src={disp.avatar} name={disp.name} size={44} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                       <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                         {disp.name}
-                        {disp.isShop && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
+                        {disp.verified && <VerifiedTick size={13} />}
+                        {disp.isShop &&<span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
                       </span>
                       <span style={{ color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{last?.created_at ? msgTimeAgo(last.created_at) : ''}</span>
                     </div>
@@ -507,12 +508,13 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
                 ← Back
               </button>
               <span style={{ cursor: 'pointer' }} onClick={() => onNav?.('profile', { handle: otherDisplay.handle })}>
-                <Avatar src={otherDisplay.avatar} name={otherDisplay.name} size={40} verified={otherDisplay.verified} />
+                <Avatar src={otherDisplay.avatar} name={otherDisplay.name} size={40} />
               </span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   {otherDisplay.name}
-                  {otherDisplay.isShop && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
+                  {otherDisplay.verified && <VerifiedTick size={14} />}
+                  {otherDisplay.isShop &&<span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{otherDisplay.handle}</div>
               </div>

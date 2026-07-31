@@ -1,7 +1,7 @@
 ﻿"use client";
 import React from "react";
 import { Icon } from "./icons";
-import { Avatar, ImagePlaceholder, ScorePill, VerifiedImpact } from "./primitives";
+import { Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, VerifiedTick } from "./primitives";
 import { useApp } from "./app-context";
 
 // =============== Image lightbox ===============
@@ -172,14 +172,11 @@ export function PostCard({ post, dense = false }) {
       marginBottom: 12, cursor: 'pointer',
     }}>
       <header style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-        <span onClick={stop(() => app.nav?.('profile', { handle: user.handle }))}><Avatar src={user.avatar} name={user.name} size={42} verified={user.verified} /></span>
+        <span onClick={stop(() => app.nav?.('profile', { handle: user.handle }))}><Avatar src={user.avatar} name={user.name} size={42} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span onClick={stop(() => app.nav?.('profile', { handle: user.handle }))} style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>{user.name}</span>
-            {user.verified && <span style={{
-              background: 'var(--sky)', color: '#fff', width: 14, height: 14,
-              borderRadius: '50%', display: 'inline-grid', placeItems: 'center', fontSize: 9,
-            }}>✓</span>}
+            {user.verified && <VerifiedTick />}
             <span style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{user.handle}</span>
             <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· {post.time}</span>
           </div>
@@ -668,14 +665,11 @@ export function SuggestedFollows() {
         const following = app.follow?.has(u.handle);
         return (
           <div key={u.handle} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
-            <span onClick={() => app.nav?.('profile', { handle: u.handle })} style={{ cursor: 'pointer' }}><Avatar src={u.avatar_url} name={u.full_name} size={36} verified={u.verified} /></span>
+            <span onClick={() => app.nav?.('profile', { handle: u.handle })} style={{ cursor: 'pointer' }}><Avatar src={u.avatar_url} name={u.full_name} size={36} /></span>
             <div onClick={() => app.nav?.('profile', { handle: u.handle })} style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}>
               <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                 {u.full_name}
-                {u.verified && <span style={{
-                  background: 'var(--sky)', color: '#fff', width: 12, height: 12,
-                  borderRadius: '50%', fontSize: 8, display: 'inline-grid', placeItems: 'center',
-                }}>✓</span>}
+                {u.verified && <VerifiedTick size={12} />}
               </div>
               <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle} · {u.impact_score ?? 0} impact</div>
             </div>
@@ -853,11 +847,12 @@ export function CommentNode({ node, depth, like, reply, remove, dense, defaultOp
     <div className="comment-row" style={{ display: 'flex', gap: 10, paddingTop: 14 }}>
       <style>{`.comment-row:hover .comment-more-btn { opacity: 1 !important; }`}</style>
       <span onClick={goProfile} style={{ cursor: usr.handle && usr.handle !== 'you' ? 'pointer' : 'default', flexShrink: 0 }}>
-        <Avatar src={usr.avatar} name={usr.name} size={av} verified={usr.verified} />
+        <Avatar src={usr.avatar} name={usr.name} size={av} />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span onClick={goProfile} style={{ fontSize: dense ? 13 : 13.5, fontWeight: 600, cursor: usr.handle && usr.handle !== 'you' ? 'pointer' : 'default' }}>{usr.name}</span>
+          {usr.verified && <VerifiedTick size={13} />}
           <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {displayTime}</span>
           <CommentMoreMenu usr={usr} isOwn={isOwn} onDelete={() => remove?.(node.id)} onNav={onNav} />
         </div>
