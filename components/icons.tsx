@@ -15,6 +15,10 @@ export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor", f
     user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 00-.1-1.3l2-1.6-2-3.4-2.4.9a7 7 0 00-2.3-1.3L13.5 3h-3l-.7 2.3a7 7 0 00-2.3 1.3l-2.4-.9-2 3.4 2 1.6A7 7 0 005 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.4-.9a7 7 0 002.3 1.3l.7 2.3h3l.7-2.3a7 7 0 002.3-1.3l2.4.9 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z" /></>,
     search: <><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></>,
+    // Warning triangle. `flame` and `flag` were already spoken for by Moderation
+    // and Appeals, and the error log needs to read as a different kind of thing
+    // at a glance in the same rail.
+    alert: <><path d="M12 4L2.5 20h19L12 4z" /><path d="M12 10v4" /><path d="M12 17.2v.1" /></>,
     heart: <path d="M12 21s-7-5-9-10a5 5 0 019-3 5 5 0 019 3c-2 5-9 10-9 10z" />,
     comment: <path d="M3 5h18v12H7l-4 4V5z" />,
     repost: <><path d="M17 2l4 4-4 4" /><path d="M21 6H7a4 4 0 00-4 4v2" /><path d="M7 22l-4-4 4-4" /><path d="M3 18h14a4 4 0 004-4v-2" /></>,

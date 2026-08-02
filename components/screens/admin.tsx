@@ -4,7 +4,14 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { AdminProducts, AdminUsers, AdminSellers, AdminActivity } from "./admin-manage";
 import { AdminCarbonCredits } from "./admin-carbon";
+import { AdminVerification } from "./admin-verification";
 import { useAdminUser } from "@/components/admin-auth";
+import {
+  fetchOverviewMetrics, fetchAnalyticsMetrics, fetchActivity, recordActivity,
+  fetchErrors, markErrorsSeen, lookupError,
+  relativeTime, duration, pageLabel, SOURCE_LABELS,
+  type OverviewMetrics, type AnalyticsMetrics, type AuditEntry, type ErrorFeed,
+} from "@/lib/admin-metrics";
 
 // =====================================================================
 // Desktop Admin Console — platform owner / moderator workspace
@@ -23,6 +30,7 @@ const ADMIN_NAV_GROUPS = [
     label: 'Management',
     items: [
       ['moderation', 'Moderation', 'flame'],
+      ['verification', 'Verification', 'check'],
       ['community-reports', 'Community Reports', 'users'],
       ['appeals', 'Appeals', 'flag'],
       ['challenges', 'Challenges', 'award'],
@@ -39,6 +47,7 @@ const ADMIN_NAV_GROUPS = [
       ['notifications', 'Notifications', 'bell'],
       ['roles', 'Roles', 'award'],
       ['activity', 'Activity', 'clock'],
+      ['errors', 'Errors', 'alert'],
       ['settings', 'Settings', 'settings'],
     ],
   },
@@ -137,7 +146,10 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const [reports, setReports] = React.useState(MOCK_ADMIN.reports);
   const [products, setProducts] = React.useState(MOCK_ADMIN.products);
   const [users, setUsers] = React.useState<any[]>(MOCK_ADMIN.users);
-  const [audit, setAudit] = React.useState(MOCK_ADMIN.audit);
+  // Starts empty and fills from admin_audit_log. It used to start as eight
+  // invented entries about people who don't work here, and every real action an
+  // admin took was appended to that list and then lost on refresh.
+  const [audit, setAudit] = React.useState<AuditEntry[]>([]);
   const [payouts, setPayouts] = React.useState<any[]>(MOCK_PAYOUTS);
   const [appeals, setAppeals] = React.useState(MOCK_APPEALS);
   const [adminTeam, setAdminTeam] = React.useState(MOCK_ADMIN_TEAM_INIT);
@@ -233,8 +245,72 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
     }
   };
 
-  const log = (action, target, kind = 'check') =>
-    setAudit(a => [{ id: 'l' + Date.now(), actor: 'You', action, target, time: 'just now', kind }, ...a]);
+  // Privy hands back a fresh function every render; the ref keeps the loaders
+  // below from re-firing on each one.
+  const tokenRef = React.useRef(adminToken);
+  tokenRef.current = adminToken;
+  const token = React.useCallback(async (): Promise<string | null> => {
+    try { return await tokenRef.current(); } catch { return null; }
+  }, []);
+
+  const loadAudit = React.useCallback(async () => {
+    const { entries } = await fetchActivity(await token(), 50);
+    if (entries?.length) setAudit(entries);
+  }, [token]);
+
+  React.useEffect(() => { loadAudit(); }, [loadAudit]);
+
+  // Held here rather than inside AdminOverview because the left rail's seller
+  // badge reads the same number. Fetched twice it would drift, and the console
+  // was already showing "4" in the rail beside a "0" in the panel.
+  const [metrics, setMetrics] = React.useState<OverviewMetrics | null>(null);
+  const [metricsError, setMetricsError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    (async () => {
+      const { metrics: m, error } = await fetchOverviewMetrics(await token());
+      setMetrics(m ?? null);
+      setMetricsError(error ?? null);
+    })();
+  }, [token]);
+
+  // Unread server errors, for the rail badge. Fetched here so the count is
+  // visible from every section — the whole point of a badge is that you don't
+  // have to be looking at the Errors page to find out something broke.
+  const [unseenErrors, setUnseenErrors] = React.useState(0);
+
+  React.useEffect(() => {
+    let alive = true;
+    const poll = async () => {
+      const { feed } = await fetchErrors(await token(), 1);
+      if (alive) setUnseenErrors(feed?.unseen ?? 0);
+    };
+    poll();
+    // Slow on purpose. This is a "something broke while you had the tab open"
+    // signal, not a live tail — a tighter interval would spend the route's rate
+    // limit on a number that changes a few times a week.
+    const t = setInterval(poll, 120_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [token]);
+
+  /**
+   * Records an admin action, both on screen and in the database.
+   *
+   * The optimistic entry goes in first so the console stays responsive, then
+   * the write happens. If the write fails the line is still on screen for this
+   * session but won't survive a refresh — the action itself already succeeded,
+   * and blocking the UI on the bookkeeping would be the wrong trade. The server
+   * logs the failure with the action name attached.
+   */
+  const log = (action, target, kind = 'check') => {
+    const at = new Date().toISOString();
+    const optimistic: AuditEntry = { id: 'pending-' + Date.now(), actor: 'You', action, target, kind, at };
+    setAudit(a => [optimistic, ...a]);
+    token()
+      .then(t => recordActivity(t, { action, target, kind, actorLabel: adminEmail ?? 'Admin' }))
+      .then(({ id }) => { if (id) setAudit(a => a.map(e => e.id === optimistic.id ? { ...e, id } : e)); })
+      .catch(() => {});
+  };
 
   // moderation actions
   const resolveReport = (id, outcome) => {
@@ -328,10 +404,10 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
 
   const openCount = reports.filter(r => r.status === 'open').length;
   const flaggedCount = products.filter(p => p.status === 'flagged').length;
-  const pendingSellers = (app.state?.sellerStatus === 'pending' ? 1 : 0) + MOCK_APPLICATIONS.length;
+  const pendingSellers = metrics?.pendingApplications ?? 0;
   const pendingPayouts = payouts.filter(p => p.status === 'pending').length;
   const pendingAppeals = appeals.filter(a => a.status === 'open').length;
-  const badges = { moderation: openCount, appeals: pendingAppeals, challenges: pendingChallenges.length, products: flaggedCount, sellers: pendingSellers, payouts: pendingPayouts };
+  const badges = { moderation: openCount, appeals: pendingAppeals, challenges: pendingChallenges.length, products: flaggedCount, sellers: pendingSellers, payouts: pendingPayouts, errors: unseenErrors };
 
   const W = collapsed ? 68 : 232;
 
@@ -506,8 +582,9 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
         </div>
 
         <div style={{ padding: '24px 28px 60px' }}>
-          {section === 'overview' && <AdminOverview reports={reports} users={users} products={products} audit={audit} appeals={appeals} pendingChallenges={pendingChallenges.length} onSection={setSection} />}
+          {section === 'overview' && <AdminOverview reports={reports} users={users} products={products} audit={audit} appeals={appeals} pendingChallenges={pendingChallenges.length} onSection={setSection} metrics={metrics} metricsError={metricsError} />}
           {section === 'moderation' && <AdminModeration reports={reports} onResolve={resolveReport} onSuspend={suspendFromReport} />}
+          {section === 'verification' && <AdminVerification getToken={adminToken} log={log} />}
           {section === 'community-reports' && <AdminCommunityReports />}
           {section === 'appeals' && <AdminAppeals appeals={appeals} onResolve={resolveAppeal} />}
           {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
@@ -519,7 +596,8 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
           {section === 'notifications' && <AdminNotifications log={log} />}
           {section === 'roles' && <AdminRoles team={adminTeam} onChangeRole={changeTeamRole} />}
           {section === 'activity' && <AdminActivity audit={audit} />}
-          {section === 'analytics' && <AdminAnalytics />}
+          {section === 'analytics' && <AdminAnalytics getToken={adminToken} />}
+          {section === 'errors' && <AdminErrors getToken={adminToken} unseen={unseenErrors} onSeen={setUnseenErrors} />}
           {section === 'settings' && <AdminSettings />}
         </div>
       </main>
@@ -530,40 +608,45 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
 // =====================================================================
 // OVERVIEW
 // =====================================================================
-function AdminOverview({ reports, users, products, audit, appeals, pendingChallenges, onSection }) {
-  const s = MOCK_ADMIN.stats;
+// Every figure here comes from /api/admin/metrics, fetched by the shell above.
+// It used to query Supabase straight from the browser, which silently returned
+// nothing for orders and seller applications — the console has a Privy session,
+// not a Supabase one, so `auth.uid()` is null and no RLS policy on those tables
+// can match.
+function AdminOverview({ reports, users, products, audit, appeals, pendingChallenges, onSection, metrics, metricsError }) {
   const openCount = reports.filter(r => r.status === 'open').length;
   const suspended = users.filter(u => u.status !== 'active').length;
   const openAppeals = appeals.filter(a => a.status === 'open').length;
 
-  // Real platform counts from Supabase (falls back to demo stats until loaded)
-  const [real, setReal] = React.useState<any>(null);
-  React.useEffect(() => {
-    import('@/lib/supabase').then(async ({ supabase }) => {
-      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-      const [members, posts, orders, apps] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('posts').select('*', { count: 'exact', head: true }),
-        supabase.from('orders').select('total_cents').gte('created_at', since),
-        supabase.from('seller_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      ]);
-      setReal({
-        members: members.count ?? null,
-        posts: posts.count ?? null,
-        gmv: orders.data ? orders.data.reduce((sum: number, o: any) => sum + (o.total_cents ?? 0), 0) / 100 : null,
-        pendingApps: apps.count ?? null,
-      });
-    }).catch(() => {});
-  }, []);
+  // A dash while loading or after a failure. Zero is a measurement and this
+  // isn't one — showing it would be the same lie in a smaller font.
+  const num = (v: number | undefined) => metrics ? (v ?? 0).toLocaleString() : '—';
+  // Posts and the seller queue are plain table counts, so they're real either
+  // way; GMV and member growth come from the aggregation functions and are only
+  // meaningful once those exist.
+  const agg = metrics?.available ? metrics : null;
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      {metricsError && (
+        <div style={{ padding: '10px 14px', borderRadius: 12, background: sTint('var(--clay)', 10), border: '1px solid ' + sTint('var(--clay)', 30), color: 'var(--clay)', fontSize: 12.5 }}>
+          {metricsError}
+        </div>
+      )}
+
+      {metrics && !metrics.available && (
+        <div style={{ padding: '12px 16px', borderRadius: 14, background: sTint('var(--sun)', 10), border: '1px solid ' + sTint('var(--sun)', 30), fontSize: 13, lineHeight: 1.55, color: 'var(--ink-3)' }}>
+          <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>Sales and member figures are unavailable.</strong> Apply{' '}
+          <code style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>033_admin_activity_and_analytics.sql</code> and they'll fill in on the next load.
+        </div>
+      )}
+
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <SStat label="Members" value={(real?.members ?? s.members).toLocaleString()} icon="users" sub={real?.members != null ? 'live count' : 'vs last month'} trend={real?.members != null ? undefined : s.membersTrend} />
-        <SStat label="Posts" value={(real?.posts ?? s.sellers).toLocaleString()} icon="leaf" sub={real?.posts != null ? 'live count' : 'vs last month'} trend={real?.posts != null ? undefined : s.sellersTrend} />
-        <SStat label="GMV · 30d" value={sMoney(real?.gmv ?? s.gmv, 0)} icon="coin" accent="var(--sun)" sub={real?.gmv != null ? 'from real orders' : undefined} trend={real?.gmv != null ? undefined : s.gmvTrend} />
-        <SStat label="Seller queue" value={String(real?.pendingApps ?? MOCK_APPLICATIONS.length)} icon="bolt" accent="var(--sky)" sub="pending review" />
+        <SStat label="Members" value={agg ? agg.members.total.toLocaleString() : '—'} icon="users" sub="live count" trend={agg?.members.trend ?? undefined} />
+        <SStat label="Posts" value={num(metrics?.posts)} icon="leaf" sub="live count" />
+        <SStat label="GMV · 30d" value={agg ? sMoney(agg.gmv.total, 0) : '—'} icon="coin" accent="var(--sun)" sub="paid orders" trend={agg?.gmv.trend ?? undefined} />
+        <SStat label="Seller queue" value={num(metrics?.pendingApplications)} icon="bolt" accent="var(--sky)" sub="pending review" />
       </div>
 
       {/* charts + attention */}
@@ -572,11 +655,11 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>Gross marketplace volume</div>
-              <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 2 }}>{sMoney(s.gmv, 0)}</div>
+              <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em', marginTop: 2 }}>{agg ? sMoney(agg.gmv.total, 0) : '—'}</div>
             </div>
-            <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>↑ {s.gmvTrend}%</span>
+            <TrendTag value={agg?.gmv.trend} />
           </div>
-          <div style={{ marginTop: 14 }}><SSpark data={MOCK_ADMIN.gmvSeries} color="var(--green)" w={620} h={120} /></div>
+          <div style={{ marginTop: 14 }}><Series data={metrics ? (agg?.gmv.series ?? null) : undefined} color="var(--green)" w={620} h={120} empty="No paid orders in the last 30 days" /></div>
         </div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Needs your attention</div>
@@ -585,7 +668,7 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
             <AttnRow icon="flag" color="var(--sky)" label="Open appeals" value={openAppeals} onClick={() => onSection('appeals')} />
             <AttnRow icon="award" color="var(--sun)" label="Pending challenges" value={pendingChallenges ?? 0} onClick={() => onSection('challenges')} />
             <AttnRow icon="bag" color="var(--sun)" label="Flagged products" value={products.filter(p => p.status === 'flagged').length} onClick={() => onSection('products')} />
-            <AttnRow icon="leaf" color="var(--sky)" label="Seller applications" value={real?.pendingApps ?? MOCK_APPLICATIONS.length} onClick={() => onSection('sellers')} />
+            <AttnRow icon="leaf" color="var(--sky)" label="Seller applications" value={metrics?.pendingApplications ?? 0} onClick={() => onSection('sellers')} />
             <AttnRow icon="lock" color="var(--ink-3)" label="Suspended / banned" value={suspended} onClick={() => onSection('users')} />
           </div>
         </div>
@@ -595,7 +678,7 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Member growth · 30 days</div>
-          <div style={{ marginTop: 14 }}><SSpark data={MOCK_ADMIN.memberSeries} color="var(--sky)" w={420} h={90} /></div>
+          <div style={{ marginTop: 14 }}><Series data={metrics ? (agg?.members.series ?? null) : undefined} color="var(--sky)" w={420} h={90} empty="No members yet" /></div>
         </div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -603,12 +686,54 @@ function AdminOverview({ reports, users, products, audit, appeals, pendingChalle
             <button onClick={() => onSection('activity')} style={{ background: 'transparent', border: 'none', color: 'var(--green)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer' }}>View log →</button>
           </div>
           <div style={{ display: 'grid', gap: 2 }}>
-            {audit.slice(0, 5).map(a => <AuditLine key={a.id} a={a} compact />)}
+            {audit.length === 0
+              ? <EmptyNote>No admin actions recorded yet</EmptyNote>
+              : audit.slice(0, 5).map(a => <AuditLine key={a.id} a={a} compact />)}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+// A dimmed line of plain text where a number or a chart would go. Used
+// wherever the honest answer is "nothing has happened here yet" — an empty
+// state that says so beats a chart flatlining at zero, which reads as a
+// measurement of quiet rather than an absence of data.
+function EmptyNote({ children, height }: { children: React.ReactNode; height?: number }) {
+  return (
+    <div style={{ display: 'grid', placeItems: 'center', minHeight: height ?? 48, padding: '10px 0', fontSize: 12.5, color: 'var(--ink-4)', textAlign: 'center' }}>
+      {children}
+    </div>
+  );
+}
+
+// Renders nothing when there's no comparison to make. A trend needs a previous
+// window with something in it; the route sends null when there isn't one, and
+// an arrow drawn anyway would be pointing at a number nobody measured.
+function TrendTag({ value, invert }: { value?: number | null; invert?: boolean }) {
+  if (value == null || !Number.isFinite(value)) return null;
+  const good = invert ? value <= 0 : value >= 0;
+  return (
+    <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 600, color: good ? 'var(--green)' : 'var(--clay)' }}>
+      {value >= 0 ? '↑' : '↓'} {Math.abs(value)}%
+    </span>
+  );
+}
+
+// SSpark interpolates across `data.length - 1`, so a single point divides by
+// zero and draws NaN into the path. Anything under two points, or a series
+// that's entirely zero, gets the empty note instead of a line.
+//
+// The three states are distinct on purpose: undefined is still loading, null is
+// "we couldn't ask", and an empty or flat array is a real measurement of
+// nothing. Collapsing the middle one into either of the others is how a chart
+// ends up asserting something nobody counted.
+function Series({ data, color, w, h, empty }: { data?: number[] | null; color: string; w: number; h: number; empty: string }) {
+  if (data === undefined) return <EmptyNote height={h}>Loading…</EmptyNote>;
+  if (data === null) return <EmptyNote height={h}>Not available yet</EmptyNote>;
+  if (data.length < 2 || data.every(v => !v)) return <EmptyNote height={h}>{empty}</EmptyNote>;
+  return <SSpark data={data} color={color} w={w} h={h} />;
 }
 
 function AttnRow({ icon, color, label, value, onClick }) {
@@ -625,13 +750,16 @@ function AttnRow({ icon, color, label, value, onClick }) {
 // shared audit line (used by overview + activity)
 export function AuditLine({ a, compact }) {
   const tone = { trash: 'var(--clay)', lock: 'var(--sun)', flame: 'var(--clay)', check: 'var(--green)', close: 'var(--ink-3)', logout: 'var(--clay)', coin: 'var(--sun)', award: 'var(--sky)' }[a.kind] || 'var(--ink-3)';
+  // Derived at render rather than stored, so a console left open overnight
+  // doesn't still claim the top entry happened "2m ago".
+  const when = a.at ? relativeTime(a.at) : (a.time ?? '');
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: compact ? '8px 0' : '12px 4px', borderBottom: compact ? 'none' : '1px solid var(--line)' }}>
       <span style={{ width: 30, height: 30, borderRadius: 9, background: sTint(tone), color: tone, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name={a.kind} size={15} /></span>
       <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.4 }}>
         <span style={{ fontWeight: 600 }}>{a.actor}</span> <span style={{ color: 'var(--ink-3)' }}>{a.action}</span> <span style={{ fontWeight: 500 }}>{a.target}</span>
       </div>
-      <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', flexShrink: 0 }}>{a.time}</span>
+      <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', flexShrink: 0 }}>{when}</span>
     </div>
   );
 };
@@ -730,46 +858,329 @@ function AdminModeration({ reports, onResolve, onSuspend }) {
 }
 
 // =====================================================================
-// ANALYTICS (stub)
+// ANALYTICS
 // =====================================================================
-function AdminAnalytics() {
-  const s = MOCK_ADMIN.stats;
+// Everything here is measured from analytics_events, which the app writes to on
+// every pageview (lib/analytics.ts → /api/track). Until migration 033 is applied
+// there is nowhere to write, so the page will read empty — which is the true
+// state of a platform that has never counted a visit, and the state the numbers
+// that used to sit here were hiding.
+function AdminAnalytics({ getToken }) {
+  const [a, setA] = React.useState<AnalyticsMetrics | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const tokenRef = React.useRef(getToken);
+  tokenRef.current = getToken;
+  React.useEffect(() => {
+    (async () => {
+      let t: string | null = null;
+      try { t = await tokenRef.current(); } catch {}
+      const { metrics, error: err } = await fetchAnalyticsMetrics(t);
+      setA(metrics ?? null);
+      setError(err ?? null);
+    })();
+  }, []);
+
+  const card = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 } as const;
+  // Loaded, and with at least one pageview behind it. Short of that the tiles
+  // show a dash — a "0" here would be read as a count, and nothing was counted.
+  const m = a?.collecting ? a : null;
+  const dash = (v: React.ReactNode) => m ? v : '—';
+
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      {error && (
+        <div style={{ padding: '10px 14px', borderRadius: 12, background: sTint('var(--clay)', 10), border: '1px solid ' + sTint('var(--clay)', 30), color: 'var(--clay)', fontSize: 12.5 }}>
+          {error}
+        </div>
+      )}
+
+      {a && !a.available && (
+        <div style={{ ...card, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <span style={{ width: 34, height: 34, borderRadius: 10, background: sTint('var(--sun)'), color: 'var(--sun)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="bolt" size={17} /></span>
+          <div style={{ fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-3)' }}>
+            <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>Analytics aren't set up yet.</strong> Apply{' '}
+            <code style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>033_admin_activity_and_analytics.sql</code> in Supabase — until then there's
+            nowhere to record visits, so nothing on this page can be measured.
+          </div>
+        </div>
+      )}
+
+      {a && a.available && !a.collecting && (
+        <div style={{ ...card, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <span style={{ width: 34, height: 34, borderRadius: 10, background: sTint('var(--sky)'), color: 'var(--sky)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="bolt" size={17} /></span>
+          <div style={{ fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-3)' }}>
+            <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>No pageviews recorded yet.</strong> Collection is live — these fill in as people
+            visit. Admin pages aren't counted, and visitors with Do Not Track on are skipped.
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <SStat label="Page views · 7d" value="84.2K" icon="bolt" trend={12} accent="var(--sky)" />
-        <SStat label="Avg. session" value="4m 38s" icon="clock" trend={5} />
-        <SStat label="Retention · 30d" value="61%" icon="users" trend={3} accent="var(--green)" />
-        <SStat label="Conversion" value="3.4%" icon="leaf" trend={-1} accent="var(--sun)" />
+        <SStat label="Page views · 7d" value={dash(m?.pageViews.value.toLocaleString())} icon="bolt" accent="var(--sky)" trend={m?.pageViews.trend ?? undefined} sub="vs previous 7 days" />
+        <SStat label="Avg. session" value={dash(m ? duration(m.session.seconds) : '')} icon="clock" trend={m?.session.trend ?? undefined} sub="time between first and last view" />
+        {/* Retention has no trend: comparing it to a prior window needs two full
+            30-day cohorts, and the number is meaningless until one exists. */}
+        <SStat label="Retention · 30d" value={dash(m?.retention.pct == null ? '—' : `${m.retention.pct}%`)} icon="users" accent="var(--green)"
+               sub={m?.retention.base ? `of ${m.retention.base.toLocaleString()} returning` : 'no prior cohort yet'} />
+        {/* Paid orders are counted from the orders table, so that figure stands
+            on its own even with no traffic data to divide it by. */}
+        <SStat label="Conversion" value={dash(m?.conversion.pct == null ? '—' : `${m.conversion.pct.toFixed(1)}%`)} icon="leaf" accent="var(--sun)"
+               trend={m?.conversion.trend ?? undefined} sub={a?.available ? `${a.conversion.orders.toLocaleString()} paid orders` : 'paid orders per session'} />
       </div>
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+
+      <div style={card}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Traffic · 30 days</div>
-        <SSpark data={MOCK_ADMIN.memberSeries} color="var(--sky)" w={900} h={120} />
+        <Series data={a ? (a.available ? a.traffic : null) : undefined} color="var(--sky)" w={900} h={120} empty="No pageviews recorded in the last 30 days" />
       </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+        <div style={card}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Top pages</div>
-          {[['Home feed', '32%'], ['Explore', '21%'], ['Marketplace', '18%'], ['Profile', '15%'], ['Communities', '14%']].map(([page, pct]) => (
-            <div key={page} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <span style={{ flex: 1, fontSize: 13.5 }}>{page}</span>
-              <div style={{ width: 120, height: 6, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
-                <div style={{ width: pct, height: '100%', borderRadius: 999, background: 'var(--green)' }} />
+          {!a?.topPages.length
+            ? <EmptyNote>{!a ? 'Loading…' : a.available ? 'No pageviews in the last 30 days' : 'Not available yet'}</EmptyNote>
+            : a.topPages.map(p => (
+              <div key={p.path} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <span style={{ flex: 1, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.path}>{pageLabel(p.path)}</span>
+                <div style={{ width: 120, height: 6, borderRadius: 999, background: 'var(--line)', overflow: 'hidden', flexShrink: 0 }}>
+                  <div style={{ width: `${p.pct}%`, height: '100%', borderRadius: 999, background: 'var(--green)' }} />
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', width: 36, textAlign: 'right', flexShrink: 0 }}>{p.pct}%</span>
               </div>
-              <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', width: 36, textAlign: 'right' }}>{pct}</span>
-            </div>
-          ))}
+            ))}
         </div>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
+        <div style={card}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Acquisition sources</div>
-          {[['Direct', '41%', 'var(--green)'], ['Search', '28%', 'var(--sky)'], ['Social', '19%', 'var(--sun)'], ['Referral', '12%', 'var(--clay)']].map(([src, pct, color]) => (
-            <div key={src} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <span style={{ flex: 1, fontSize: 13.5 }}>{src}</span>
-              <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{pct}</span>
-            </div>
-          ))}
+          {!a?.sources.length
+            ? <EmptyNote>{!a ? 'Loading…' : a.available ? 'No sessions in the last 30 days' : 'Not available yet'}</EmptyNote>
+            : a.sources.map(src => {
+              const meta = SOURCE_LABELS[src.source] ?? { label: src.source, color: 'var(--ink-3)' };
+              return (
+                <div key={src.source} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: meta.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 13.5 }}>{meta.label}</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{src.pct}%</span>
+                </div>
+              );
+            })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// ERRORS
+// =====================================================================
+// Server failures, from public.error_log (migration 034).
+//
+// Only logError() lands here — not logInfo, not logWarn. Those stay on the
+// console, where volume costs nothing; a row per request would make Postgres
+// the busiest thing in the stack and, on a bad day, the thing that falls over
+// because something else already had.
+//
+// Two things this shows that a log drain makes tedious: how many times a
+// failure has happened rather than just that it happened, and a lookup by
+// request id — the code failure() already returns to the browser and puts in
+// the x-request-id header. Someone reports "it broke", reads out six
+// characters, and this finds the line.
+//
+// Everything on this page is the detail failure() deliberately withholds from
+// users: driver messages naming tables and columns, stacks naming file paths.
+// That is the point of the page, and the reason the route behind it is gated
+// on a verified Privy token.
+function AdminErrors({ getToken, unseen, onSeen }) {
+  const [feed, setFeed] = React.useState<ErrorFeed | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [days, setDays] = React.useState(7);
+  const [open, setOpen] = React.useState<string | null>(null);
+  const [lookup, setLookup] = React.useState('');
+  const [found, setFound] = React.useState<any[] | null>(null);
+  const app = useApp();
+
+  const tokenRef = React.useRef(getToken);
+  tokenRef.current = getToken;
+  const token = React.useCallback(async (): Promise<string | null> => {
+    try { return await tokenRef.current(); } catch { return null; }
+  }, []);
+
+  const load = React.useCallback(async () => {
+    const { feed: f, error: err } = await fetchErrors(await token(), days);
+    setFeed(f ?? null);
+    setError(err ?? null);
+    onSeen?.(f?.unseen ?? 0);
+  }, [token, days, onSeen]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const markSeen = async (fingerprint?: string) => {
+    const { error: err } = await markErrorsSeen(await token(), fingerprint);
+    if (err) { app.toast?.({ msg: "Couldn't update", sub: err, kind: 'error', icon: 'close' }); return; }
+    load();
+  };
+
+  const search = async () => {
+    const id = lookup.trim();
+    if (!id) { setFound(null); return; }
+    const { occurrences } = await lookupError(await token(), id);
+    setFound(occurrences);
+  };
+
+  const card = { background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 } as const;
+  const groups = feed?.groups ?? [];
+  const total = groups.reduce((n, g) => n + g.occurrences, 0);
+
+  return (
+    <div style={{ display: 'grid', gap: 18 }}>
+      {error && (
+        <div style={{ padding: '10px 14px', borderRadius: 12, background: sTint('var(--clay)', 10), border: '1px solid ' + sTint('var(--clay)', 30), color: 'var(--clay)', fontSize: 12.5 }}>
+          {error}
+        </div>
+      )}
+
+      {feed && !feed.available && (
+        <div style={{ ...card, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <span style={{ width: 34, height: 34, borderRadius: 10, background: sTint('var(--sun)'), color: 'var(--sun)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="alert" size={17} /></span>
+          <div style={{ fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink-3)' }}>
+            <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>The error log isn't set up yet.</strong> Apply{' '}
+            <code style={{ fontFamily: 'JetBrains Mono', fontSize: 12.5 }}>034_error_log.sql</code> in Supabase. Until then failures still go to the
+            server console and Vercel's log drain — there's just nowhere to keep them.
+          </div>
+        </div>
+      )}
+
+      {/* Tiles. A zero here is a real measurement — unlike Analytics, where
+          nothing recorded and nothing happened are different facts, an error
+          log with no rows genuinely means nothing failed. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <SStat label="Unread" value={feed ? (feed.unseen ?? 0).toLocaleString() : '—'} icon="alert"
+               accent={feed?.unseen ? 'var(--clay)' : 'var(--green)'} sub="across all time" />
+        <SStat label={`Distinct failures · ${days}d`} value={feed ? groups.length.toLocaleString() : '—'} icon="flame" accent="var(--sun)" sub="grouped by cause" />
+        <SStat label={`Occurrences · ${days}d`} value={feed ? total.toLocaleString() : '—'} icon="clock" accent="var(--sky)" sub="every time one fired" />
+      </div>
+
+      {/* Lookup by request id — the reason the id is in the error response. */}
+      <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>Find by request id</span>
+        <input
+          value={lookup}
+          onChange={e => setLookup(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') search(); }}
+          placeholder="e.g. k3f9a2mx7q"
+          style={{ flex: 1, minWidth: 180, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--bg-2)', color: 'var(--ink)', fontFamily: 'JetBrains Mono', fontSize: 13 }}
+        />
+        <button className="btn btn-ghost" onClick={search}><Icon name="search" size={13} /> Look up</button>
+        {found != null && <button className="btn btn-ghost" onClick={() => { setFound(null); setLookup(''); }}>Clear</button>}
+        <div style={{ flexBasis: '100%', fontSize: 12, color: 'var(--ink-4)' }}>
+          Every failed request returns this code to the browser and in an <code style={{ fontFamily: 'JetBrains Mono' }}>x-request-id</code> header.
+        </div>
+      </div>
+
+      {found != null && (
+        <div style={card}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+            {found.length ? `${found.length} occurrence${found.length === 1 ? '' : 's'} for that id` : 'Nothing logged under that id'}
+          </div>
+          {found.map(o => <ErrorDetail key={o.id} scope={o.scope} message={o.message} errorMessage={o.errorMessage} stack={o.stack} path={o.path} requestId={o.requestId} at={o.at} />)}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[1, 7, 30].map(d => (
+            <button key={d} onClick={() => setDays(d)} className="btn btn-ghost"
+                    style={days === d ? { background: sTint('var(--green)'), color: 'var(--green)' } : undefined}>
+              {d === 1 ? '24h' : `${d}d`}
+            </button>
+          ))}
+        </div>
+        <button className="btn btn-ghost" onClick={load}>Refresh</button>
+        {!!feed?.unseen && (
+          <button className="btn btn-ghost" style={{ marginLeft: 'auto' }} onClick={() => markSeen()}>
+            <Icon name="check" size={13} /> Mark all read
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {!feed
+          ? <div style={card}><EmptyNote>Loading…</EmptyNote></div>
+          : !feed.available
+            ? null
+            : !groups.length
+              ? <div style={card}><EmptyNote height={90}>Nothing has failed in the last {days === 1 ? '24 hours' : `${days} days`}.</EmptyNote></div>
+              : groups.map(g => (
+                <div key={g.fingerprint} style={{ background: 'var(--surface)', border: '1px solid ' + (g.unseen ? sTint('var(--clay)', 40) : 'var(--line)'), borderRadius: 16, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '15px 18px' }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, display: 'grid', placeItems: 'center', background: sTint('var(--clay)'), color: 'var(--clay)' }}>
+                      <Icon name="alert" size={16} />
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', background: 'var(--bg-2)', padding: '2px 7px', borderRadius: 6 }}>{g.scope}</span>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{g.message}</span>
+                        {!!g.unseen && (
+                          <span style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', fontWeight: 600, color: 'var(--clay)', background: sTint('var(--clay)'), padding: '2px 7px', borderRadius: 6 }}>NEW</span>
+                        )}
+                      </div>
+                      {g.errorMessage && (
+                        <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={g.errorMessage}>
+                          {g.errorMessage}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>
+                        {g.occurrences.toLocaleString()}× · last {relativeTime(g.lastSeen)} · first {relativeTime(g.firstSeen)}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button className="btn btn-ghost" onClick={() => setOpen(open === g.fingerprint ? null : g.fingerprint)}>
+                        {open === g.fingerprint ? 'Hide' : 'Details'}
+                      </button>
+                      {!!g.unseen && (
+                        <button className="btn btn-ghost" onClick={() => markSeen(g.fingerprint)}>
+                          <Icon name="check" size={13} /> Read
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {open === g.fingerprint && (
+                    <div style={{ borderTop: '1px solid var(--line)', padding: '14px 18px' }}>
+                      <ErrorDetail scope={g.scope} message={g.message} errorMessage={g.errorMessage} stack={g.stack} path={g.path} requestId={g.requestId} at={g.lastSeen} latest />
+                    </div>
+                  )}
+                </div>
+              ))}
+      </div>
+    </div>
+  );
+}
+
+// One occurrence, expanded. Shared by the grouped list and the request-id
+// lookup so a stack reads the same either way.
+function ErrorDetail({ scope, message, errorMessage, stack, path, requestId, at, latest }: any) {
+  const row = (label: string, value: React.ReactNode) => value ? (
+    <div style={{ display: 'flex', gap: 10, fontSize: 12.5, marginBottom: 5 }}>
+      <span style={{ color: 'var(--ink-4)', width: 82, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontFamily: 'JetBrains Mono', color: 'var(--ink-2)', wordBreak: 'break-all' }}>{value}</span>
+    </div>
+  ) : null;
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {latest && <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginBottom: 8 }}>Most recent occurrence</div>}
+      {row('Scope', scope)}
+      {row('Message', message)}
+      {row('Error', errorMessage)}
+      {row('Path', path)}
+      {row('Request id', requestId)}
+      {row('When', at ? new Date(at).toLocaleString() : null)}
+      {stack && (
+        <pre style={{
+          marginTop: 10, padding: 12, borderRadius: 10, background: 'var(--bg-2)', border: '1px solid var(--line)',
+          fontFamily: 'JetBrains Mono', fontSize: 11.5, lineHeight: 1.6, color: 'var(--ink-3)',
+          overflowX: 'auto', whiteSpace: 'pre', margin: '10px 0 0',
+        }}>{stack}</pre>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import React from "react";
 import { usePathname } from "next/navigation";
 import { Icon } from "./icons";
-import { Logo, Avatar } from "./primitives";
+import { Logo, Avatar, VerifiedTick } from "./primitives";
 import { useApp } from "./app-context";
 
 const COLLAPSED_KEY = "sidebar-collapsed";
@@ -125,7 +125,10 @@ export function DesktopSidebar({ active, onNav }: any) {
           {!collapsed && (
             <>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.user?.name || "You"}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.user?.name || "You"}</span>
+                  {app.user?.verified && <VerifiedTick size={12} />}
+                </div>
                 <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "JetBrains Mono" }}>@{app.user?.handle || "you"}</div>
               </div>
               <button onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }} style={{ background: menuOpen ? "var(--bg-2)" : "transparent", border: "none", borderRadius: 8, padding: 5, cursor: "pointer", color: "var(--ink-3)" }}>

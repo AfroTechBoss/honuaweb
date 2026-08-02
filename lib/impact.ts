@@ -241,6 +241,81 @@ export async function getAllLogs(userId: string): Promise<ImpactLog[]> {
   return [];
 }
 
+// ---------------------------------------------------------------------------
+// Leaderboard
+// ---------------------------------------------------------------------------
+
+export type LeaderRow = {
+  rank: number;
+  userId: string;
+  name: string;
+  handle: string;
+  avatar: string | null;
+  co2: number;
+  isYou: boolean;
+  verified: boolean;
+};
+
+/**
+ * Ranking by lifetime CO₂ avoided, summed from the ledger.
+ *
+ * Summed from impact_logs rather than read off profiles.total_co2_kg so it
+ * agrees with the number on each person's own profile — the two disagreeing is
+ * worse than either being slightly stale. `impact_logs` is public-read, so this
+ * works from the client.
+ *
+ * Returns the top `top` plus the viewer's own row when they rank below it, so
+ * they always see where they actually stand.
+ */
+export async function getImpactLeaderboard(viewerId?: string, top = 5): Promise<LeaderRow[]> {
+  try {
+    const { data: logs, error } = await supabase
+      .from('impact_logs')
+      .select('user_id, co2_saved_kg');
+    if (error || !logs) return [];
+
+    const totals = new Map<string, number>();
+    for (const l of logs as any[]) {
+      if (!l.user_id) continue;
+      totals.set(l.user_id, (totals.get(l.user_id) ?? 0) + Number(l.co2_saved_kg ?? 0));
+    }
+    // Everyone, ranked — the viewer's rank has to be their true position, not
+    // their position within the slice we happen to display.
+    const ranked = [...totals.entries()]
+      .filter(([, co2]) => co2 > 0)
+      .sort((a, b) => b[1] - a[1]);
+    if (!ranked.length) return [];
+
+    const rankOf = new Map(ranked.map(([id], i) => [id, i + 1]));
+    const shown = ranked.slice(0, top);
+    const viewerRank = viewerId ? rankOf.get(viewerId) : undefined;
+    if (viewerId && viewerRank && viewerRank > top) {
+      shown.push(ranked[viewerRank - 1]);
+    }
+
+    const ids = shown.map(([id]) => id);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, handle, full_name, avatar_url, verified')
+      .in('id', ids);
+    const byId = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
+    return shown.map(([id, co2]) => {
+      const p = byId.get(id);
+      return {
+        rank: rankOf.get(id)!,
+        userId: id,
+        name: p?.full_name || (p?.handle ? `@${p.handle}` : 'Someone'),
+        handle: p?.handle ?? '',
+        avatar: p?.avatar_url ?? null,
+        co2,
+        isYou: id === viewerId,
+        verified: !!p?.verified,
+      };
+    });
+  } catch { return []; }
+}
+
 // Local calendar day (YYYY-MM-DD) for a Date — avoids the UTC off-by-one that
 // dropped "today" for users ahead of UTC.
 export function localDay(d: Date): string {

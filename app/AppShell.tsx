@@ -8,6 +8,7 @@ import { ModalRoot } from "@/components/screens/desktop-rest";
 import { MobileNav, MobileComposeFab } from "@/components/sidebar";
 import { OAuthOnboardingFlow } from "@/components/screens/desktop-misc";
 import { CartDrawer } from "@/components/cart-drawer";
+import { AnalyticsTracker } from "@/components/analytics-tracker";
 
 const PUBLIC_PATHS = ["/login", "/terms", "/seller-policy", "/proposition", "/admin", "/checkout", "/orders", "/search", "/support", "/report", "/returns", "/marketplace"];
 
@@ -272,6 +273,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div id="honua-app">
         <AuthGate>{children}</AuthGate>
       </div>
+      <AnalyticsTracker />
       <ToastHost />
       <ModalRoot />
       <CartDrawer />

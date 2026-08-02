@@ -219,7 +219,16 @@ export function DesktopProfile({ onNav, params }) {
           <div className="profile-identity-row" style={{ marginBottom: 18, paddingTop: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <h1 className="font-display profile-name" style={{ margin: 0, fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>{profile.full_name}</h1>
-              {profile.verified && <VerifiedTick size={22} />}
+              {profile.verified && (
+                <button
+                  type="button"
+                  aria-label={`About @${profile.handle}'s verification`}
+                  onClick={() => app.openModal('verification', { profile })}
+                  style={{ background: 'none', border: 'none', padding: 0, lineHeight: 0, cursor: 'pointer', borderRadius: 999 }}
+                >
+                  <VerifiedTick size={22} />
+                </button>
+              )}
               {profile.impact_score > 0 && <span className="chip chip-green">Impact score {profile.impact_score}</span>}
             </div>
             <div style={{ fontSize: 14, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
