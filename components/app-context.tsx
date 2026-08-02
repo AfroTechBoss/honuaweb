@@ -133,7 +133,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, handle, avatar_url, cover_url, onboarding_complete")
+          .select("full_name, handle, avatar_url, cover_url, verified, onboarding_complete")
           .eq("id", u.id)
           .single();
         if (profile) {
@@ -147,6 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               handle: profile.handle || base.handle,
               avatar: profile.avatar_url || base.avatar,
               cover: profile.cover_url || null,
+              verified: !!profile.verified,
             },
           }));
         }
@@ -340,6 +341,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => {});
     refreshUnread(userId);
     refreshCollections(userId);
+    // Keep profiles.timezone current. Streaks are counted in local calendar
+    // days, so the streak-reminder job (/api/cron/streak) can't tell when a
+    // user's midnight is without this. Written on every sign-in so it follows
+    // people who move; failure is silent because it's not worth blocking on.
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) supabase.from('profiles').update({ timezone: tz }).eq('id', userId).then(() => {}, () => {});
+    } catch {}
     // Sync seller status app-wide so "Sell on Honua" vs "Seller dashboard"
     // is correct everywhere (marketplace, sidebar) — not just on /sell.
     import('@/lib/market').then(({ getMySellerApplication }) => getMySellerApplication(userId)).then(dbApp => {

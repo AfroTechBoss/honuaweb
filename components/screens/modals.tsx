@@ -1,10 +1,12 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS, ACTION_IMPACTS, computeImpact, VOUCH_THRESHOLD } from "@/lib/impact";
 import { QuoteCard } from "./communities";
+import { VERIFICATION_MEANS } from "@/lib/verification-copy";
+import { MVerifyRequest } from "./verification-modal";
 
 // Hashtag pool - seeded from MOCK trends + common sustainability tags
 const HASHTAG_POOL = [
@@ -1290,6 +1292,14 @@ export function MEditProfile({ close }) {
   const [location, setLocation] = React.useState('');
   const [website, setWebsite] = React.useState('');
 
+  // Username. Kept apart from the other fields because it's the one that can be
+  // taken by somebody else the moment it's given up — hence the confirm step.
+  const [handle, setHandle] = React.useState('');
+  const [originalHandle, setOriginalHandle] = React.useState('');
+  const [handleStatus, setHandleStatus] = React.useState<'idle' | 'checking' | 'available' | 'taken' | 'short'>('idle');
+  const [confirmingHandle, setConfirmingHandle] = React.useState(false);
+  const handleDebounce = React.useRef<any>(null);
+
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
   const [coverFile, setCoverFile] = React.useState<File | null>(null);
@@ -1310,11 +1320,30 @@ export function MEditProfile({ close }) {
         setBio(p.bio || '');
         setLocation(p.location || '');
         setWebsite(p.website || '');
+        setHandle(p.handle || '');
+        setOriginalHandle(p.handle || '');
         setCurrentAvatar(p.avatar_url || null);
         setCurrentCover(p.cover_url || null);
       }).catch(() => {});
     });
   }, [userId]);
+
+  React.useEffect(() => () => { if (handleDebounce.current) clearTimeout(handleDebounce.current); }, []);
+
+  const onHandleChange = (v: string) => {
+    const clean = v.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
+    setHandle(clean);
+    if (handleDebounce.current) clearTimeout(handleDebounce.current);
+    if (clean === originalHandle) { setHandleStatus('idle'); return; }
+    if (clean.length < 3) { setHandleStatus(clean.length > 0 ? 'short' : 'idle'); return; }
+    setHandleStatus('checking');
+    handleDebounce.current = setTimeout(async () => {
+      try {
+        const { isHandleAvailable } = await import('@/lib/profile');
+        setHandleStatus(await isHandleAvailable(clean, userId) ? 'available' : 'taken');
+      } catch { setHandleStatus('idle'); }
+    }, 500);
+  };
 
   const pickAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -1332,13 +1361,26 @@ export function MEditProfile({ close }) {
     setCoverPreview(URL.createObjectURL(f));
   };
 
+  const handleChanged = !!originalHandle && handle !== originalHandle;
+
   const save = async () => {
     if (!userId) return;
+
+    if (handleChanged) {
+      if (handle.length < 3) { app.toast?.({ msg: 'Username must be at least 3 characters', kind: 'error', icon: 'bolt' }); return; }
+      if (handleStatus === 'checking') { app.toast?.({ msg: 'Still checking that username…', kind: 'error', icon: 'bolt' }); return; }
+      if (handleStatus === 'taken') { app.toast?.({ msg: `@${handle} is already taken`, sub: 'Try a different one.', kind: 'error', icon: 'bolt' }); return; }
+      // Giving up a username hands it to whoever asks for it next, so say so
+      // before the write rather than after.
+      if (!confirmingHandle) { setConfirmingHandle(true); return; }
+    }
+
     setSaving(true);
     try {
       const { uploadFile } = await import('@/lib/storage');
       const { updateProfile } = await import('@/lib/profile');
       const updates: Record<string, any> = { full_name: fullName, bio, location, website };
+      if (handleChanged) updates.handle = handle;
 
       if (avatarFile) {
         updates.avatar_url = await uploadFile('avatars', userId, avatarFile);
@@ -1349,12 +1391,23 @@ export function MEditProfile({ close }) {
       }
 
       await updateProfile(userId, updates);
-      app.toast?.({ msg: 'Profile updated', kind: 'success', icon: 'check' });
+      app.toast?.({ msg: handleChanged ? `You're now @${handle}` : 'Profile updated', kind: 'success', icon: 'check' });
       close();
-      // Reload the page so profile reflects changes
-      window.location.reload();
+      // Reload the page so profile reflects changes. A renamed account can't
+      // reload in place — the URL it's standing on still names the old handle.
+      if (handleChanged) window.location.href = '/profile';
+      else window.location.reload();
     } catch (err: any) {
-      app.toast?.({ msg: 'Failed to save', sub: err.message, kind: 'error', icon: 'bolt' });
+      // Someone else can claim the name between the availability check and this
+      // write; the unique index on profiles.handle is what actually decides.
+      const taken = err?.code === '23505' || /duplicate key|unique/i.test(err?.message ?? '');
+      setConfirmingHandle(false);
+      if (taken) setHandleStatus('taken');
+      app.toast?.({
+        msg: taken ? `@${handle} was just claimed` : 'Failed to save',
+        sub: taken ? 'Pick another username and try again.' : err.message,
+        kind: 'error', icon: 'bolt',
+      });
     } finally {
       setSaving(false);
     }
@@ -1364,6 +1417,51 @@ export function MEditProfile({ close }) {
   const coverSrc = coverPreview || currentCover;
   const fld: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 13px', fontSize: 14, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none' };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', display: 'block', marginBottom: 5 };
+
+  const handleMsg =
+    handleStatus === 'taken' ? `@${handle} is already taken.` :
+    handleStatus === 'available' ? `@${handle} is available.` :
+    handleStatus === 'short' ? 'Min 3 characters.' :
+    handleStatus === 'checking' ? 'Checking availability…' :
+    handleChanged ? '' : 'Letters, numbers and underscores.';
+  const handleMsgColor =
+    handleStatus === 'taken' ? 'var(--clay)' :
+    handleStatus === 'available' ? 'var(--green)' : 'var(--ink-4)';
+
+  // The rename warning takes over the whole modal on purpose. It's the one
+  // change in here that can't be undone by editing the field back.
+  if (confirmingHandle) {
+    return (
+      <Modal onClose={() => setConfirmingHandle(false)} width={460}>
+        <ModalHead
+          icon="bolt"
+          iconColor="var(--clay)"
+          title={`Give up @${originalHandle}?`}
+          sub={`@${originalHandle}  →  @${handle}`}
+          onClose={() => setConfirmingHandle(false)}
+        />
+        <div style={{ padding: '18px 24px 0' }}>
+          <p style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)' }}>
+            Usernames aren’t held for you. The moment you save, <strong>@{originalHandle}</strong> goes
+            back into circulation and anyone can claim it — including someone hoping to be mistaken for you.
+          </p>
+          <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: 13.5, lineHeight: 1.7, color: 'var(--ink-3)' }}>
+            <li>Links and @mentions pointing at <strong>@{originalHandle}</strong> stop leading to you.</li>
+            <li>If someone else takes it, you can’t get it back.</li>
+            <li>The change is recorded and shown on your profile.</li>
+          </ul>
+        </div>
+        <ModalFoot>
+          <button className="btn btn-ghost" onClick={() => setConfirmingHandle(false)} disabled={saving}>
+            Keep @{originalHandle}
+          </button>
+          <button className="btn" style={{ background: 'var(--clay)', color: '#fff' }} onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : `Yes, become @${handle}`}
+          </button>
+        </ModalFoot>
+      </Modal>
+    );
+  }
 
   return (
     <Modal onClose={close} width={560}>
@@ -1404,9 +1502,24 @@ export function MEditProfile({ close }) {
             <input style={fld} value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" />
           </div>
           <div>
-            <label style={lab}>LOCATION</label>
-            <input style={fld} value={location} onChange={e => setLocation(e.target.value)} placeholder="City, Country" />
+            <label style={lab}>USERNAME</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--ink-4)', pointerEvents: 'none' }}>@</span>
+              <input
+                style={{ ...fld, paddingLeft: 27, borderColor: handleStatus === 'taken' ? 'var(--clay)' : handleStatus === 'available' ? 'var(--green)' : undefined }}
+                value={handle}
+                onChange={e => onHandleChange(e.target.value)}
+                placeholder="yourhandle"
+              />
+            </div>
+            {handleMsg && (
+              <span style={{ fontSize: 11.5, color: handleMsgColor, fontFamily: 'JetBrains Mono', marginTop: 5, display: 'block' }}>{handleMsg}</span>
+            )}
           </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={lab}>LOCATION</label>
+          <input style={fld} value={location} onChange={e => setLocation(e.target.value)} placeholder="City, Country" />
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={lab}>BIO</label>
@@ -1422,6 +1535,157 @@ export function MEditProfile({ close }) {
         <button className="btn btn-green" onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Save changes'}
         </button>
+      </ModalFoot>
+    </Modal>
+  );
+};
+
+// --- Verification details ---
+// Opened by clicking the badge on a profile. The badge on its own is just a
+// claim; this is the record behind it, for anyone who wants to check.
+export function MVerification({ data, close }) {
+  const profile = data?.profile;
+  const [renames, setRenames] = React.useState<any[] | null>(null);
+  const [verifiedActions, setVerifiedActions] = React.useState<number | null>(null);
+  const [explaining, setExplaining] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!profile?.id) return;
+    let alive = true;
+    (async () => {
+      const [{ getHandleHistory }, { supabase }] = await Promise.all([
+        import('@/lib/profile'),
+        import('@/lib/supabase'),
+      ]);
+      const [history, counted] = await Promise.all([
+        getHandleHistory(profile.id),
+        supabase.from('impact_logs').select('id', { count: 'exact', head: true })
+          .eq('user_id', profile.id).eq('status', 'verified'),
+      ]);
+      if (!alive) return;
+      setRenames(history);
+      setVerifiedActions(counted.count ?? 0);
+    })();
+    return () => { alive = false; };
+  }, [profile?.id]);
+
+  const monthYear = (v?: string | null) =>
+    v ? new Date(v).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : null;
+
+  const isVerified = !!profile?.verified;
+  const joined = monthYear(profile?.created_at);
+  // Null for anyone verified before migration 029 added the column — we'd
+  // rather say we don't know than print a date we made up.
+  const verifiedSince = monthYear(profile?.verified_at);
+  const renameCount = renames?.length ?? 0;
+
+  const row: React.CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, padding: '11px 0', borderBottom: '1px solid var(--line)' };
+  const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', flexShrink: 0 };
+  const val: React.CSSProperties = { fontSize: 14, fontWeight: 600, textAlign: 'right', minWidth: 0 };
+  const unknown: React.CSSProperties = { ...val, fontWeight: 500, color: 'var(--ink-4)' };
+
+  return (
+    <Modal onClose={close} width={460}>
+      <ModalHead
+        icon="check"
+        iconColor="var(--sky)"
+        title={isVerified ? 'Verified account' : 'Account details'}
+        sub={profile?.handle ? `@${profile.handle}` : undefined}
+        onClose={close}
+      />
+      <div style={{ padding: '18px 24px 0' }}>
+
+        <div style={{ display: 'flex', gap: 12, background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 14, padding: '14px 16px', marginBottom: 6 }}>
+          <div style={{ paddingTop: 2 }}><VerifiedTick size={18} /></div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>
+              {isVerified
+                ? `${profile?.full_name || 'This account'} is verified`
+                : 'This account is not verified'}
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+              {isVerified
+                ? 'Someone at Honua reviewed an application from this account and confirmed it is who it says it is.'
+                : 'Verification is granted only after an admin reviews an application from the account. It is never automatic.'}
+            </p>
+          </div>
+        </div>
+
+        <div style={row}>
+          <span style={lab}>JOINED</span>
+          {joined ? <span style={val}>{joined}</span> : <span style={unknown}>Unknown</span>}
+        </div>
+
+        {isVerified && (
+          <div style={row}>
+            <span style={lab}>VERIFIED SINCE</span>
+            {verifiedSince
+              ? <span style={val}>{verifiedSince}</span>
+              : <span style={unknown}>Not on record</span>}
+          </div>
+        )}
+
+        <div style={row}>
+          <span style={lab}>IMPACT SCORE</span>
+          <span style={val}>{formatCount(Number(profile?.impact_score ?? 0))}</span>
+        </div>
+
+        <div style={row}>
+          <span style={lab}>VERIFIED ACTIONS</span>
+          {verifiedActions === null
+            ? <span style={unknown}>…</span>
+            : <span style={val}>{verifiedActions === 1 ? '1 action' : `${formatCount(verifiedActions)} actions`}</span>}
+        </div>
+
+        <div style={{ ...row, borderBottom: 'none' }}>
+          <span style={lab}>USERNAME CHANGES</span>
+          {renames === null
+            ? <span style={unknown}>…</span>
+            : <span style={val}>{renameCount === 1 ? '1 change' : `${renameCount} changes`}</span>}
+        </div>
+
+        {renameCount > 0 && (
+          <div style={{ background: 'var(--bg-2)', borderRadius: 12, padding: '10px 14px', marginTop: 2 }}>
+            {renames!.slice(0, 5).map((r: any, i: number) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, fontSize: 12.5, fontFamily: 'JetBrains Mono', padding: '4px 0', color: 'var(--ink-3)' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{r.old_handle} → @{r.new_handle}</span>
+                <span style={{ flexShrink: 0, color: 'var(--ink-4)' }}>
+                  {new Date(r.changed_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+            ))}
+            {renameCount > 5 && (
+              <div style={{ fontSize: 12, color: 'var(--ink-4)', paddingTop: 4 }}>+{renameCount - 5} earlier</div>
+            )}
+          </div>
+        )}
+
+        {/* Collapsed by default: someone who clicked the badge usually wants the
+            record above, not the policy. It's here for the ones who want both. */}
+        <div style={{ borderTop: '1px solid var(--line)', marginTop: 14, paddingTop: 12 }}>
+          <button
+            onClick={() => setExplaining(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--sky)' }}
+          >
+            What does verified mean?
+            <span style={{ display: 'inline-flex', transform: explaining ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>
+              <Icon name="chevron" size={14} stroke={2.2} />
+            </span>
+          </button>
+          {explaining && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+              {VERIFICATION_MEANS.map(m => (
+                <div key={m.title}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{m.title}</div>
+                  <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.55 }}>{m.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <ModalFoot>
+        <button className="btn btn-green" onClick={close}>Done</button>
       </ModalFoot>
     </Modal>
   );
@@ -1705,7 +1969,7 @@ export function ModalContent({ type, data, close }) {
   const map = {
     compose: data?.communityId ? MCommunityCompose : MCompose, logaction: MLogAction, export: MExport, startproject: MStartProject,
     createchallenge: MCreateChallenge, createcommunity: MCreateCommunity, editcommunity: MEditCommunity, newcollection: MNewCollection, editprofile: MEditProfile,
-    tip: MTip, autooffset: MAutoOffset, offsetyear: MOffsetYear,
+    tip: MTip, autooffset: MAutoOffset, offsetyear: MOffsetYear, verification: MVerification, verifyrequest: MVerifyRequest,
     deleteaccount: MDeleteAccount, deleteaccount2: MDeleteAccount2,
     project: MProject, article: MArticle, product: MProduct, credit: MCredit,
     challenge: MChallenge, discussion: MDiscussion, badge: MBadge, celebrate: MCelebrate,

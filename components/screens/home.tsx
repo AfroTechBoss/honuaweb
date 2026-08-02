@@ -513,6 +513,10 @@ function StoryRail({ groups, onOpen, onNav, onAddStatus }: { groups: StoryGroup[
   );
 }
 
+// Every feed query needs the author profile plus the profiles of whatever the
+// post wraps, so the card can render a repost/quote without a second round trip.
+const FEED_SELECT = `*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)), quote_post:quote_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`;
+
 // =============== Desktop Home ===============
 export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const [tab, setTab] = React.useState('foryou');
@@ -551,7 +555,7 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
         if (!followingIds.length) { setDbPosts([]); setLoadingFeed(false); return; }
         const { data } = await Promise.race([
           supabase.from('posts')
-            .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)), quote_post:quote_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
+            .select(FEED_SELECT)
             .in('user_id', followingIds)
             .is('community_id', null)
             .order('created_at', { ascending: false })
@@ -559,15 +563,42 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           timeout,
         ]);
         setDbPosts(data ?? []);
+      } else if (tab === 'verified') {
+        // "Verified" belongs to the impact log, not the post — a log is promoted
+        // at 3 community vouches (migration 018). Asking impact_logs directly
+        // keeps the tab honest; the old filter read posts.co2_saved_kg, which is
+        // only a copy the trigger writes, so anything that ever set that column
+        // by another route would have slipped into this feed.
+        const { data: verifiedLogs } = await Promise.race([
+          supabase.from('impact_logs')
+            .select('post_id, logged_at')
+            .eq('status', 'verified')
+            .not('post_id', 'is', null)
+            .order('logged_at', { ascending: false })
+            .limit(50),
+          timeout,
+        ]);
+        const postIds = (verifiedLogs ?? []).map((l: any) => l.post_id).filter(Boolean);
+        if (!postIds.length) { setDbPosts([]); setLoadingFeed(false); return; }
+        const { data } = await Promise.race([
+          supabase.from('posts')
+            .select(FEED_SELECT)
+            .in('id', postIds)
+            .is('community_id', null)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          timeout,
+        ]);
+        setDbPosts(data ?? []);
       } else {
-        let query = supabase
-          .from('posts')
-          .select(`*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified), original:original_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)), quote_post:quote_post_id(*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified))`)
-          .is('community_id', null)
-          .order('created_at', { ascending: false })
-          .limit(50);
-        if (tab === 'verified') query = query.eq('is_repost', false).gt('co2_saved_kg', 0);
-        const { data } = await Promise.race([query, timeout]);
+        const { data } = await Promise.race([
+          supabase.from('posts')
+            .select(FEED_SELECT)
+            .is('community_id', null)
+            .order('created_at', { ascending: false })
+            .limit(50),
+          timeout,
+        ]);
         setDbPosts(data ?? []);
       }
     } catch {}
@@ -585,6 +616,10 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
         .channel(`home-feed-inserts-${tab}-${app.user?.id ?? 'anon'}-${Math.random().toString(36).slice(2)}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
           const newPost = payload.new as any;
+          // A post is born with no vouches, so it can never belong in the
+          // verified feed. It arrives there later, via fetchFeed, once three
+          // people have vouched for its log.
+          if (tab === 'verified') return;
           // Fetch the full post with joined profile so it renders correctly
           const { data } = await supabase
             .from('posts')
@@ -675,9 +710,16 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           ) : (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-3)' }}>
               <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--bg-2)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: 'var(--ink-4)' }}><Icon name={tab === 'verified' ? 'leaf' : 'users'} size={26} /></div>
-              <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)' }}>{tab === 'following' ? 'Nothing here yet' : 'No posts yet'}</div>
-              <p style={{ fontSize: 14, maxWidth: 320, margin: '6px auto 0', lineHeight: 1.5 }}>{tab === 'following' ? 'Follow people to see their updates in this tab.' : 'Be the first to post something!'}</p>
+              <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-2)' }}>
+                {tab === 'following' ? 'Nothing here yet' : tab === 'verified' ? 'No verified actions yet' : 'No posts yet'}
+              </div>
+              <p style={{ fontSize: 14, maxWidth: 320, margin: '6px auto 0', lineHeight: 1.5 }}>
+                {tab === 'following' ? 'Follow people to see their updates in this tab.'
+                  : tab === 'verified' ? 'Logged actions land here once three people vouch that they happened.'
+                  : 'Be the first to post something!'}
+              </p>
               {tab === 'following' && <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => setTab('foryou')}>Discover people →</button>}
+              {tab === 'verified' && <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => onNav?.('impact')}>Log an action →</button>}
             </div>
           )}
         </div>

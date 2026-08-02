@@ -19,6 +19,7 @@ Object.assign(S_STATUS, {
   suspended:   { label: 'Suspended',  color: 'var(--sun)'  },
   banned:      { label: 'Banned',     color: 'var(--clay)' },
   active:      { label: 'Active',     color: 'var(--green)' },
+  revoked:     { label: 'Revoked',    color: 'var(--ink-3)' },
 });
 
 // Account-role chip colours

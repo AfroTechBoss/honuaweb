@@ -21,6 +21,35 @@ export async function updateProfile(userId: string, updates: Record<string, any>
   if (error) throw error;
 }
 
+export type HandleChange = { old_handle: string; new_handle: string; changed_at: string };
+
+// Every rename this account has been through, newest first. Written only by the
+// trigger in migration 029 — if that migration hasn't been applied yet the
+// table is missing, and an unknown history is better shown as none than as an
+// error on someone's profile.
+export async function getHandleHistory(userId: string): Promise<HandleChange[]> {
+  const { data, error } = await supabase
+    .from("handle_history")
+    .select("old_handle, new_handle, changed_at")
+    .eq("user_id", userId)
+    .order("changed_at", { ascending: false });
+  if (error) return [];
+  return (data ?? []) as HandleChange[];
+}
+
+// Case-insensitive, because profiles.handle is unique but not citext — without
+// the ilike, "Chidile" would pass this check and then fail on the constraint.
+export async function isHandleAvailable(handle: string, currentUserId?: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .ilike("handle", handle)
+    .limit(1);
+  if (error) throw error;
+  const taken = (data ?? []).filter((r: any) => r.id !== currentUserId);
+  return taken.length === 0;
+}
+
 export async function getProfilePosts(userId: string) {
   const postSelect = `
     *,
@@ -81,6 +110,36 @@ export async function getFollowingCount(userId: string) {
     .eq("follower_id", userId);
   return count ?? 0;
 }
+
+export type FollowUser = {
+  id: string;
+  handle: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  verified: boolean;
+  bio: string | null;
+  impact_score: number | null;
+  followed_at: string;
+};
+
+// One row per edge, with the profile on the far side of it already embedded —
+// the alternative is a second round trip per person in the list.
+async function followEdge(column: "follower_id" | "following_id", userId: string): Promise<FollowUser[]> {
+  // Reading followers means joining to whoever is on the *other* end.
+  const join = column === "following_id" ? "follows_follower_id_fkey" : "follows_following_id_fkey";
+  const { data, error } = await supabase
+    .from("follows")
+    .select(`created_at, profile:profiles!${join}(id, handle, full_name, avatar_url, verified, bio, impact_score)`)
+    .eq(column, userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? [])
+    .map((r: any) => (r.profile ? { ...r.profile, followed_at: r.created_at } : null))
+    .filter(Boolean) as FollowUser[];
+}
+
+export const getFollowers = (userId: string) => followEdge("following_id", userId);
+export const getFollowing = (userId: string) => followEdge("follower_id", userId);
 
 export async function getAchievements(userId: string) {
   const { data } = await supabase

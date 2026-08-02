@@ -2,7 +2,13 @@ import { supabase } from "./supabase";
 
 export type NotifType =
   | "like" | "follow" | "comment" | "reply" | "mention"
-  | "community_invite" | "badge" | "level_up" | "vouch";
+  | "community_invite" | "badge" | "level_up" | "vouch"
+  // Sent by /api/cron/streak, not by another user — these carry no actor.
+  | "streak_risk" | "streak_ended"
+  // Written server-side by /api/admin/verification when a reviewer decides an
+  // application. Also actorless: the decision is the platform's, not a
+  // reviewer's to be named for.
+  | "account_verified" | "verification_declined";
 
 export async function createNotification({
   userId, actorId, type, postId, body, badgeName, communityId,

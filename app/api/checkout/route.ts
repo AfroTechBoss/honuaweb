@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
+import { enforce } from '@/lib/rate-limit';
+import { logError, requestId } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
+  // Every call here creates a real PaymentIntent against the Stripe account.
+  // Unauthenticated, so the ceiling is per-IP: enough for someone retrying a
+  // failed card, nowhere near enough to fill the dashboard with junk intents.
+  const limited = enforce(req, { name: 'checkout', limit: 10, windowMs: 60_000 },
+    'Too many checkout attempts — wait a minute and try again.');
+  if (limited) return limited;
+
   try {
     const { items, orderId } = await req.json();
 
@@ -39,10 +48,15 @@ export async function POST(req: Request) {
       paymentIntentId: paymentIntent.id,
     });
   } catch (err: any) {
-    console.error('[api/checkout] error:', err?.type, err?.message, err?.code);
+    const id = requestId(req);
+    logError('api/checkout', 'payment intent failed', err, {
+      requestId: id, stripeType: err?.type, stripeCode: err?.code,
+    });
+    // The id goes back so a customer who saw this can be matched to the log
+    // line without guessing from timestamps.
     return NextResponse.json(
-      { error: 'stripe_error', type: err?.type ?? null, code: err?.code ?? null, message: err?.message ?? String(err) },
-      { status: 502 },
+      { error: 'stripe_error', type: err?.type ?? null, code: err?.code ?? null, message: err?.message ?? String(err), requestId: id },
+      { status: 502, headers: { 'x-request-id': id } },
     );
   }
 }

@@ -4,6 +4,8 @@ import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal,
 import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS } from "@/lib/impact";
+import { getMyVerificationRequest, type VerificationRequest } from "@/lib/verification";
+import { VERIFICATION_SLA } from "@/lib/verification-copy";
 
 export function DesktopSettings({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
@@ -66,6 +68,7 @@ export function SettingsSection({ sec, app, onNav }) {
           <Field label="Username" v={app.user?.handle ? `@${app.user.handle}` : '—'} />
           <Field label="Email" v={app.user?.email || '—'} />
         </Section>
+        <VerificationSection app={app} />
         <Section title="Security">
           <ToggleC2 label="Two-factor authentication" sub="Recommended for active organizers." def />
           <ToggleC2 label="Login alerts" sub="Get notified when a new device signs in." def />
@@ -391,6 +394,71 @@ export function Section({ title, sub, children }: { title: string; sub?: string;
       {!sub && <div style={{ height: 14 }} />}
       {children}
     </div>
+  );
+};
+
+// --- Verification ---
+// The only place an account can start a verification application. The badge is
+// never granted automatically: this opens a request, an admin reads it, and
+// the decision comes back as a notification and an email.
+export function VerificationSection({ app }: { app: any }) {
+  const userId: string | undefined = app.user?.id;
+  const [req, setReq] = React.useState<VerificationRequest | null | undefined>(undefined);
+
+  const load = React.useCallback(() => {
+    if (!userId) { setReq(null); return; }
+    getMyVerificationRequest(userId).then(setReq);
+  }, [userId]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const verified = !!app.user?.verified;
+  const status = req?.status;
+  const loading = req === undefined;
+
+  // Verified accounts still see the decision record — that's where the reason
+  // for a revoke would show up if one ever happens.
+  const state = verified ? 'verified' : status === 'pending' ? 'pending' : status === 'rejected' ? 'rejected' : 'none';
+
+  const meta: Record<string, { color: string; icon: string; label: string; sub: string }> = {
+    verified: { color: 'var(--sky)', icon: 'check', label: 'Verified', sub: 'Your profile carries the tick.' },
+    pending:  { color: 'var(--sun)', icon: 'clock', label: 'Under review', sub: `${VERIFICATION_SLA} You'll hear either way.` },
+    rejected: { color: 'var(--clay)', icon: 'bolt', label: 'Not approved', sub: req?.reviewer_note || 'No reason was recorded.' },
+    none:     { color: 'var(--ink-3)', icon: 'check', label: 'Not verified', sub: 'Verification confirms an account is who it says it is. It is never granted automatically.' },
+  };
+  const m = meta[state];
+
+  const open = () => app.openModal('verifyrequest', { request: req ?? null, onSubmitted: () => load() });
+
+  return (
+    <Section title="Verification">
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, minWidth: 0, flex: 1 }}>
+          <div style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 10, background: 'var(--bg-2)', color: m.color, display: 'grid', placeItems: 'center', border: '1px solid var(--line)' }}>
+            <Icon name={m.icon} size={16} stroke={2.2} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {loading ? 'Checking…' : m.label}
+              {state === 'rejected' && req?.reviewed_at && (
+                <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)' }}>
+                  {new Date(req.reviewed_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+            {!loading && <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3, lineHeight: 1.55 }}>{m.sub}</div>}
+          </div>
+        </div>
+        {!loading && (
+          <button className={state === 'none' || state === 'rejected' ? 'btn btn-green' : 'btn btn-ghost'} style={{ padding: '7px 14px', fontSize: 13, flexShrink: 0 }} onClick={open}>
+            {state === 'none' ? 'Apply for verification'
+              : state === 'rejected' ? 'Apply again'
+              : state === 'pending' ? 'View application'
+              : 'What this means'}
+          </button>
+        )}
+      </div>
+    </Section>
   );
 };
 

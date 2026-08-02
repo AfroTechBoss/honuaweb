@@ -3,8 +3,12 @@ import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
 
-const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin' };
-const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)' };
+// `verified` is an impact action clearing its vouch threshold; `account_verified`
+// is the identity badge. Different things, so they don't share a row style.
+const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin', streak_risk: 'flame', streak_ended: 'flame', account_verified: 'check', verification_declined: 'bolt' };
+// streak_risk is a warning (still saveable), streak_ended is a loss — different
+// colours so the two read apart at a glance in a list of flame icons.
+const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)', streak_risk: 'var(--sun)', streak_ended: 'var(--clay)', account_verified: 'var(--sky)', verification_declined: 'var(--ink-3)' };
 
 function timeAgo(ts: string) {
   const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -51,6 +55,12 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
       case 'follow': return n.actor?.handle && onNav?.('profile', { handle: n.actor.handle });
       case 'community_invite': return onNav?.('forum');
       case 'badge': case 'level_up': return onNav?.('profile');
+      // Straight to the profile, where the badge either is or isn't.
+      case 'account_verified': return onNav?.('profile');
+      // The reviewer's reason is on the settings row that offers a re-apply.
+      case 'verification_declined': return onNav?.('settings');
+      // Straight to the ledger, where the streak counter and "Log an action" are.
+      case 'streak_risk': case 'streak_ended': return onNav?.('impact');
       default: return null;
     }
   };
@@ -63,6 +73,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     'Follows': ['follow'],
     'Community': ['community_invite'],
     'Badges': ['badge', 'level_up'],
+    'Streaks': ['streak_risk', 'streak_ended'],
   };
 
   const filtered = tab === 'All' ? items : items.filter(n => TAB_TYPES[tab]?.includes(n.type));

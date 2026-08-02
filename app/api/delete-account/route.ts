@@ -1,7 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { enforce } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  // Low ceiling on purpose. A real deletion happens once and never repeats, so
+  // anything past a couple of attempts is either a stuck client retrying a
+  // request that already succeeded, or someone probing with stolen tokens.
+  const limited = enforce(request, { name: "delete-account", limit: 3, windowMs: 60_000 });
+  if (limited) return limited;
+
   // Read the access token sent by the client
   const authHeader = request.headers.get("Authorization");
   const token = authHeader?.replace("Bearer ", "").trim();

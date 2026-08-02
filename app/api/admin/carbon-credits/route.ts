@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPrivyToken } from "@/lib/privy-verify";
 import { CREDIT_TAGS } from "@/lib/admin-carbon";
+import { enforce } from "@/lib/rate-limit";
 
 // Admin CRUD for the carbon market's listings.
 //
@@ -16,6 +17,11 @@ import { CREDIT_TAGS } from "@/lib/admin-carbon";
 export const runtime = 'nodejs';
 
 async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse | null }> {
+  // Before the token check: verifyPrivyToken is a network round trip, so an
+  // unauthenticated flood costs money and latency even though it all 401s.
+  const limited = enforce(req, { name: 'admin-carbon', limit: 60, windowMs: 60_000 });
+  if (limited) return { db: null, fail: limited };
+
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim();
   const admin = await verifyPrivyToken(token);
   if (!admin) return { db: null, fail: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };

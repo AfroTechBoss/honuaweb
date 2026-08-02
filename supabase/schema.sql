@@ -177,7 +177,14 @@ alter table public.projects     enable row level security;
 -- Profiles
 create policy "profiles_public_read"  on public.profiles for select using (true);
 create policy "profiles_owner_insert" on public.profiles for insert with check (auth.uid() = id);
-create policy "profiles_owner_update" on public.profiles for update using (auth.uid() = id);
+-- The WITH CHECK is spelled out rather than left to Postgres to infer from
+-- USING, so the missing half doesn't read as an oversight. It decides rows
+-- only: which *columns* an owner may write is enforced by the trigger in
+-- migration 036, because no policy can express that.
+create policy "profiles_owner_update" on public.profiles
+  for update
+  using      (auth.uid() = id)
+  with check (auth.uid() = id);
 
 -- Posts
 create policy "posts_public_read"   on public.posts for select using (true);

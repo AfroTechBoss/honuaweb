@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { getAllLogs, computeStreak, localDay, ImpactLog } from "@/lib/impact";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { getAllLogs, getImpactLeaderboard, computeStreak, localDay, ImpactLog, LeaderRow } from "@/lib/impact";
 
 // Distinct colour per category, used by the chart + legend.
 export const CAT_COLORS: Record<string, string> = {
@@ -41,6 +41,13 @@ function groupByDateCategory(logs: ImpactLog[], days = 30): DayBucket[] {
   return result;
 }
 
+// kg up to a tonne, then tonnes — a five-figure kg number in a narrow column
+// reads as noise.
+function co2Label(kg: number): string {
+  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
+  return `${Math.round(kg)} kg`;
+}
+
 function formatDateLabel(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
   return `${d.toLocaleString('default', { month: 'short' })} ${d.getDate()}`;
@@ -70,8 +77,11 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
   const [loading, setLoading] = React.useState(true);
   const [chartDays, setChartDays] = React.useState(30);
   const [chartMode, setChartMode] = React.useState<'co2' | 'gp'>('co2');
+  // null = still loading; [] = loaded and genuinely empty.
+  const [leaders, setLeaders] = React.useState<LeaderRow[] | null>(null);
 
   const reload = React.useCallback(() => {
+    getImpactLeaderboard(app.user?.id).then(setLeaders).catch(() => setLeaders([]));
     if (!app.user?.id) { setLoading(false); return; }
     getAllLogs(app.user.id).then(data => {
       setLogs(data);
@@ -268,32 +278,48 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
 
           <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 22 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Neighborhood ranking</h2>
+              <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Impact leaderboard</h2>
               <span className="chip">Community</span>
             </div>
-            {[
-              ['1', 'Sarah Green', '@sarahgreen', '482 kg', false],
-              ['2', 'Tara Lin', '@tara_l', '364 kg', false],
-              ['3', app.user?.name || 'You', '@' + ((app.user as any)?.handle || 'you'), `${Math.round(totalCo2)} kg`, true],
-              ['4', 'Marcus J.', '@ecomarcus', '142 kg', false],
-              ['5', 'Maya Patel', '@urbangrower', '128 kg', false],
-            ].map(([rank, n, h, v, isYou]) => (
-              <div key={String(rank)} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                background: isYou ? 'var(--green-tint)' : 'transparent',
-                margin: isYou ? '0 -8px' : 0,
-                padding: isYou ? '10px 8px' : '10px 0',
-                borderRadius: isYou ? 10 : 0,
-              }}>
-                <span style={{ width: 22, fontFamily: 'JetBrains Mono', fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{rank}</span>
-                <Avatar name={String(n)} size={32} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{n} {isYou && <span style={{ color: 'var(--green)', fontSize: 11 }}>(you)</span>}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{h}</div>
-                </div>
-                <div style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>−{v}</div>
+            {leaders === null ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 13, color: 'var(--ink-3)' }}>Loading the ranking…</div>
+            ) : leaders.length === 0 ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 13, color: 'var(--ink-3)' }}>
+                No one has logged CO₂ yet. Log an action and you'll take the top spot.
               </div>
-            ))}
+            ) : leaders.map((row, i) => {
+              // A gap in rank means the viewer's row was appended from further
+              // down the table — mark the jump instead of implying they're next.
+              const gap = i > 0 && row.rank > leaders[i - 1].rank + 1;
+              return (
+                <React.Fragment key={row.userId}>
+                  {gap && <div style={{ textAlign: 'center', color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', fontSize: 12, padding: '2px 0' }}>⋯</div>}
+                  <div
+                    onClick={() => row.handle && onNav?.('profile', { handle: row.handle })}
+                    className={row.handle ? 'row-hover' : undefined}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: row.isYou ? 'var(--green-tint)' : 'transparent',
+                      margin: row.isYou ? '0 -8px' : 0,
+                      padding: row.isYou ? '10px 8px' : '10px 0',
+                      borderRadius: row.isYou ? 10 : 0,
+                      cursor: row.handle ? 'pointer' : 'default',
+                    }}>
+                    <span style={{ width: 22, fontFamily: 'JetBrains Mono', fontSize: 13, color: 'var(--ink-3)', fontWeight: 600 }}>{row.rank}</span>
+                    <Avatar src={row.avatar ?? undefined} name={row.name} size={32} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                        {row.verified && <VerifiedTick size={12} />}
+                        {row.isYou && <span style={{ color: 'var(--green)', fontSize: 11, flexShrink: 0 }}>(you)</span>}
+                      </div>
+                      {row.handle && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{row.handle}</div>}
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>−{co2Label(row.co2)}</div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       </main>
