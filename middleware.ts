@@ -62,7 +62,26 @@ export async function middleware(request: NextRequest) {
 
   // Validates the JWT against Supabase Auth (and refreshes it if expiring) —
   // do not replace with getSession(), which trusts the cookie unverified.
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  // "You have no session" and "we couldn't reach Supabase to find out" both
+  // arrive here as user === null. Discarding the error collapses them, so a
+  // network blip signs everyone out mid-session and drops them on a login page
+  // with nothing to say about why — indistinguishable from sign-in silently
+  // doing nothing. Only an answer that never came back counts as unverified: a
+  // missing session (400) or a rejected token (401/403) are real verdicts and
+  // still mean signed out.
+  const unverified =
+    !!error && (error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500);
+  if (unverified) {
+    console.warn(JSON.stringify({
+      level: "warn",
+      scope: "middleware",
+      message: "session check failed — treating as signed out",
+      at: new Date().toISOString(),
+      reason: `${error!.name}: ${error!.message}`,
+    }));
+  }
 
   const path = request.nextUrl.pathname;
 
@@ -73,11 +92,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // No session → only public routes
+  // No session → only public routes. Still fails closed when the check itself
+  // failed, but marks the redirect so /login can explain the bounce instead of
+  // presenting an empty form as if nothing had happened.
   if (!user && !isPublic(path)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.search = "";
+    url.search = unverified ? "?e=session" : "";
     return NextResponse.redirect(url);
   }
 
