@@ -37,15 +37,34 @@ function BrandPanel() {
   );
 }
 
-function PasswordField({ value, onChange, placeholder = 'Enter your password', label = 'PASSWORD' }: any) {
+// One inline error line, in the house style (reset-password/page.tsx:74).
+// role="alert" so it is announced the moment it appears — an error that exists
+// only visually leaves a screen-reader user retyping a password that was never
+// the problem.
+function FieldError({ id, children }: { id?: string; children?: React.ReactNode }) {
+  if (!children) return null;
+  return (
+    <p id={id} role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 5, fontSize: 12.5, color: 'var(--clay)', margin: '6px 0 0', lineHeight: 1.45 }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 2 }}>
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{children}</span>
+    </p>
+  );
+}
+
+// `error`, `inputRef` and `errorId` are optional — callers that don't pass them
+// (the signup wizard, the forgot-password modal) get the field exactly as before.
+function PasswordField({ value, onChange, placeholder = 'Enter your password', label = 'PASSWORD', error, inputRef, errorId }: any) {
   const [show, setShow] = React.useState(false);
-  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 42px 12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
+  const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: `1px solid ${error ? 'var(--clay)' : 'var(--line)'}`, borderRadius: 11, padding: '12px 42px 12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={lab}>{label}</label>
       <div style={{ position: 'relative' }}>
-        <input type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder} style={field} />
+        <input ref={inputRef} type={show ? 'text' : 'password'} value={value} onChange={onChange} placeholder={placeholder} style={field}
+          aria-invalid={error ? true : undefined} aria-describedby={error && errorId ? errorId : undefined} />
         <button type="button" onClick={() => setShow(s => !s)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', display: 'grid', placeItems: 'center', padding: 4 }}>
           {show ? (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -61,6 +80,7 @@ function PasswordField({ value, onChange, placeholder = 'Enter your password', l
           )}
         </button>
       </div>
+      <FieldError id={errorId}>{error}</FieldError>
     </div>
   );
 }
@@ -82,6 +102,8 @@ function SocialButtons({ onGoogle, onApple }: { onGoogle: () => void; onApple: (
   );
 }
 
+const isValidEmail = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
+
 // ── Forgot-password modal ─────────────────────────────────────────────────────
 type ForgotStep = 'email' | 'method' | 'code' | 'new-password' | 'link-sent' | 'done';
 
@@ -99,8 +121,6 @@ function ForgotPasswordModal({ initialEmail, onClose }: { initialEmail: string; 
 
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
-
-  const isValidEmail = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim());
 
   const sendLink = async () => {
     setLoading(true); setErr('');
@@ -304,23 +324,77 @@ function ForgotPasswordModal({ initialEmail, onClose }: { initialEmail: string; 
 }
 
 // ── Sign-in form ──────────────────────────────────────────────────────────────
-function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: () => void }) {
+
+// Supabase answers a wrong password and an unknown email with the same
+// "Invalid login credentials" — deliberately, so the form can't be used to find
+// out who has an account here. That property is worth keeping, so this
+// translates the string rather than trying to work out which field was wrong.
+// Anything unrecognised falls through to the raw message: an unhelpful sentence
+// beats a confidently wrong one.
+const SIGN_IN_MESSAGES: [RegExp, string][] = [
+  [/invalid login credentials|invalid.*password/i, 'Wrong email or password. Please try again.'],
+  [/email not confirmed/i, 'Confirm your email first — open the link we sent you, then sign in.'],
+  [/too many requests|rate limit/i, 'Too many attempts. Wait a moment and try again.'],
+  [/failed to fetch|networkerror|load failed/i, "Couldn't reach Honua. Check your connection and try again."],
+];
+
+function signInMessage(raw?: string) {
+  const msg = (raw || '').trim();
+  for (const [pattern, friendly] of SIGN_IN_MESSAGES) if (pattern.test(msg)) return friendly;
+  return msg || 'Something went wrong signing you in. Please try again.';
+}
+
+function SignInForm({ onSwitch, onSuccess, notice }: { onSwitch: () => void; onSuccess: () => void; notice?: string }) {
   const app = useApp();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [showForgot, setShowForgot] = React.useState(false);
+  // Which field to mark, and what to say under it. Only ever one at a time —
+  // the first thing to fix is the only thing worth reading.
+  const [errField, setErrField] = React.useState<'email' | 'password' | null>(null);
+  const [errMsg, setErrMsg] = React.useState('');
+  // The social buttons have no field to sit under, so their failures get their
+  // own line beneath them rather than being fired off as a toast.
+  const [socialErr, setSocialErr] = React.useState('');
+  // Why you're back here, sent by middleware or the OAuth callback. It belongs
+  // above the form because it describes the trip that landed you on this page,
+  // not the fields below it — and it's copied into state so the next attempt
+  // can clear it rather than leaving stale history sitting over a fresh try.
+  const [formErr, setFormErr] = React.useState('');
+  React.useEffect(() => { if (notice) setFormErr(notice); }, [notice]);
+  const emailRef = React.useRef<HTMLInputElement>(null);
+  const passwordRef = React.useRef<HTMLInputElement>(null);
   const field: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 15, fontFamily: 'Satoshi', color: 'var(--ink)', outline: 'none', marginTop: 6 };
   const lab: React.CSSProperties = { fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' };
 
+  // Typing is the user acting on the message, so it stops applying — leaving it
+  // up would have it contradict the field it sits under.
+  const clearError = () => { setErrField(null); setErrMsg(''); setFormErr(''); };
+
+  const fail = (which: 'email' | 'password', msg: string) => {
+    setErrField(which);
+    setErrMsg(msg);
+    (which === 'email' ? emailRef : passwordRef).current?.focus();
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) { app.toast?.({ msg: 'Please fill in all fields', icon: 'bolt', kind: 'error' }); return; }
+    setSocialErr('');
+    setFormErr('');
+    if (!email.trim()) { fail('email', 'Enter your email address.'); return; }
+    if (!isValidEmail(email)) { fail('email', "That doesn't look like an email address."); return; }
+    if (!password) { fail('password', 'Enter your password.'); return; }
+    clearError();
     setLoading(true);
     try {
       await app.login(email, password);
     } catch (err: any) {
-      app.toast?.({ msg: 'Sign in failed', sub: err.message, icon: 'bolt', kind: 'error' });
+      // Under the password field rather than in a toast: the message belongs
+      // beside the thing being corrected, and it has to stay put long enough to
+      // read and act on. Password, not email, because that is the field a
+      // person retypes — and Supabase won't say which half was wrong anyway.
+      fail('password', signInMessage(err?.message));
     } finally {
       setLoading(false);
     }
@@ -332,12 +406,20 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
       <h2 className="font-display" style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>Welcome back</h2>
       <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '6px 0 24px' }}>Sign in to pick up where you left off.</p>
 
-      <form onSubmit={submit}>
+      {/* noValidate: the browser's own "please enter an email address" bubble is
+          itself a pop-up, and it would fire before any of this ran. */}
+      <form onSubmit={submit} noValidate>
+        {formErr && <div style={{ marginBottom: 12 }}><FieldError>{formErr}</FieldError></div>}
         <div style={{ marginBottom: 14 }}>
-          <label style={lab}>EMAIL</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={field} />
+          <label style={lab} htmlFor="signin-email">EMAIL</label>
+          <input id="signin-email" ref={emailRef} type="email" value={email} onChange={e => { setEmail(e.target.value); clearError(); }} placeholder="you@example.com"
+            style={{ ...field, borderColor: errField === 'email' ? 'var(--clay)' : 'var(--line)' }}
+            aria-invalid={errField === 'email' || undefined}
+            aria-describedby={errField === 'email' ? 'signin-email-err' : undefined} />
+          {errField === 'email' && <FieldError id="signin-email-err">{errMsg}</FieldError>}
         </div>
-        <PasswordField value={password} onChange={(e: any) => setPassword(e.target.value)} placeholder="Your password" />
+        <PasswordField value={password} onChange={(e: any) => { setPassword(e.target.value); clearError(); }} placeholder="Your password"
+          inputRef={passwordRef} errorId="signin-password-err" error={errField === 'password' ? errMsg : ''} />
         <div style={{ textAlign: 'right', marginBottom: 4 }}>
           <span onClick={() => setShowForgot(true)} style={{ fontSize: 12.5, color: 'var(--green)', fontWeight: 600, cursor: 'pointer' }}>Forgot password?</span>
         </div>
@@ -352,9 +434,10 @@ function SignInForm({ onSwitch, onSuccess }: { onSwitch: () => void; onSuccess: 
         <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
       </div>
       <SocialButtons
-        onGoogle={async () => { try { await app.loginWithGoogle(); } catch (e: any) { app.toast?.({ msg: 'Google sign-in failed', sub: e.message, icon: 'bolt', kind: 'error' }); } }}
-        onApple={async () => { try { await app.loginWithApple(); } catch (e: any) { app.toast?.({ msg: 'Apple sign-in failed', sub: e.message, icon: 'bolt', kind: 'error' }); } }}
+        onGoogle={async () => { clearError(); setSocialErr(''); try { await app.loginWithGoogle(); } catch (e: any) { setSocialErr(`Google sign-in failed. ${signInMessage(e?.message)}`); } }}
+        onApple={async () => { clearError(); setSocialErr(''); try { await app.loginWithApple(); } catch (e: any) { setSocialErr(`Apple sign-in failed. ${signInMessage(e?.message)}`); } }}
       />
+      <FieldError>{socialErr}</FieldError>
 
       <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-3)', marginTop: 20 }}>
         New to Honua?{' '}
@@ -994,7 +1077,7 @@ export function DesktopAuth({ onNav, params }: { onNav: any; params?: Record<str
       <BrandPanel />
       <div style={{ flex: '0 0 clamp(360px, 42%, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px clamp(20px,4vw,56px)', overflow: 'auto', width: '100%' }} className="no-scrollbar auth-content">
         {mode === 'signin'
-          ? <SignInForm onSwitch={() => setMode('signup')} onSuccess={() => {}} />
+          ? <SignInForm onSwitch={() => setMode('signup')} onSuccess={() => {}} notice={params?.notice as string} />
           : mode === 'signup'
           ? <SignUpFlow onSwitch={() => setMode('signin')} onConfirm={(email) => { setConfirmedEmail(email); setMode('confirm'); }} />
           : <CheckEmailScreen email={confirmedEmail} onBackToSignIn={() => setMode('signin')} />
