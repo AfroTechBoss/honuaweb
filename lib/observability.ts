@@ -96,9 +96,16 @@ export const logWarn = (scope: string, message: string, meta?: Record<string, un
  * wrong for weeks.
  */
 export function logError(scope: string, message: string, error?: unknown, meta?: Record<string, unknown>) {
+  // Supabase hands back a plain object, not an Error — String() on one of those
+  // yields "[object Object]", which is how a logged failure ends up saying
+  // nothing at all. Unwrap anything that carries a message, and keep the code
+  // and hint: on a PostgREST error those two are the whole diagnosis.
+  const bag = error as any;
   const detail = error instanceof Error
     ? { errorMessage: error.message, stack: error.stack }
-    : error !== undefined ? { errorMessage: String(error) } : {};
+    : bag && typeof bag === 'object' && typeof bag.message === 'string'
+      ? { errorMessage: bag.message, ...(bag.code ? { errorCode: bag.code } : {}), ...(bag.hint ? { errorHint: bag.hint } : {}) }
+      : error !== undefined ? { errorMessage: String(error) } : {};
 
   log("error", scope, message, { ...detail, ...(meta ?? {}) });
   try { slot.fn?.({ scope, message, error, meta, requestId: meta?.requestId as string | undefined }); }

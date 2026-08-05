@@ -461,6 +461,8 @@ function PostMoreMenu({ profile, postId, isOwn = false, postContent = '', postCr
   const [editSaving, setEditSaving] = React.useState(false);
   const [reason, setReason] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const [reportError, setReportError] = React.useState('');
   const canEdit = !!postCreatedAt && (Date.now() - new Date(postCreatedAt).getTime()) < 15 * 60 * 1000;
 
   const handleMute = (e: React.MouseEvent) => {
@@ -474,7 +476,7 @@ function PostMoreMenu({ profile, postId, isOwn = false, postContent = '', postCr
     app.toast?.({ msg: `@${profile?.handle} blocked`, sub: "They can no longer see your profile or posts.", icon: 'lock' });
   };
   const handleReport = (e: React.MouseEvent) => {
-    e.stopPropagation(); setOpen(false); setReason(''); setSubmitted(false); setShowReport(true);
+    e.stopPropagation(); setOpen(false); setReason(''); setSubmitted(false); setReportError(''); setShowReport(true);
   };
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation(); setShowDelete(false);
@@ -485,11 +487,32 @@ function PostMoreMenu({ profile, postId, isOwn = false, postContent = '', postCr
       app.toast?.({ msg: 'Failed to delete post', icon: 'close' });
     }
   };
-  const submit = (e: React.MouseEvent) => {
-    e.stopPropagation(); if (!reason) return;
-    setSubmitted(true);
-    setTimeout(() => { setShowReport(false); setSubmitted(false); }, 1800);
-    app.toast?.({ msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
+  // The third of the three modals that showed a tick and wrote nothing. It goes
+  // to the same table as the feed's — see migration 046 and lib/content-reports.
+  const submit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!reason || sending) return;
+    setSending(true);
+    setReportError('');
+    const { fileReport } = await import('@/lib/content-reports');
+    const outcome = await fileReport({
+      targetType: 'post',
+      targetId: postId,
+      targetOwnerId: profile?.id,
+      reporterId: app.user?.id,
+      reason,
+    });
+    setSending(false);
+
+    if (outcome.kind === 'filed' || outcome.kind === 'duplicate') {
+      setSubmitted(true);
+      setTimeout(() => { setShowReport(false); setSubmitted(false); }, 1800);
+      app.toast?.(outcome.kind === 'duplicate'
+        ? { msg: 'Already reported', sub: "You've reported this post before — it's with our moderators.", icon: 'check' }
+        : { msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
+      return;
+    }
+    setReportError(outcome.kind === 'signed-out' ? 'Sign in to report a post.' : outcome.message);
   };
 
   const handleEditOpen = (e: React.MouseEvent) => {
@@ -599,9 +622,12 @@ function PostMoreMenu({ profile, postId, isOwn = false, postContent = '', postCr
                     </button>
                   ))}
                 </div>
+                {reportError && (
+                  <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(190,90,60,.1)', color: 'var(--clay)', fontSize: 12.5, lineHeight: 1.45 }}>{reportError}</div>
+                )}
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => setShowReport(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
-                  <button onClick={submit} disabled={!reason} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reason ? 'var(--clay)' : 'var(--line)', cursor: reason ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>Submit report</button>
+                  <button onClick={submit} disabled={!reason || sending} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reason && !sending ? 'var(--clay)' : 'var(--line)', cursor: reason && !sending ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>{sending ? 'Sending…' : 'Submit report'}</button>
                 </div>
               </>
             )}

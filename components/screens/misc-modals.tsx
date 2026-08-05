@@ -188,13 +188,36 @@ export function MCredit({ data, close }) {
         close();
         return;
       }
-      if (app.user?.id) {
-        const { purchaseCredit } = await import('@/lib/market');
-        await purchaseCredit(app.user.id, { id: data.id, name: data.name }, qty, Math.round(unit * qty * 100));
-        window.dispatchEvent(new Event('honua:offset-purchased'));
+      if (!app.user?.id) {
+        app.toast?.({ msg: 'Sign in to retire a credit', kind: 'error', icon: 'leaf' });
+        close();
+        return;
       }
+
+      const { retireCredit } = await import('@/lib/market');
+      const outcome = await retireCredit(data.id, qty);
+
+      if (outcome.kind !== 'retired') {
+        app.toast?.({
+          msg: outcome.kind === 'signed-out' ? 'Sign in to retire a credit'
+            : outcome.kind === 'unavailable' ? 'Retirement is not switched on yet'
+            : outcome.message,
+          sub: outcome.kind === 'unavailable' ? 'Nothing was charged or recorded.' : undefined,
+          kind: 'error', icon: 'leaf',
+        });
+        return;
+      }
+
+      window.dispatchEvent(new Event('honua:offset-purchased'));
       close();
-      app.openModal('celebrate', { title: `Offset ${qty} t CO₂`, sub: `You retired ${qty} tonne${qty > 1 ? 's' : ''} via ${data.name}. Certificate added to your wallet.` });
+      // Everything shown here is what the database recorded, including the
+      // tonnage — it can differ from `qty` only if the request was refused,
+      // and a refusal never reaches this line.
+      const r = outcome.retirement;
+      app.openModal('celebrate', {
+        title: `Offset ${r.tonnes} t CO₂`,
+        sub: `Retired via ${r.creditName} for $${(r.totalCents / 100).toFixed(2)}. Serial ${r.serial}.`,
+      });
     } finally { setBuying(false); }
   };
   return (
@@ -210,8 +233,11 @@ export function MCredit({ data, close }) {
             </div>
           ))}
         </div>
-        <span className="verified-impact">on-chain verified · {data.tag}</span>
-        <p style={{ fontSize: 13.5, color: 'var(--ink-3)', lineHeight: 1.6, margin: '12px 0 0' }}>Each tonne is third-party audited and traceable to GPS-tagged plots. Retirement certificate issued to your wallet on purchase.</p>
+        {/* Was "on-chain verified" over a claim of GPS-tagged plots and a
+            certificate issued to a wallet. None of that exists. What does
+            exist after migration 047 is a retirement serial. */}
+        <span className="verified-impact">{data.tag}</span>
+        <p style={{ fontSize: 13.5, color: 'var(--ink-3)', lineHeight: 1.6, margin: '12px 0 0' }}>Listed under {data.verifier || 'its standard'}, vintage {data.vintage || '—'}. Retiring issues a serial you can quote when reconciling against the registry.</p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Tonnes of CO₂</div>

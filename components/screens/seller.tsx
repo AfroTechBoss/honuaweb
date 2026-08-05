@@ -1,12 +1,37 @@
 "use client";
 import React from "react";
+// One vocabulary for payout destinations across the application, the seller's
+// payouts page and the admin queue — see lib/payout-methods.ts.
+import { PAYOUT_KIND_LABEL, CONNECT_COUNTRIES, BANK_COUNTRIES, connectSupports, type PayoutKind } from "@/lib/payout-methods";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 
 
 // =====================================================================
 // Small form helpers (prefixed to avoid global collisions)
 // =====================================================================
+const FLD_PAD_LEFT = 13;   // the .fld default
+const FLD_PREFIX_GAP = 3;  // breathing room between prefix and what's typed
+
 function FldText({ label, hint, value, onChange, placeholder, prefix, area, type = 'text' }: { label?: string; hint?: string; value?: any; onChange?: (value: any) => void; placeholder?: string; prefix?: string; area?: boolean; type?: string }) {
+  // The prefix is absolutely positioned, so the input has to be padded past it
+  // by hand. Measuring beats guessing: a hardcoded offset fits "$" and buries
+  // the first characters of anything longer, like "honua.green/shop/".
+  const prefixRef = React.useRef<HTMLSpanElement>(null);
+  const [padLeft, setPadLeft] = React.useState(FLD_PAD_LEFT);
+
+  React.useLayoutEffect(() => {
+    if (!prefix) { setPadLeft(FLD_PAD_LEFT); return; }
+    const el = prefixRef.current;
+    if (!el) return;
+    const measure = () => setPadLeft(FLD_PAD_LEFT + el.offsetWidth + FLD_PREFIX_GAP);
+    measure();
+    // Webfonts land after first paint and change the prefix's width with them.
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [prefix]);
+
   return (
     <label style={{ display: 'block' }}>
       {label && <span className="fld-label">{label}</span>}
@@ -14,8 +39,8 @@ function FldText({ label, hint, value, onChange, placeholder, prefix, area, type
         <textarea className="fld" rows={4} value={value} placeholder={placeholder} onChange={e => onChange?.(e.target.value)} />
       ) : (
         <div style={{ position: 'relative' }}>
-          {prefix && <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-4)', fontSize: 14 }}>{prefix}</span>}
-          <input className="fld" type={type} value={value} placeholder={placeholder} onChange={e => onChange?.(e.target.value)} style={{ paddingLeft: prefix ? 26 : 13 }} />
+          {prefix && <span ref={prefixRef} style={{ position: 'absolute', left: FLD_PAD_LEFT, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-4)', fontSize: 14, pointerEvents: 'none', whiteSpace: 'nowrap' }}>{prefix}</span>}
+          <input className="fld" type={type} value={value} placeholder={placeholder} onChange={e => onChange?.(e.target.value)} style={{ paddingLeft: padLeft }} />
         </div>
       )}
       {hint && <span style={{ fontSize: 11.5, color: 'var(--ink-4)', display: 'block', marginTop: 5 }}>{hint}</span>}
@@ -77,26 +102,48 @@ export function DesktopSell({ onNav, params }: { onNav: any; params?: Record<str
   const app = useApp();
   const status = app.state?.sellerStatus || 'none';
   const [started, setStarted] = React.useState(false);
+  // Set by "Revise & re-apply". Without it the sync effect below would put the
+  // rejected screen straight back, because the stored application really is
+  // still rejected until a new one is filed.
+  const [reapplying, setReapplying] = React.useState(false);
+  // Only true once the database has actually answered. Until then the screen
+  // shows nothing decisive — offering "apply to sell" to someone whose
+  // application is in the queue is the exact failure this guards.
+  const [synced, setSynced] = React.useState(false);
+  const [syncFailed, setSyncFailed] = React.useState(false);
 
-  // Sync seller status from Supabase (application may have been reviewed elsewhere)
+  // Sync seller status from Supabase. The row is the truth: it may have been
+  // reviewed elsewhere, and it may never have been written at all.
   React.useEffect(() => {
-    if (!app.user?.id) return;
-    import('@/lib/market').then(({ getMySellerApplication }) => getMySellerApplication(app.user.id)).then(dbApp => {
-      if (!dbApp) return;
+    if (!app.user?.id) { setSynced(true); return; }
+    import('@/lib/market').then(({ loadMySellerApplication }) => loadMySellerApplication(app.user.id)).then(res => {
+      if (res.state === 'error') { setSyncFailed(true); setSynced(true); return; }
+      if (res.state === 'none') {
+        app.setState?.((s: any) => s.sellerStatus === 'none' ? s : ({ ...s, sellerStatus: 'none' }));
+        setSynced(true);
+        return;
+      }
+      const dbApp = res.app;
       const dbStatus = dbApp.status === 'approved' ? 'approved' : dbApp.status === 'rejected' ? 'rejected' : 'pending';
       app.setState?.((s: any) => s.sellerStatus === dbStatus ? s : ({
         ...s,
         sellerStatus: dbStatus,
         sellerShop: s.sellerShop ?? { name: dbApp.shop_name, handle: dbApp.shop_handle, tagline: dbApp.tagline },
       }));
-    }).catch(() => {});
+      setSynced(true);
+    }).catch(() => { setSyncFailed(true); setSynced(true); });
   }, [app.user?.id]);
 
   const body = () => {
-    if (status === 'pending')  return <SellPending onNav={onNav} />;
-    if (status === 'approved') return <SellApproved onNav={onNav} />;
-    if (status === 'rejected') return <SellRejected onNav={onNav} />;
-    if (started) return <ApplyWizard onNav={onNav} onCancel={() => setStarted(false)} />;
+    // Signed-out visitors get the landing page immediately — there is no
+    // application to look up, and making them wait would be for nothing.
+    if (app.user?.id && !synced) return <SellChecking />;
+    if (!reapplying) {
+      if (status === 'pending')  return <SellPending onNav={onNav} />;
+      if (status === 'approved') return <SellApproved onNav={onNav} />;
+      if (status === 'rejected') return <SellRejected onNav={onNav} onReapply={() => { setReapplying(true); setStarted(true); }} />;
+    }
+    if (started) return <ApplyWizard onNav={onNav} onCancel={() => { setStarted(false); setReapplying(false); }} syncFailed={syncFailed} />;
     return <SellLanding onStart={() => setStarted(true)} />;
   };
 
@@ -200,14 +247,36 @@ function SellLanding({ onStart }) {
 // ---- The application wizard ----
 const APPLY_STEPS = ['Shop', 'Catalog', 'Impact', 'Business', 'Payouts', 'Review'];
 
-function ApplyWizard({ onNav, onCancel }) {
+// The four destinations the platform can actually pay into. The wizard used to
+// offer two of them, so a maker in Lagos — where Stripe does not operate — met a
+// step whose only real answer was a bank field that discarded what they typed.
+//
+// `kind` is the value stored in seller_applications.payout_method, and it is the
+// same vocabulary as payout_methods.kind, so the preference recorded here and the
+// destination connected later are comparable rather than two private spellings.
+const PAYOUT_OPTIONS: { kind: PayoutKind; title: string; sub: string; mark?: string; brand?: string; icon?: string }[] = [
+  { kind: 'stripe', title: 'Connect with Stripe', mark: 'S', brand: '#635bff',
+    sub: 'Fastest payouts, handles tax & currency · sent automatically' },
+  { kind: 'paypal', title: 'PayPal', mark: 'P', brand: '#0070ba',
+    sub: 'Paid to your PayPal address · sent automatically' },
+  { kind: 'bank', title: 'Bank transfer', icon: 'bank',
+    sub: 'Direct deposit to your account · 2–5 business days' },
+  { kind: 'uglycash', title: 'UglyCash', mark: '$', brand: '#111',
+    sub: 'Sent to your $handle' },
+];
+
+function ApplyWizard({ onNav, onCancel, syncFailed = false }) {
   const app = useApp();
   const [step, setStep] = React.useState(0);
+  const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [f, setF] = React.useState<any>({
     name: '', handle: '', tagline: '', location: '', logo: false,
     categories: [], types: ['Physical goods'], shipsTo: 'Worldwide',
     practices: [], certs: [], impact: '',
     legalName: '', bizType: 'Sole proprietor', country: '', taxId: '', address: '',
+    // `payout` holds a PayoutKind. `holder`/`iban` used to live here too and were
+    // never sent anywhere — see the note on step 4.
     payout: '', schedule: 'Weekly',
     agreeSeller: false, agreeImpact: false,
   });
@@ -226,6 +295,18 @@ function ApplyWizard({ onNav, onCancel }) {
     set('logo', true);
   };
 
+  // Step 3 asks for a country as free text, so this resolves it by name or by
+  // ISO code and stays quiet when it resolves to neither — better to say nothing
+  // than to tell someone Stripe is unavailable because they typed "U.K.".
+  const typedCountry = React.useMemo(() => {
+    const q = (f.country ?? '').trim().toLowerCase();
+    if (q.length < 2) return null;
+    return CONNECT_COUNTRIES.find(c => c.name.toLowerCase() === q || c.code.toLowerCase() === q)
+      ?? BANK_COUNTRIES.find(c => c.name.toLowerCase() === q || c.code.toLowerCase() === q)
+      ?? null;
+  }, [f.country]);
+  const stripeBlocked = !!typedCountry && !connectSupports(typedCountry.code);
+
   const canNext = () => {
     if (step === 0) return f.name && f.tagline;
     if (step === 1) return f.categories.length > 0;
@@ -236,21 +317,45 @@ function ApplyWizard({ onNav, onCancel }) {
     return true;
   };
 
+  // Nothing here moves the seller to "in review" until the row exists.
+  //
+  // This used to flip the local status first, swallow every error, and toast
+  // "Application submitted" unconditionally. When the insert failed the maker
+  // was told they had applied, the admin queue stayed empty, and the moment the
+  // browser's cached state was lost they were asked to apply again — with no
+  // record anywhere that they ever had. Persist, check, then claim.
   const submit = async () => {
-    app.setState?.(s => ({ ...s, sellerStatus: 'pending', sellerShop: { name: f.name, handle: f.handle || f.name.toLowerCase().replace(/\s+/g, ''), tagline: f.tagline } }));
-    // Persist to Supabase so admins can actually review it
-    if (app.user?.id) {
-      try {
-        let logo_url: string | null = null;
-        if (logoFile) {
+    if (saving) return;
+    if (!app.user?.id) {
+      setSaveError('You need to be signed in to apply. Sign in and your answers will still be here.');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      // The logo is optional, so a failed upload must not take the application
+      // down with it. Previously it threw inside the same try as the insert and
+      // the whole submission was lost.
+      let logo_url: string | null = null;
+      if (logoFile) {
+        try {
           const { uploadFile } = await import('@/lib/storage');
           logo_url = await uploadFile('avatars', app.user.id, logoFile);
-        }
-        const { submitSellerApplication } = await import('@/lib/market');
-        await submitSellerApplication(app.user.id, { ...f, logo_url });
-      } catch {}
+        } catch { logo_url = null; }
+      }
+      const { submitSellerApplication } = await import('@/lib/market');
+      const res = await submitSellerApplication(app.user.id, { ...f, logo_url });
+      if (res.state === 'failed') {
+        setSaveError(res.message);
+        return;
+      }
+      app.setState?.(s => ({ ...s, sellerStatus: 'pending', sellerShop: { name: f.name, handle: f.handle || f.name.toLowerCase().replace(/\s+/g, ''), tagline: f.tagline } }));
+      app.toast?.({ msg: 'Application submitted', sub: 'We\'ll review it within 2 business days.', kind: 'success', icon: 'check' });
+    } catch (err: any) {
+      setSaveError(err?.message || 'Something went wrong sending your application. Nothing was saved — try again.');
+    } finally {
+      setSaving(false);
     }
-    app.toast?.({ msg: 'Application submitted', sub: 'We\'ll review it within 2 business days.', kind: 'success', icon: 'check' });
   };
 
   const handle = f.handle || f.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -358,27 +463,65 @@ function ApplyWizard({ onNav, onCancel }) {
           {/* STEP 4 — Payouts */}
           {step === 4 && (
             <div style={{ display: 'grid', gap: 16 }}>
-              <button onClick={() => set('payout', 'stripe')} className="opt-row" style={{ borderColor: f.payout === 'stripe' ? 'var(--green)' : 'var(--line)', background: f.payout === 'stripe' ? 'var(--green-tint)' : 'var(--surface)' }}>
-                <span style={{ width: 40, height: 40, borderRadius: 10, background: '#635bff', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontFamily: 'Satoshi', flexShrink: 0 }}>S</span>
-                <span style={{ flex: 1 }}>
-                  <span style={{ fontSize: 14.5, fontWeight: 600 }}>Connect with Stripe</span>
-                  <span style={{ display: 'block', fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>Recommended · fastest payouts, handles tax & currency</span>
+              {PAYOUT_OPTIONS.map(o => {
+                const on = f.payout === o.kind;
+                const unavailable = o.kind === 'stripe' && stripeBlocked;
+                return (
+                  <div key={o.kind}>
+                    <button
+                      onClick={() => set('payout', on ? '' : o.kind)}
+                      className="opt-row"
+                      style={{
+                        width: '100%',
+                        borderColor: on ? 'var(--green)' : 'var(--line)',
+                        background: on ? 'var(--green-tint)' : 'var(--surface)',
+                        opacity: unavailable ? .62 : 1,
+                      }}
+                    >
+                      <span style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, display: 'grid', placeItems: 'center',
+                        background: o.mark ? o.brand : 'var(--bg-2)', color: o.mark ? '#fff' : 'var(--ink-2)',
+                        fontWeight: 700, fontFamily: 'Satoshi', fontSize: 17 }}>
+                        {o.mark ?? <Icon name={o.icon} size={20} />}
+                      </span>
+                      <span style={{ flex: 1, textAlign: 'left' }}>
+                        <span style={{ fontSize: 14.5, fontWeight: 600 }}>{o.title}</span>
+                        <span style={{ display: 'block', fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>{o.sub}</span>
+                      </span>
+                      {/* Not SBadge: its "approved" state says *Approved*, which on a
+                          payout row reads as a decision Honua has made about the
+                          seller rather than the choice they just clicked. */}
+                      {on && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--green)' }}>
+                          <Icon name="check" size={14} stroke={2.6} /> Selected
+                        </span>
+                      )}
+                    </button>
+                    {/* Named where the choice is made, not discovered after approval.
+                        `f.country` is typed by hand, so this only speaks when the
+                        text actually resolves to a country Stripe is known not to
+                        serve — silence is the honest default for anything else. */}
+                    {unavailable && (
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5, margin: '8px 2px 0' }}>
+                        Stripe doesn&rsquo;t operate in {typedCountry?.name}. Pick PayPal, a bank transfer or UglyCash — those withdrawals are sent by hand and arrive just the same.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* The account details themselves are deliberately not collected here.
+                  This step used to take an account holder and an IBAN and drop both
+                  on the floor — nothing persisted them, so a maker typed their bank
+                  details into a form that discarded them. Destinations belong in
+                  payout_methods (migration 042), which is per-seller, masked in
+                  every admin view, and audited when revealed. An application row is
+                  none of those things. So this asks the preference and the real
+                  connection happens on the payouts page once the shop is open. */}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: 14, borderRadius: 12, background: 'var(--sky-tint)' }}>
+                <span style={{ color: 'var(--sky)', display: 'flex' }}><Icon name="lock" size={16} /></span>
+                <span style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                  We only need the preference now. You&rsquo;ll connect the actual account — PayPal address, bank details or $handle — from your payouts page once you&rsquo;re approved, and you can change or add to it any time.
                 </span>
-                {f.payout === 'stripe' && <SBadge status="approved" />}
-              </button>
-              <button onClick={() => set('payout', 'bank')} className="opt-row" style={{ borderColor: f.payout === 'bank' ? 'var(--green)' : 'var(--line)', background: f.payout === 'bank' ? 'var(--green-tint)' : 'var(--surface)' }}>
-                <span style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg-2)', color: 'var(--ink-2)', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="globe" size={20} /></span>
-                <span style={{ flex: 1 }}>
-                  <span style={{ fontSize: 14.5, fontWeight: 600 }}>Bank transfer</span>
-                  <span style={{ display: 'block', fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2 }}>Direct deposit to your account · 2–5 business days</span>
-                </span>
-              </button>
-              {f.payout === 'bank' && (
-                <div style={{ display: 'grid', gap: 14, padding: 16, borderRadius: 14, border: '1px solid var(--line)', background: 'var(--bg-2)' }}>
-                  <FldText label="Account holder" value={f.holder} onChange={v => set('holder', v)} placeholder="Name on the account" />
-                  <FldText label="IBAN / Account number" value={f.iban} onChange={v => set('iban', v)} placeholder="•••• •••• •••• ••••" />
-                </div>
-              )}
+              </div>
               <div>
                 <span className="fld-label">Payout schedule</span>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -399,7 +542,7 @@ function ApplyWizard({ onNav, onCancel }) {
               <ReviewCard title="Shop" onEdit={() => setStep(0)} rows={[['Name', f.name || '—'], ['Handle', '@' + (handle || '—')], ['Tagline', f.tagline || '—'], ['Location', f.location || '—']]} />
               <ReviewCard title="Catalog" onEdit={() => setStep(1)} rows={[['Categories', f.categories.join(', ') || '—'], ['Types', f.types.join(', ')], ['Ships to', f.shipsTo]]} />
               <ReviewCard title="Impact" onEdit={() => setStep(2)} rows={[['Practices', f.practices.join(', ') || '—'], ['Certs', f.certs.join(', ') || 'None'], ['Story', (f.impact || '—').slice(0, 90) + (f.impact.length > 90 ? '…' : '')]]} />
-              <ReviewCard title="Business & payouts" onEdit={() => setStep(3)} rows={[['Legal name', f.legalName || '—'], ['Type', f.bizType], ['Country', f.country || '—'], ['Payout', f.payout === 'stripe' ? 'Stripe' : f.payout === 'bank' ? 'Bank transfer' : '—']]} />
+              <ReviewCard title="Business & payouts" onEdit={() => setStep(3)} rows={[['Legal name', f.legalName || '—'], ['Type', f.bizType], ['Country', f.country || '—'], ['Payout', PAYOUT_KIND_LABEL[f.payout as PayoutKind] ?? '—'], ['Schedule', f.schedule]]} />
               <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
                 <CheckRow checked={f.agreeSeller} onToggle={() => set('agreeSeller', !f.agreeSeller)} policyHref="/seller-policy" sub="Listing standards, fulfilment timelines, returns and the fee schedule." />
                 <CheckRow checked={f.agreeImpact} onToggle={() => set('agreeImpact', !f.agreeImpact)} title="I'll keep my impact claims honest" sub="Everything in my listings is accurate and I can back up sustainability claims if asked." />
@@ -410,15 +553,32 @@ function ApplyWizard({ onNav, onCancel }) {
       </div>
 
       {/* Sticky footer nav */}
-      <div style={{ position: 'sticky', bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 40px', borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
-        <button className="btn btn-ghost" onClick={() => step === 0 ? onCancel() : setStep(s => s - 1)} style={{ padding: '10px 18px' }}>{step === 0 ? 'Cancel' : 'Back'}</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{step + 1}/{APPLY_STEPS.length}</span>
-          {step < APPLY_STEPS.length - 1 ? (
-            <button className="btn btn-green" disabled={!canNext()} onClick={() => setStep(s => s + 1)} style={{ padding: '10px 22px', opacity: canNext() ? 1 : .45, cursor: canNext() ? 'pointer' : 'not-allowed' }}>Continue <Icon name="arrow" size={15} stroke={2.2} /></button>
-          ) : (
-            <button className="btn btn-green" disabled={!canNext()} onClick={submit} style={{ padding: '10px 22px', opacity: canNext() ? 1 : .45, cursor: canNext() ? 'pointer' : 'not-allowed' }}>Submit application <Icon name="check" size={15} stroke={2.4} /></button>
-          )}
+      <div style={{ position: 'sticky', bottom: 0, borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
+        {/* A failed submission is stated here, next to the button that failed,
+            and the wizard stays put with every answer intact. A toast would have
+            scrolled away and left the maker believing they had applied. */}
+        {saveError && (
+          <div style={{ padding: '12px 40px', background: sTint('var(--clay)', 10), borderBottom: '1px solid ' + sTint('var(--clay)', 22), fontSize: 13, color: 'var(--clay)', lineHeight: 1.5 }}>
+            <strong>Not submitted.</strong> {saveError}
+          </div>
+        )}
+        {syncFailed && !saveError && (
+          <div style={{ padding: '12px 40px', background: sTint('var(--sun)', 10), borderBottom: '1px solid ' + sTint('var(--sun)', 22), fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+            We couldn&rsquo;t check whether you have applied before. If you already have one in review, submitting again will file a second application.
+          </div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 40px' }}>
+          <button className="btn btn-ghost" onClick={() => step === 0 ? onCancel() : setStep(s => s - 1)} style={{ padding: '10px 18px' }}>{step === 0 ? 'Cancel' : 'Back'}</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{step + 1}/{APPLY_STEPS.length}</span>
+            {step < APPLY_STEPS.length - 1 ? (
+              <button className="btn btn-green" disabled={!canNext()} onClick={() => setStep(s => s + 1)} style={{ padding: '10px 22px', opacity: canNext() ? 1 : .45, cursor: canNext() ? 'pointer' : 'not-allowed' }}>Continue <Icon name="arrow" size={15} stroke={2.2} /></button>
+            ) : (
+              <button className="btn btn-green" disabled={!canNext() || saving} onClick={submit} style={{ padding: '10px 22px', opacity: (canNext() && !saving) ? 1 : .45, cursor: (canNext() && !saving) ? 'pointer' : 'not-allowed' }}>
+                {saving ? 'Submitting…' : saveError ? 'Try again' : 'Submit application'} <Icon name="check" size={15} stroke={2.4} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -459,6 +619,19 @@ function StatusShell({ children }) {
   return <div style={{ display: 'grid', placeItems: 'center', minHeight: '100%', padding: '48px 24px' }}><div style={{ width: '100%', maxWidth: 600 }}>{children}</div></div>;
 }
 
+// Shown for the moment between mount and the database answering. Deliberately
+// quiet: the wrong thing to show here is either of the two real answers.
+function SellChecking() {
+  return (
+    <StatusShell>
+      <div style={{ textAlign: 'center', color: 'var(--ink-4)' }}>
+        <span style={{ width: 56, height: 56, borderRadius: 18, background: 'var(--bg-2)', display: 'inline-grid', placeItems: 'center' }}><Icon name="clock" size={26} /></span>
+        <p style={{ fontSize: 14.5, marginTop: 16 }}>Checking your seller status…</p>
+      </div>
+    </StatusShell>
+  );
+}
+
 function SellPending({ onNav }) {
   const app = useApp();
   const shop = app.state?.sellerShop || { name: 'Your shop' };
@@ -494,9 +667,12 @@ function SellPending({ onNav }) {
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'center' }}>
         <button className="btn btn-ghost" onClick={() => onNav?.('marketplace')}>Back to marketplace</button>
-        <button className="btn btn-ghost" onClick={() => onNav?.('admin')} style={{ color: 'var(--green)', borderColor: 'var(--green-3)' }}>Open admin review →</button>
       </div>
-      <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-4)', marginTop: 14, fontFamily: 'JetBrains Mono' }}>Demo: approve this application from the admin queue to unlock the dashboard.</p>
+      {/* The "open admin review" shortcut and the line under it described a demo
+          where anyone could approve themselves. The queue is real now — it lives
+          behind sellers.review in the console — so neither belongs on the
+          applicant's screen. */}
+      <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-4)', marginTop: 14, lineHeight: 1.5 }}>Your application is on file. You&rsquo;ll be notified as soon as a reviewer has looked at it.</p>
     </StatusShell>
   );
 }
@@ -519,7 +695,7 @@ function SellApproved({ onNav }) {
   );
 }
 
-function SellRejected({ onNav }) {
+function SellRejected({ onNav, onReapply }) {
   const app = useApp();
   return (
     <StatusShell>
@@ -529,7 +705,11 @@ function SellRejected({ onNav }) {
         <p style={{ fontSize: 15, color: 'var(--ink-3)', lineHeight: 1.6, margin: '10px 0 0' }}>A reviewer left notes on what to strengthen — usually clearer impact evidence or business details. You can revise and re-apply anytime.</p>
       </div>
       <div style={{ marginTop: 26, display: 'grid', gap: 10 }}>
-        <button className="btn btn-green" onClick={() => app.setState?.(s => ({ ...s, sellerStatus: 'none' }))} style={{ justifyContent: 'center', padding: '13px' }}>Revise & re-apply</button>
+        {/* Re-applying is a local intent, not a status change. Clearing
+            `sellerStatus` here would only have been undone by the next sync,
+            because the stored application is still rejected until a new one
+            is filed. */}
+        <button className="btn btn-green" onClick={onReapply} style={{ justifyContent: 'center', padding: '13px' }}>Revise & re-apply</button>
         <button className="btn btn-ghost" onClick={() => app.toast?.({ msg: 'Opening…', sub: 'Support docs would open here.', icon: 'comment' })} style={{ justifyContent: 'center', padding: '13px' }}>Contact the review team</button>
       </div>
     </StatusShell>

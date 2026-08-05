@@ -1,5 +1,13 @@
 import { supabase } from "./supabase";
 
+/** 8 hex chars of collision insurance for a storage key. */
+export function randomKey(): string {
+  const b = new Uint8Array(4);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(b);
+  else for (let i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
+  return Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+}
+
 // Upload a file to a bucket and return the public CDN URL.
 // Path format: {bucket}/{userId}/{filename}
 // Supabase Storage serves these from its global CDN automatically.
@@ -8,11 +16,21 @@ export async function uploadFile(
   userId: string,
   file: File
 ): Promise<string> {
-  const ext = file.name.split(".").pop();
-  const path = `${userId}/${Date.now()}.${ext}`;
+  // Extension only, lowercased, and only if it looks like one. `file.name` is
+  // whatever the user's filesystem handed over, and it lands in a storage key.
+  const raw = (file.name.split(".").pop() ?? "").toLowerCase();
+  const ext = /^[a-z0-9]{1,8}$/.test(raw) ? raw : "bin";
+
+  // Date.now() alone is not a key. Two files picked in the same millisecond —
+  // a multi-image post, which this app allows — collided, and `upsert: true`
+  // meant the second silently overwrote the first: the post then showed the
+  // same picture twice and the original was gone from storage. A random suffix
+  // makes the collision vanishingly unlikely, and upsert: false turns whatever
+  // is left into a visible error instead of data loss.
+  const path = `${userId}/${Date.now()}-${randomKey()}.${ext}`;
 
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    upsert: true,
+    upsert: false,
     contentType: file.type,
   });
   if (error) throw error;

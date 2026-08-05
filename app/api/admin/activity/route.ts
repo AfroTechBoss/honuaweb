@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPrivyToken } from "@/lib/privy-verify";
 import { enforce } from "@/lib/rate-limit";
+import { gateRole, type Permission } from "@/lib/admin-role";
 import { logWarn, logError, requestId, failure } from "@/lib/observability";
 
 // The admin audit log: what an admin did, kept.
@@ -19,7 +20,7 @@ import { logWarn, logError, requestId, failure } from "@/lib/observability";
 
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<{ db: any; adminId: string; fail: NextResponse | null }> {
+async function authed(req: NextRequest, permission: Permission | null): Promise<{ db: any; adminId: string; fail: NextResponse | null }> {
   const limited = enforce(req, { name: 'admin-activity', limit: 120, windowMs: 60_000 });
   if (limited) return { db: null, adminId: '', fail: limited };
 
@@ -28,6 +29,16 @@ async function authed(req: NextRequest): Promise<{ db: any; adminId: string; fai
   if (!admin) return { db: null, adminId: '', fail: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const db = getSupabaseAdmin();
   if (!db) return { db: null, adminId: '', fail: NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 503 }) };
+
+  // `null` means authenticate but don't authorise. Only POST passes it, and the
+  // reason is in the header note above: every admin action writes its own audit
+  // row through here, so a permission on the write would mean the roles that
+  // lack it act without leaving a trace. Reading the log is the gated half.
+  if (permission) {
+    const denied = await gateRole(db, admin.userId, permission);
+    if (denied) return { db: null, adminId: '', fail: denied };
+  }
+
   return { db, adminId: admin.userId, fail: null };
 }
 
@@ -38,7 +49,7 @@ const str = (v: any, max: number) => typeof v === 'string' ? v.trim().slice(0, m
 const KINDS = new Set(['trash', 'lock', 'flame', 'check', 'close', 'logout', 'coin', 'award']);
 
 export async function GET(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'analytics.view');
   if (fail) return fail;
 
   const id = requestId(req);
@@ -76,7 +87,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { db, adminId, fail } = await authed(req);
+  const { db, adminId, fail } = await authed(req, null);
   if (fail) return fail;
 
   const id = requestId(req);

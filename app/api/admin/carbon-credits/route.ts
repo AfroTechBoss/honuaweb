@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPrivyToken } from "@/lib/privy-verify";
 import { CREDIT_TAGS } from "@/lib/admin-carbon";
 import { enforce } from "@/lib/rate-limit";
+import { gateRole, type Permission } from "@/lib/admin-role";
 
 // Admin CRUD for the carbon market's listings.
 //
@@ -16,7 +17,7 @@ import { enforce } from "@/lib/rate-limit";
 
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse | null }> {
+async function authed(req: NextRequest, permission: Permission): Promise<{ db: any; fail: NextResponse | null }> {
   // Before the token check: verifyPrivyToken is a network round trip, so an
   // unauthenticated flood costs money and latency even though it all 401s.
   const limited = enforce(req, { name: 'admin-carbon', limit: 60, windowMs: 60_000 });
@@ -27,6 +28,14 @@ async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse |
   if (!admin) return { db: null, fail: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const db = getSupabaseAdmin();
   if (!db) return { db: null, fail: NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 503 }) };
+
+  // GET is gated the same as the writes, which is stricter than it looks. The
+  // read is not just the catalog — it joins carbon_purchases, which RLS
+  // otherwise shows only to the buyer. The Roles page draws one "Carbon catalog"
+  // row; gating every verb on it is what makes that row true.
+  const denied = await gateRole(db, admin.userId, permission);
+  if (denied) return { db: null, fail: denied };
+
   return { db, fail: null };
 }
 
@@ -72,7 +81,7 @@ function fields(body: any, { require: required }: { require: boolean }): { value
 // against it. Admins need the hidden and sold-out ones too; the public market
 // query deliberately filters them out.
 export async function GET(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'carbon.manage');
   if (fail) return fail;
 
   const [{ data: credits, error }, { data: purchases }] = await Promise.all([
@@ -106,7 +115,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'carbon.manage');
   if (fail) return fail;
 
   const body = await req.json().catch(() => ({}));
@@ -124,7 +133,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'carbon.manage');
   if (fail) return fail;
 
   const body = await req.json().catch(() => ({}));
@@ -150,7 +159,7 @@ export async function PATCH(req: NextRequest) {
 // the row is part of a retirement record, and dropping it would null out the
 // link the certificate depends on. Deactivating takes it off the market instead.
 export async function DELETE(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'carbon.manage');
   if (fail) return fail;
 
   const body = await req.json().catch(() => ({}));

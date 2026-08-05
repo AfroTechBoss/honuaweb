@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { readPlatform } from "@/lib/platform-server";
 
 // ---------------------------------------------------------------------------
 // Server-side auth gate. Until now every guard was client-side (AuthGate in
@@ -22,13 +23,26 @@ const PUBLIC_PATHS = [
   "/api",
   "/support",
   "/report",
+  // Public for a sharper reason than the two above it: everyone who needs
+  // /appeal has just been suspended or banned, so requiring the session they may
+  // no longer hold would close the only door out.
+  "/appeal",
   "/returns",
   "/marketplace",
   "/search",
   "/checkout",
   "/orders",
   "/admin",
+  // Reachable signed out for the obvious reason: during maintenance nobody's
+  // session is being checked, so bouncing this one to /login would replace the
+  // explanation with a form that cannot be submitted.
+  "/maintenance",
 ];
+
+// Maintenance mode closes everything except these. /admin because the console
+// is where it gets turned back off, and locking yourself out of the switch is
+// the one mistake this feature can make that has no way back.
+const MAINTENANCE_EXEMPT = ["/admin", "/maintenance"];
 
 // Public API endpoints (OG scraping must work unauthenticated)
 const PUBLIC_API = ["/api/og"];
@@ -39,6 +53,32 @@ function isPublic(path: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // ---- Maintenance mode (platform_settings, migration 044) ----
+  //
+  // Checked before the session, because during maintenance there is nothing to
+  // gate — the answer is the same for everyone. readPlatform() caches for 15s,
+  // gives up after 1.5s and returns "open" on every failure, so a slow or
+  // unreachable settings row makes the site normal rather than making it dark.
+  //
+  // A redirect rather than a rewrite, despite a rewrite preserving the URL: on
+  // a rewrite the client-side router still sees the path it asked for, so
+  // AuthGate would bounce a signed-out visitor to /login and replace the
+  // explanation with a form. The path they wanted rides along as ?from= so the
+  // page can offer it back once maintenance lifts.
+  if (path !== "/maintenance" && !MAINTENANCE_EXEMPT.some((p) => path === p || path.startsWith(p + "/"))) {
+    const { maintenanceMode } = await readPlatform();
+    if (maintenanceMode) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/maintenance";
+      url.search = path === "/" ? "" : `?from=${encodeURIComponent(path)}`;
+      const bounce = NextResponse.redirect(url);
+      bounce.headers.set("Cache-Control", "no-store");
+      return bounce;
+    }
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -82,8 +122,6 @@ export async function middleware(request: NextRequest) {
       reason: `${error!.name}: ${error!.message}`,
     }));
   }
-
-  const path = request.nextUrl.pathname;
 
   // Signed-in users don't need the login page
   if (user && path === "/login") {

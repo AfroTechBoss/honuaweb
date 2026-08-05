@@ -150,7 +150,7 @@ export default function TermsPage() {
               <P>Each natural person may maintain only one personal account. Organisations may maintain one organisational account. Operating multiple accounts, including to evade suspension or circumvent rate limits, is prohibited.</P>
             </Sub>
             <Sub title="Account security">
-              <P>You are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You must immediately notify us at <strong>security@honua.earth</strong> if you suspect unauthorised access. Honua will not be liable for losses arising from unauthorised use of your account where the breach resulted from your failure to maintain credential confidentiality.</P>
+              <P>You are responsible for maintaining the confidentiality of your login credentials and for all activities that occur under your account. You must immediately notify us at <strong>security@honua.green</strong> if you suspect unauthorised access. Honua will not be liable for losses arising from unauthorised use of your account where the breach resulted from your failure to maintain credential confidentiality.</P>
             </Sub>
             <Sub title="Account types">
               <UL items={[
@@ -223,7 +223,7 @@ export default function TermsPage() {
               <P>The Honua Marketplace ("Marketplace") is a facilitated commerce platform where vetted sellers ("Sellers") offer sustainable products and services to Platform users ("Buyers"). Honua acts as an intermediary, not a party to the underlying sale contract.</P>
             </Sub>
             <Sub title="Seller eligibility">
-              <P>Sellers must apply and be approved by Honua. Approval requires: a verified business identity; product or service offerings that meet Honua's Sustainability Standards (available at honua.earth/seller-standards); agreement to Honua's Seller Agreement; and maintenance of Honua's minimum impact and quality ratings.</P>
+              <P>Sellers must apply and be approved by Honua. Approval requires: a verified business identity; product or service offerings that meet Honua's Sustainability Standards (available at honua.green/seller-standards); agreement to Honua's Seller Agreement; and maintenance of Honua's minimum impact and quality ratings.</P>
             </Sub>
             <Sub title="Buyer protections">
               <UL items={[
@@ -234,7 +234,7 @@ export default function TermsPage() {
               ]} />
             </Sub>
             <Sub title="Fees">
-              <P>Honua charges a platform fee on Seller transactions. The current fee schedule is published at honua.earth/fees and may be updated with 30 days' notice. Transaction fees are non-refundable except where required by law.</P>
+              <P>Honua charges a platform fee on Seller transactions. The current fee schedule is published at honua.green/fees and may be updated with 30 days' notice. Transaction fees are non-refundable except where required by law.</P>
             </Sub>
             <Sub title="Prohibited items">
               <P>The following may not be listed or sold on the Marketplace: counterfeit goods; products making fraudulent environmental claims ("greenwashing"); wildlife products; hazardous materials without required certifications; digital assets that constitute securities without appropriate licensing; and any item or service prohibited by applicable law.</P>
@@ -298,7 +298,7 @@ export default function TermsPage() {
               ]} />
             </Sub>
             <Sub title="Enforcement">
-              <P>Violations may result in content removal, feature restrictions, temporary suspension, or permanent account termination depending on severity and recurrence. You may appeal enforcement decisions at honua.earth/appeals within 30 days. We aim to review appeals within 14 business days.</P>
+              <P>Violations may result in content removal, feature restrictions, temporary suspension, or permanent account termination depending on severity and recurrence. You may appeal enforcement decisions at honua.green/appeals within 30 days. We aim to review appeals within 14 business days.</P>
             </Sub>
           </Section>
 
@@ -345,13 +345,13 @@ export default function TermsPage() {
                 "Objection: Object to processing based on legitimate interests",
                 "Opt-out of automated decision-making: Where we use automated systems, you may request human review",
               ]} />
-              <P>Submit rights requests at honua.earth/privacy or email privacy@honua.earth. We respond within 30 days. EEA/UK users may also lodge complaints with their national supervisory authority.</P>
+              <P>Submit rights requests at honua.green/privacy or email privacy@honua.green. We respond within 30 days. EEA/UK users may also lodge complaints with their national supervisory authority.</P>
             </Sub>
             <Sub title="International transfers">
               <P>Honua is based in the United States. Data transferred from the EEA, UK, or Switzerland is protected by Standard Contractual Clauses (SCCs) or equivalent safeguards as required by applicable law.</P>
             </Sub>
             <Sub title="Security">
-              <P>We employ industry-standard measures including AES-256 encryption at rest, TLS 1.3 in transit, role-based access controls, regular penetration testing, and a bug-bounty programme (details at honua.earth/security). No system is perfectly secure; we will notify you of breaches that materially affect your data as required by applicable law.</P>
+              <P>We employ industry-standard measures including AES-256 encryption at rest, TLS 1.3 in transit, role-based access controls, regular penetration testing, and a bug-bounty programme (details at honua.green/security). No system is perfectly secure; we will notify you of breaches that materially affect your data as required by applicable law.</P>
             </Sub>
           </Section>
 
@@ -382,7 +382,7 @@ export default function TermsPage() {
           {/* ── 13. Billing ── */}
           <Section id="s13" title="13. Subscription Plans & Billing">
             <Sub title="Subscription tiers">
-              <P>Honua offers optional paid subscription tiers as described at honua.earth/pricing. Subscription fees are billed in advance on a monthly or annual basis via Stripe. All prices are in USD unless otherwise stated.</P>
+              <P>Honua offers optional paid subscription tiers as described at honua.green/pricing. Subscription fees are billed in advance on a monthly or annual basis via Stripe. All prices are in USD unless otherwise stated.</P>
             </Sub>
             <Sub title="Free trial">
               <P>Where a free trial is offered, it begins on the date you subscribe and ends on the trial expiry date. Your payment method will be charged at the applicable subscription rate at the end of the trial unless you cancel before trial expiry.</P>
@@ -391,7 +391,7 @@ export default function TermsPage() {
               <P>You may cancel your subscription at any time through Settings → Subscription. Cancellation takes effect at the end of the current billing period; you retain access until then. We do not pro-rate partial periods unless required by law.</P>
             </Sub>
             <Sub title="Refunds">
-              <P>Subscription fees are generally non-refundable except: within 14 days of initial purchase (EU/UK cooling-off period); where Honua materially reduces subscription features without adequate notice; or where required by applicable consumer-protection law. Refund requests: billing@honua.earth.</P>
+              <P>Subscription fees are generally non-refundable except: within 14 days of initial purchase (EU/UK cooling-off period); where Honua materially reduces subscription features without adequate notice; or where required by applicable consumer-protection law. Refund requests: billing@honua.green.</P>
             </Sub>
             <Sub title="Price changes">
               <P>We will notify you of price increases at least 30 days before they apply to your subscription. You may cancel before the new price takes effect.</P>
@@ -424,7 +424,7 @@ export default function TermsPage() {
           {/* ── 16. Disputes ── */}
           <Section id="s16" title="16. Dispute Resolution & Governing Law">
             <Sub title="Informal resolution">
-              <P>Before filing any formal dispute, you agree to contact Honua at legal@honua.earth and attempt to resolve the matter informally for at least 30 days. Most issues are resolved at this stage.</P>
+              <P>Before filing any formal dispute, you agree to contact Honua at legal@honua.green and attempt to resolve the matter informally for at least 30 days. Most issues are resolved at this stage.</P>
             </Sub>
             <Sub title="Binding arbitration">
               <P>If informal resolution fails, you and Honua agree that any dispute arising from or related to these Terms or the Platform will be resolved by binding individual arbitration administered by the American Arbitration Association (AAA) under its Consumer Arbitration Rules. Arbitration will take place in San Francisco, California, or, at your election, via video conference. The arbitrator's award is final and may be entered in any court of competent jurisdiction.</P>
@@ -447,7 +447,7 @@ export default function TermsPage() {
               "Send an email to your registered address at least 14 days before the changes take effect",
               "Display a prominent in-app notification",
               'Update the "Last updated" date at the top of this page',
-              "Maintain an archive of prior versions at honua.earth/terms/history",
+              "Maintain an archive of prior versions at honua.green/terms/history",
             ]} />
             <P>Your continued use of the Platform after the effective date of revised Terms constitutes acceptance. If you do not agree with the changes, you must stop using the Platform and may delete your account.</P>
           </Section>
@@ -470,7 +470,7 @@ export default function TermsPage() {
             <P>Honua respects intellectual property rights and complies with the DMCA. If you believe that User Content on our Platform infringes your copyright, submit a notice to our Designated Copyright Agent:</P>
             <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 20px", fontSize: 14, fontFamily: "JetBrains Mono", marginBottom: 16, lineHeight: 2 }}>
               <div>Copyright Agent — Honua Cooperative Ltd</div>
-              <div>Email: dmca@honua.earth</div>
+              <div>Email: dmca@honua.green</div>
               <div>Subject: DMCA Takedown Notice</div>
             </div>
             <P>Your notice must include: (1) identification of the copyrighted work; (2) identification of the infringing material and its location on our Platform; (3) your contact information; (4) a statement of good-faith belief that use is not authorised; (5) a statement, under penalty of perjury, that the information is accurate and you are authorised to act on the copyright owner's behalf; and (6) your physical or electronic signature.</P>
@@ -480,14 +480,14 @@ export default function TermsPage() {
 
           {/* ── 20. Children ── */}
           <Section id="s20" title="20. Children's Privacy">
-            <P>Honua is not directed to children under 13 and we do not knowingly collect personal data from children under 13. If we become aware that a child under 13 has provided us with personal data, we will take steps to delete such information as soon as practicable. Parents or guardians who believe their child under 13 has created an account should contact us at privacy@honua.earth and we will investigate and delete the account promptly.</P>
+            <P>Honua is not directed to children under 13 and we do not knowingly collect personal data from children under 13. If we become aware that a child under 13 has provided us with personal data, we will take steps to delete such information as soon as practicable. Parents or guardians who believe their child under 13 has created an account should contact us at privacy@honua.green and we will investigate and delete the account promptly.</P>
             <P>For users aged 13–17: we apply enhanced privacy defaults including private accounts by default, no targeted advertising, restricted direct messaging from non-followers, and no Wallet features. Parents may request data access or deletion on behalf of minor children.</P>
           </Section>
 
           {/* ── 21. Accessibility ── */}
           <Section id="s21" title="21. Accessibility">
-            <P>Honua is committed to making our Platform accessible to all users, including those with disabilities. We target WCAG 2.1 Level AA compliance. If you encounter accessibility barriers, please contact us at accessibility@honua.earth. We will respond within 5 business days and work to remediate the issue promptly.</P>
-            <P>We regularly audit our Platform for accessibility and provide keyboard navigation, screen-reader support, high-contrast modes, and adjustable text sizes. Where features are not yet fully accessible, we publish a known-issues log at honua.earth/accessibility.</P>
+            <P>Honua is committed to making our Platform accessible to all users, including those with disabilities. We target WCAG 2.1 Level AA compliance. If you encounter accessibility barriers, please contact us at accessibility@honua.green. We will respond within 5 business days and work to remediate the issue promptly.</P>
+            <P>We regularly audit our Platform for accessibility and provide keyboard navigation, screen-reader support, high-contrast modes, and adjustable text sizes. Where features are not yet fully accessible, we publish a known-issues log at honua.green/accessibility.</P>
           </Section>
 
           {/* ── 22. Environmental ── */}
@@ -509,14 +509,14 @@ export default function TermsPage() {
             <P>If you have questions about these Terms or any aspect of the Platform, please reach out:</P>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, marginTop: 8 }}>
               {[
-                ["General enquiries", "hello@honua.earth"],
-                ["Privacy & data rights", "privacy@honua.earth"],
-                ["Legal & compliance", "legal@honua.earth"],
-                ["Security vulnerabilities", "security@honua.earth"],
-                ["Copyright / DMCA", "dmca@honua.earth"],
-                ["Accessibility", "accessibility@honua.earth"],
-                ["Billing & subscriptions", "billing@honua.earth"],
-                ["Marketplace disputes", "marketplace@honua.earth"],
+                ["General enquiries", "hello@honua.green"],
+                ["Privacy & data rights", "privacy@honua.green"],
+                ["Legal & compliance", "legal@honua.green"],
+                ["Security vulnerabilities", "security@honua.green"],
+                ["Copyright / DMCA", "dmca@honua.green"],
+                ["Accessibility", "accessibility@honua.green"],
+                ["Billing & subscriptions", "billing@honua.green"],
+                ["Marketplace disputes", "marketplace@honua.green"],
               ].map(([label, email]) => (
                 <div key={email} style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" }}>
                   <div style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--ink-4)", marginBottom: 4 }}>{label}</div>

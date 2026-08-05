@@ -5,10 +5,10 @@ import { getNotifications, markAllRead } from "@/lib/notifications";
 
 // `verified` is an impact action clearing its vouch threshold; `account_verified`
 // is the identity badge. Different things, so they don't share a row style.
-const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin', streak_risk: 'flame', streak_ended: 'flame', account_verified: 'check', verification_declined: 'bolt' };
+const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin', streak_risk: 'flame', streak_ended: 'flame', account_verified: 'check', verification_declined: 'bolt', admin_broadcast: 'bell' };
 // streak_risk is a warning (still saveable), streak_ended is a loss — different
 // colours so the two read apart at a glance in a list of flame icons.
-const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)', streak_risk: 'var(--sun)', streak_ended: 'var(--clay)', account_verified: 'var(--sky)', verification_declined: 'var(--ink-3)' };
+const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)', streak_risk: 'var(--sun)', streak_ended: 'var(--clay)', account_verified: 'var(--sky)', verification_declined: 'var(--ink-3)', admin_broadcast: 'var(--ink-2)' };
 
 function timeAgo(ts: string) {
   const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -74,6 +74,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     'Community': ['community_invite'],
     'Badges': ['badge', 'level_up'],
     'Streaks': ['streak_risk', 'streak_ended'],
+    'From Honua': ['admin_broadcast', 'account_verified', 'verification_declined'],
   };
 
   const filtered = tab === 'All' ? items : items.filter(n => TAB_TYPES[tab]?.includes(n.type));
@@ -141,7 +142,12 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+                      {/* Only a broadcast carries a title — everything else is a
+                          single sentence and `title` is null on those rows. */}
+                      {n.title && (
+                        <div style={{ fontSize: 14, fontWeight: 650, color: 'var(--ink)', marginBottom: 3 }}>{n.title}</div>
+                      )}
+                      <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)', whiteSpace: n.title ? 'pre-wrap' : undefined }}>
                         {n.actor && <strong style={{ color: 'var(--ink)' }}>{n.actor.full_name || `@${n.actor.handle}`} </strong>}
                         {n.body}
                       </div>

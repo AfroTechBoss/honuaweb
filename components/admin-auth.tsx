@@ -1,7 +1,6 @@
 "use client";
 import React from "react";
 import { PrivyProvider, usePrivy, useLoginWithEmail } from "@privy-io/react-auth";
-import { Logo } from "@/components/shared";
 
 // ── Privy-gated wrapper for the admin panel ──────────────────────────
 // Authorized emails are controlled in the Privy dashboard:
@@ -120,11 +119,7 @@ function AdminLoginScreen() {
         background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.09)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
       }}>
-        {/* Logo */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <span style={{ width: 48, height: 48, borderRadius: 14, background: '#22c55e', display: 'grid', placeItems: 'center' }}>
-            <Logo size={28} />
-          </span>
           <div style={{ textAlign: 'center' }}>
             <div style={{ color: '#fff', fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>Honua Admin</div>
             <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 12.5, fontFamily: 'JetBrains Mono', letterSpacing: '.08em', marginTop: 3 }}>CONSOLE ACCESS</div>

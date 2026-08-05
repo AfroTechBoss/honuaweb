@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPrivyToken } from "@/lib/privy-verify";
 import { enforce } from "@/lib/rate-limit";
+import { gateRole, type Permission } from "@/lib/admin-role";
 import { logWarn, requestId, failure } from "@/lib/observability";
 
 // Every number on the admin overview and analytics pages.
@@ -20,7 +21,7 @@ import { logWarn, requestId, failure } from "@/lib/observability";
 
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse | null }> {
+async function authed(req: NextRequest, permission: Permission | null): Promise<{ db: any; fail: NextResponse | null }> {
   // Ahead of the token check: verifyPrivyToken is a network round trip, so an
   // unauthenticated flood costs money and latency even when it all 401s.
   const limited = enforce(req, { name: 'admin-metrics', limit: 60, windowMs: 60_000 });
@@ -31,6 +32,13 @@ async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse |
   if (!admin) return { db: null, fail: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const db = getSupabaseAdmin();
   if (!db) return { db: null, fail: NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 503 }) };
+
+  // `null` is a deliberate choice, not a missing gate — see the call site.
+  if (permission) {
+    const denied = await gateRole(db, admin.userId, permission);
+    if (denied) return { db: null, fail: denied };
+  }
+
   return { db, fail: null };
 }
 
@@ -71,12 +79,36 @@ async function overview(db: any) {
   // The two head-only counts come through here rather than from the browser
   // for the same reason as everything else: seller_applications is admin-only
   // under RLS, and an admin's browser can't satisfy that policy.
-  const [gmvRows, memberRows, posts, applications] = await Promise.all([
+  const [gmvRows, memberRows, posts, applications, flaggedProducts] = await Promise.all([
     series(db, 'admin_gmv_series', { days: 30 }, missing),
     series(db, 'admin_member_series', { days: 30 }, missing),
     db.from('posts').select('*', { count: 'exact', head: true }),
     db.from('seller_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    // Same reason again, plus one of its own: the products select policy hides
+    // anything not live, so a browser asking this question would be told there
+    // are no flagged listings by the very policy that flagging applies.
+    db.from('products').select('*', { count: 'exact', head: true }).eq('status', 'flagged'),
   ]);
+
+  // Content reports (migration 046). Deliberately outside the Promise.all
+  // above and outside `missing`: this one arrived later than the rest, so a
+  // database without 046 should show a zero here and keep every other number
+  // on the page rather than marking the whole overview unavailable.
+  //
+  // The figure is distinct *targets*, not rows — five people reporting one
+  // post is one thing for a moderator to decide, and the badge counts
+  // decisions waiting.
+  let openReports = 0;
+  const { data: reportCounts, error: reportErr } = await db.rpc('admin_content_report_counts');
+  if (reportErr) {
+    logWarn('admin/metrics', 'content report counts unavailable — the badge will read 0', {
+      fix: 'apply supabase/migrations/046_content_reports.sql',
+      reason: reportErr.message,
+    });
+  } else {
+    const c = Array.isArray(reportCounts) ? reportCounts[0] : reportCounts;
+    openReports = Number(c?.open_targets ?? 0);
+  }
 
   const gmv = split(gmvRows.map((r: any) => Number(r.cents ?? 0) / 100));
   const members = split(memberRows.map((r: any) => Number(r.total ?? 0)));
@@ -104,6 +136,8 @@ async function overview(db: any) {
     },
     posts: posts.count ?? 0,
     pendingApplications: applications.count ?? 0,
+    flaggedProducts: flaggedProducts.count ?? 0,
+    openReports,
   };
 }
 
@@ -178,12 +212,17 @@ async function analytics(db: any) {
 }
 
 export async function GET(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  // One route, two audiences. `?scope=analytics` is the Analytics page and
+  // wants analytics.view; the default scope is the counters on the console's
+  // landing page, which every role sees the moment they sign in. Gating that
+  // would greet a moderator with a permission error on the first screen and
+  // tell them nothing useful, so the overview stays open to any verified admin.
+  const scope = req.nextUrl.searchParams.get('scope');
+  const { db, fail } = await authed(req, scope === 'analytics' ? 'analytics.view' : null);
   if (fail) return fail;
 
   const id = requestId(req);
   try {
-    const scope = req.nextUrl.searchParams.get('scope');
     const data = scope === 'analytics' ? { analytics: await analytics(db) } : await overview(db);
     return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPrivyToken } from "@/lib/privy-verify";
 import { enforce } from "@/lib/rate-limit";
+import { gateRole, type Permission } from "@/lib/admin-role";
 import { logWarn, requestId, failure } from "@/lib/observability";
 
 // Reads public.error_log (migration 034) for the admin console.
@@ -18,7 +19,7 @@ import { logWarn, requestId, failure } from "@/lib/observability";
 
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse | null }> {
+async function authed(req: NextRequest, permission: Permission): Promise<{ db: any; fail: NextResponse | null }> {
   const limited = enforce(req, { name: 'admin-errors', limit: 60, windowMs: 60_000 });
   if (limited) return { db: null, fail: limited };
 
@@ -27,6 +28,13 @@ async function authed(req: NextRequest): Promise<{ db: any; fail: NextResponse |
   if (!admin) return { db: null, fail: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const db = getSupabaseAdmin();
   if (!db) return { db: null, fail: NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 503 }) };
+
+  // Stack traces and driver messages are the closest thing the console has to a
+  // map of the backend. Moderators and analysts have no use for it, and it is
+  // the page you would read first if you were looking for a way in.
+  const denied = await gateRole(db, admin.userId, permission);
+  if (denied) return { db: null, fail: denied };
+
   return { db, fail: null };
 }
 
@@ -54,7 +62,7 @@ function group(row: any) {
 }
 
 export async function GET(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'errors.view');
   if (fail) return fail;
 
   const id = requestId(req);
@@ -117,7 +125,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'errors.view');
   if (fail) return fail;
 
   const id = requestId(req);

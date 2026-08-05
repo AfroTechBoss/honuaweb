@@ -17,6 +17,10 @@ export type OverviewMetrics = {
   members: { total: number; series: number[]; trend: Trend };
   posts: number;
   pendingApplications: number;
+  /** products.status = 'flagged', counted in SQL — the console holds no catalogue. */
+  flaggedProducts: number;
+  /** Distinct posts/comments/profiles/listings with an unanswered report (046). */
+  openReports: number;
 };
 
 export type AnalyticsMetrics = {

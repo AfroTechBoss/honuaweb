@@ -340,6 +340,12 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
                 {order.paymentStatus === 'failed' && (
                   <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: 'color-mix(in srgb, var(--clay) 14%, transparent)', color: 'var(--clay)' }}>Payment failed</span>
                 )}
+                {/* Set when an admin refunds the whole order. Without this the
+                    order would show no payment chip at all — the one state where
+                    the buyer most wants confirmation would read as blank. */}
+                {order.paymentStatus === 'refunded' && (
+                  <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 20, background: 'color-mix(in srgb, var(--sky) 14%, transparent)', color: 'var(--sky)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="arrow" size={12} /> Refunded</span>
+                )}
               </div>
               <div style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>Placed {date}</div>
             </div>

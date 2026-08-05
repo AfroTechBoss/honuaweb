@@ -1719,26 +1719,34 @@ export function MTip({ data, close }) {
   );
 };
 
-// --- Auto-offset subscribe ---
+// --- Auto-offset (planned, not live) ---
+//
+// This used to present a $14/mo plan and a Subscribe button that closed the
+// modal and fired an "Auto-offset active" toast. No subscription record was
+// written, nothing recurred, and "Manage in Settings" led nowhere — so the
+// platform was telling people they had a recurring commitment it had no way to
+// honour or to cancel. It now describes the intent and takes no money.
 export function MAutoOffset({ close }) {
-  const app = useApp();
   return (
     <Modal onClose={close} width={480}>
-      <ModalHead icon="leaf" title="Start auto-offset" sub="We match your tracked footprint with verified credits, every month." onClose={close} />
+      <ModalHead icon="leaf" title="Auto-offset" sub="Planned — not available yet." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
-        <div style={{ background: 'var(--green-tint)', borderRadius: 14, padding: 18, textAlign: 'center' }}>
-          <div style={{ fontSize: 40, fontWeight: 600, fontFamily: 'Lora', color: 'var(--green)' }}>$14<span style={{ fontSize: 16 }}>/mo</span></div>
-          <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>≈ 0.7 t CO₂ retired monthly</div>
+        <div style={{ background: 'var(--bg-2)', borderRadius: 14, padding: 18 }}>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+            The idea: a monthly amount you set, retired automatically against a project mix you choose, with receipts you can hand to an accountant.
+          </p>
         </div>
         <div style={{ marginTop: 16 }}>
-          {['Auto-purchase from your chosen project mix', 'Pause or cancel anytime', 'Quarterly receipts emailed to you', 'Counts toward your verified impact'].map((b, i) => (
-            <div key={i} style={{ display: 'flex', gap: 9, padding: '6px 0', fontSize: 13.5, color: 'var(--ink-2)' }}><span style={{ color: 'var(--green)' }}><Icon name="check" size={15} stroke={2.2} /></span> {b}</div>
+          {['Recurring billing — needs to exist before this can be sold', 'A project mix you control', 'Receipts against real retirement serials', 'Pause or cancel from Settings'].map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: 9, padding: '6px 0', fontSize: 13.5, color: 'var(--ink-3)' }}><span style={{ color: 'var(--ink-4)' }}><Icon name="clock" size={15} stroke={2.2} /></span> {b}</div>
           ))}
         </div>
+        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.6, margin: '14px 0 0' }}>
+          Until it exists you can retire any amount manually from the carbon market, and each retirement gets its own serial.
+        </p>
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={close}>Not now</button>
-        <button className="btn btn-green" onClick={() => { close(); app.toast({ kind: 'success', msg: 'Auto-offset active', sub: '$14/mo · first credit retires Jun 1. Manage in Settings.', icon: 'leaf' }); }}>Subscribe · $14/mo</button>
+        <button className="btn btn-ghost" onClick={close}>Close</button>
       </ModalFoot>
     </Modal>
   );
@@ -1780,17 +1788,25 @@ export function MOffsetYear({ close }) {
     if (!pick || !signedIn) return;
     setBuying(true);
     try {
-      const { purchaseCredit } = await import('@/lib/market');
-      const ok = await purchaseCredit(app.user.id, { id: pick.id, name: pick.name }, qty, Math.round(total * 100));
-      if (!ok) {
-        app.toast?.({ msg: "Couldn't record that retirement", kind: 'error', icon: 'leaf' });
+      const { retireCredit } = await import('@/lib/market');
+      const outcome = await retireCredit(pick.id, qty);
+      if (outcome.kind !== 'retired') {
+        app.toast?.({
+          msg: outcome.kind === 'signed-out' ? 'Sign in to retire a credit'
+            : outcome.kind === 'unavailable' ? 'Retirement is not switched on yet'
+            : outcome.message,
+          sub: outcome.kind === 'unavailable' ? 'Nothing was charged or recorded.' : undefined,
+          kind: 'error', icon: 'leaf',
+        });
         return;
       }
       window.dispatchEvent(new Event('honua:offset-purchased'));
       close();
+      // Price and tonnage as recorded, not as this modal proposed them.
+      const r = outcome.retirement;
       app.openModal('celebrate', {
-        title: `Offset ${qty} t CO₂`,
-        sub: `You retired ${qty} tonne${qty === 1 ? '' : 's'} via ${pick.name} for $${total.toFixed(2)}. Certificate added to your wallet.`,
+        title: `Offset ${r.tonnes} t CO₂`,
+        sub: `Retired via ${r.creditName} for $${(r.totalCents / 100).toFixed(2)}. Serial ${r.serial}.`,
       });
     } finally { setBuying(false); }
   };

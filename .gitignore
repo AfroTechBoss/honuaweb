@@ -8,6 +8,8 @@ npm-debug.log*
 .env*
 !.env.example
 next-env.d.ts.timestamp
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 .claude
 tsk.txt
 supabase/.temp/
