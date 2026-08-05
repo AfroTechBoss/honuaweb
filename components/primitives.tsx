@@ -141,9 +141,18 @@ export function Avatar({ src, name = "U", size = 36, score, noBorder = false }: 
 }
 
 // The verified badge. Always sits next to a name, sized to the text beside it.
+// The tick is drawn, not typed. As a "✓" glyph it sat low and left of centre in
+// the circle: `place-items: center` centres the line box, and the glyph's ink
+// sits wherever the font puts it inside that box — differently in every font,
+// and differently again on the fallback face. The path below is centred on the
+// viewBox by construction, so it lands dead centre at every size.
 export function VerifiedTick({ size = 14 }: { size?: number }) {
   return (
-    <span title="Verified" style={{ background: "var(--sky)", color: "#fff", width: size, height: size, borderRadius: "50%", display: "inline-grid", placeItems: "center", fontSize: size * 0.64, flexShrink: 0 }}>✓</span>
+    <span title="Verified" style={{ background: "var(--sky)", color: "#fff", width: size, height: size, borderRadius: "50%", display: "inline-grid", placeItems: "center", flexShrink: 0 }}>
+      <svg width={size * 0.62} height={size * 0.62} viewBox="0 0 12 12" fill="none" aria-hidden="true" style={{ display: "block" }}>
+        <path d="M2.5 6.1 L4.9 8.5 L9.5 3.5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
   );
 }
 

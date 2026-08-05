@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyPrivyToken } from "@/lib/privy-verify";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, SUPPORT_EMAIL } from "@/lib/email";
 import { verificationApprovedEmail, verificationRejectedEmail } from "@/lib/email-verification";
 import { enforce } from "@/lib/rate-limit";
+import { gateRole, type Permission } from "@/lib/admin-role";
 import { logError, logWarn, requestId } from "@/lib/observability";
 
 // The verification review queue.
@@ -20,7 +21,7 @@ import { logError, logWarn, requestId } from "@/lib/observability";
 
 export const runtime = 'nodejs';
 
-async function authed(req: NextRequest): Promise<{ db: any; adminId: string; fail: NextResponse | null }> {
+async function authed(req: NextRequest, permission: Permission): Promise<{ db: any; adminId: string; fail: NextResponse | null }> {
   // Counted before the token is checked, not after. verifyPrivyToken is a
   // network round trip, so an unauthenticated flood costs real money and real
   // latency even though every request 401s. The budget is generous — a reviewer
@@ -33,6 +34,13 @@ async function authed(req: NextRequest): Promise<{ db: any; adminId: string; fai
   if (!admin) return { db: null, adminId: '', fail: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const db = getSupabaseAdmin();
   if (!db) return { db: null, adminId: '', fail: NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured on the server' }, { status: 503 }) };
+
+  // The queue holds applicants' legal documents and their email addresses, and
+  // PATCH is the only thing on the platform that can set profiles.verified. Both
+  // halves want a reviewer, not just anyone holding a console token.
+  const denied = await gateRole(db, admin.userId, permission);
+  if (denied) return { db: null, adminId: '', fail: denied };
+
   return { db, adminId: admin.userId, fail: null };
 }
 
@@ -183,7 +191,7 @@ async function verifiedAccounts(db: any) {
 // With ?search= it does something different: finds accounts by handle or name,
 // for the "verify someone directly" picker. Same auth, so it stays one route.
 export async function GET(req: NextRequest) {
-  const { db, fail } = await authed(req);
+  const { db, fail } = await authed(req, 'sellers.review');
   if (fail) return fail;
 
   const search = str(req.nextUrl.searchParams.get('search'));
@@ -255,7 +263,9 @@ async function sendDecisionEmail(db: any, req: NextRequest, profile: any, approv
     const mail = approved
       ? verificationApprovedEmail({ name, handle: profile.handle, appUrl: appUrl(req) })
       : verificationRejectedEmail({ name, handle: profile.handle, reason, appUrl: appUrl(req) });
-    const result = await sendEmail({ to, ...mail });
+    // replyTo last so it wins regardless of what the template returns — a reply
+    // has to reach a person, and this is the one send where it's likely.
+    const result = await sendEmail({ to, ...mail, replyTo: SUPPORT_EMAIL });
     return { emailed: result.sent, emailError: result.error };
   } catch (e: any) {
     return { emailed: false, emailError: e?.message || 'Could not send the email' };
@@ -265,7 +275,7 @@ async function sendDecisionEmail(db: any, req: NextRequest, profile: any, approv
 // PATCH — approve or reject an application, verify an account directly, or
 // revoke an existing badge.
 export async function PATCH(req: NextRequest) {
-  const { db, adminId, fail } = await authed(req);
+  const { db, adminId, fail } = await authed(req, 'sellers.review');
   if (fail) return fail;
 
   // `rid`, not `id` — `id` below is the application's primary key.

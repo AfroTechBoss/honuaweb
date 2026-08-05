@@ -172,12 +172,121 @@ function WriteReviewModal({ product, onClose, onSubmit }: { product: any; onClos
   );
 }
 
+// ─── Report a listing ────────────────────────────────────────────────────────
+//
+// Migration 046's queue has accepted `product` as a target type since the day it
+// was written, and the admin Moderation panel draws a row for one — but nothing
+// on the member side could file it, so that branch had never once been reached.
+// This is the missing half.
+//
+// The reasons are the listing's own, not the feed's. "Harassment" is not a thing
+// a product can be, and a moderator reading the queue needs the reason to point
+// at what they should go and check.
+const LISTING_REASONS = [
+  'Not actually sustainable — greenwashing',
+  'Counterfeit or stolen goods',
+  'Prohibited item',
+  'Misleading description or photos',
+  'Wrong or deceptive price',
+  'Never shipped / seller unresponsive',
+  'Offensive content',
+  'Other',
+];
+
+function ReportListing({ product }: { product: any }) {
+  const app = useApp();
+  const [open, setOpen] = React.useState(false);
+  const [reason, setReason] = React.useState('');
+  const [note, setNote] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const submit = async () => {
+    if (!reason || sending) return;
+    setSending(true);
+    setError('');
+    const { fileReport } = await import('@/lib/content-reports');
+    const outcome = await fileReport({
+      targetType: 'product',
+      targetId: product.id,
+      targetOwnerId: product.seller?.id ?? null,
+      reporterId: app.user?.id,
+      reason,
+      note,
+    });
+    setSending(false);
+
+    if (outcome.kind === 'filed' || outcome.kind === 'duplicate') {
+      setOpen(false);
+      setReason(''); setNote('');
+      app.toast?.(outcome.kind === 'duplicate'
+        ? { msg: 'Already reported', sub: "You've reported this listing before — it's with our moderators.", icon: 'check' }
+        : { msg: 'Listing reported', sub: 'Thanks — a moderator will take a look.', icon: 'check', kind: 'success' });
+      return;
+    }
+    setError(outcome.kind === 'signed-out' ? 'Sign in to report a listing.' : outcome.message);
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{ marginTop: 10, width: '100%', padding: '9px', borderRadius: 12, border: 'none', background: 'none', color: 'var(--ink-3)', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+      >
+        <Icon name="flag" size={13} /> Report this listing
+      </button>
+
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 300, display: 'grid', placeItems: 'center', padding: 20 }} onClick={() => !sending && setOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--line)', width: 'min(460px, 100%)', padding: 24, maxHeight: '85vh', overflow: 'auto' }}>
+            <h3 className="font-display" style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 600 }}>Report this listing</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+              {product.title} — sold by {product.seller?.name ?? 'this seller'}. Reports go to Honua moderators; the seller is not told who filed one.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+              {LISTING_REASONS.map(r => (
+                <button key={r} onClick={() => setReason(r)} style={{
+                  textAlign: 'left', padding: '10px 12px', borderRadius: 10, fontSize: 13.5, cursor: 'pointer',
+                  border: `1.5px solid ${reason === r ? 'var(--clay)' : 'var(--line)'}`,
+                  background: reason === r ? 'var(--clay-tint, rgba(180,90,60,.08))' : 'transparent',
+                  color: reason === r ? 'var(--clay)' : 'var(--ink-2)', fontWeight: reason === r ? 600 : 400,
+                }}>{r}</button>
+              ))}
+            </div>
+
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Anything else the moderator should know (optional)"
+              maxLength={1000}
+              style={{ width: '100%', minHeight: 72, padding: 11, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--bg-2)', color: 'var(--ink)', fontSize: 13.5, fontFamily: 'inherit', resize: 'vertical' }}
+            />
+
+            {error && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--clay)' }}>{error}</div>}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button className="btn btn-ghost" onClick={() => setOpen(false)} disabled={sending} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+              <button onClick={submit} disabled={!reason || sending} style={{
+                flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, color: '#fff',
+                background: reason && !sending ? 'var(--clay)' : 'var(--line)',
+                cursor: reason && !sending ? 'pointer' : 'not-allowed',
+              }}>{sending ? 'Sending…' : 'Submit report'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Product detail page ─────────────────────────────────────────────────────
 export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any }) {
   const app = useApp();
   const isDbId = /^[0-9a-f-]{36}$/.test(String(id));
   const mockProduct = ALL_PRODUCTS.find(p => p.id === id);
   const [dbProduct, setDbProduct] = React.useState<any>(null);
+  const [dbRelated, setDbRelated] = React.useState<any[]>([]);
   const [dbLoading, setDbLoading] = React.useState(isDbId);
   const [reviews, setReviews] = React.useState<any[]>([]);
   const [showReview, setShowReview] = React.useState(false);
@@ -195,7 +304,9 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
           id: p.id, title: p.name, price: p.price_cents / 100, brand: p.brand, tag: p.tag,
           imgUrl: p.imgUrl, img: p.name, category: p.category,
           // Use the seller's real profile handle so "Message" opens a DM with them
-          seller: { name: p.sellerShopName || p.sellerName || p.brand, handle: p.sellerHandle || null, shopHandle: p.sellerShopHandle || null, logo: p.sellerLogo || null, rating: p.rating, reviews: p.review_count },
+          // sellerId rides along so a report can be attached to the account
+          // behind the listing, not just the listing.
+          seller: { name: p.sellerShopName || p.sellerName || p.brand, handle: p.sellerHandle || null, shopHandle: p.sellerShopHandle || null, logo: p.sellerLogo || null, rating: p.rating, reviews: p.review_count, id: p.sellerId || null },
           description: p.description || `${p.name} from ${p.brand}. Sustainably made with planet-friendly materials.`,
           eco: ECO_DETAILS[p.tag] || [],
           inStock: true, stock: 40,
@@ -205,6 +316,30 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
     }).catch(() => setDbLoading(false));
     return () => { alive = false; };
   }, [id, isDbId]);
+
+  // Real "you might also like" — other live listings sharing this one's tag or
+  // brand. Runs once the product itself has loaded, since it needs both.
+  React.useEffect(() => {
+    if (!isDbId || !dbProduct) return;
+    let alive = true;
+    const filters = [dbProduct.tag && `tag.eq.${dbProduct.tag}`, dbProduct.brand && `brand.eq.${dbProduct.brand}`].filter(Boolean);
+    if (!filters.length) return;
+    import('@/lib/supabase').then(({ supabase }) =>
+      supabase.from('products')
+        .select('id, name, brand, price_cents, image_url')
+        .eq('status', 'live')
+        .neq('id', dbProduct.id)
+        .or(filters.join(','))
+        .limit(4)
+    ).then(({ data }: any) => {
+      if (!alive) return;
+      setDbRelated((data ?? []).filter((r: any) => r.name && r.price_cents != null).map((r: any) => ({
+        id: r.id, title: r.name, brand: r.brand || '', img: r.name,
+        imgUrl: r.image_url ?? null, price: (r.price_cents / 100).toFixed(2).replace(/\.00$/, ''),
+      })));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [isDbId, dbProduct?.id, dbProduct?.tag, dbProduct?.brand]);
 
   const product = mockProduct ?? dbProduct;
 
@@ -268,7 +403,12 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
     );
   };
 
-  const relatedProducts = ALL_PRODUCTS.filter(p => p.id !== product.id && (p.tag === product.tag || p.brand === product.brand)).slice(0, 4);
+  // Real listings share a tag or a brand with this one. The demo catalogue is
+  // only consulted for the seeded "m1"-style ids the marketplace hands out when
+  // the products table is empty — a real product must never suggest a fake one.
+  const relatedProducts = isDbId
+    ? dbRelated
+    : ALL_PRODUCTS.filter(p => p.id !== product.id && (p.tag === product.tag || p.brand === product.brand)).slice(0, 4);
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>
@@ -358,6 +498,10 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
                 <Icon name="bookmark" size={15} stroke={wished ? 2.4 : 1.75} />
                 {wished ? 'Saved to wishlist' : 'Save to wishlist'}
               </button>
+              {/* Only for listings that exist as rows. The demo catalogue has
+                  ids like "m3"; a report filed against one would point at
+                  nothing, and content_reports.target_id is a uuid. */}
+              {isDbId && <ReportListing product={product} />}
             </div>
 
             {/* Description */}

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { randomKey } from './storage';
 
 export type StoryType = 'image' | 'video' | 'text' | 'post';
 
@@ -162,9 +163,12 @@ export async function sendStoryReply(fromUserId: string, toUserId: string, text:
 }
 
 export async function uploadStoryMedia(file: File, userId: string): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'bin';
-  const path = `${userId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('stories').upload(path, file, { upsert: true });
+  // Same collision-and-overwrite problem uploadFile had: a timestamp is not a
+  // unique key, and upsert turned the clash into silent data loss.
+  const raw = (file.name.split('.').pop() ?? '').toLowerCase();
+  const ext = /^[a-z0-9]{1,8}$/.test(raw) ? raw : 'bin';
+  const path = `${userId}/${Date.now()}-${randomKey()}.${ext}`;
+  const { error } = await supabase.storage.from('stories').upload(path, file, { upsert: false, contentType: file.type });
   if (error) throw error;
   const { data } = supabase.storage.from('stories').getPublicUrl(path);
   return data.publicUrl;

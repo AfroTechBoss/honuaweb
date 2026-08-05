@@ -681,20 +681,6 @@ export function DesktopHome({ onNav, params }: { onNav: any; params?: Record<str
           {/* Story rail */}
           <StoryRail groups={storyGroups} onOpen={setStoryGroupIdx} onNav={onNav} onAddStatus={() => setStatusCompose(true)} />
 
-          {/* Composer prompt */}
-          <div onClick={() => { app.openModal?.('compose'); }} style={{
-            background: 'var(--surface)', borderRadius: 16,
-            border: '1px solid var(--line)', padding: 16, marginBottom: 12,
-            display: 'flex', gap: 12, alignItems: 'center', cursor: 'pointer',
-          }}>
-            <Avatar src={app.user?.avatar} name={app.user?.name || 'You'} size={40} />
-            <span style={{ flex: 1, fontSize: 15, color: 'var(--ink-4)', fontFamily: 'Satoshi' }}>Share an action, idea, or update…</span>
-            <span style={{ color: 'var(--ink-3)', display: 'inline-flex' }}><Icon name="image" size={16} /></span>
-            <span style={{ color: 'var(--ink-3)', display: 'inline-flex' }}><Icon name="pin" size={16} /></span>
-            <button className="btn btn-primary" style={{ padding: '7px 14px' }} onClick={(e) => { e.stopPropagation(); app.openModal?.('compose'); }}>Post</button>
-          </div>
-
-
           {loadingFeed ? (
             <>{[1,2,3,4,5].map(i => <PostCardSkeleton key={i} />)}</>
           ) : feed.length > 0 ? (
@@ -913,6 +899,8 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impac
   const [showReport, setShowReport] = React.useState(false);
   const [reportReason, setReportReason] = React.useState('');
   const [reportSubmitted, setReportSubmitted] = React.useState(false);
+  const [reportSending, setReportSending] = React.useState(false);
+  const [reportError, setReportError] = React.useState('');
   const [showEdit, setShowEdit] = React.useState(false);
   const [editContent, setEditContent] = React.useState('');
   const [editSaving, setEditSaving] = React.useState(false);
@@ -939,15 +927,37 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impac
     setShowMenu(false);
     setReportSubmitted(false);
     setReportReason('');
+    setReportError('');
     setShowReport(true);
   };
 
-  const submitReport = (e: React.MouseEvent) => {
+  // This used to set a flag, show a green tick and write nothing anywhere. The
+  // confirmation is now shown only for a report that reached the database —
+  // migration 046 is the table, lib/content-reports the write.
+  const submitReport = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!reportReason) return;
-    setReportSubmitted(true);
-    setTimeout(() => { setShowReport(false); setReportSubmitted(false); }, 1800);
-    app.toast?.({ msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
+    if (!reportReason || reportSending) return;
+    setReportSending(true);
+    setReportError('');
+    const { fileReport } = await import('@/lib/content-reports');
+    const outcome = await fileReport({
+      targetType: 'post',
+      targetId: post.id,
+      targetOwnerId: displayProfile?.id ?? post.user_id,
+      reporterId: app.user?.id,
+      reason: reportReason,
+    });
+    setReportSending(false);
+
+    if (outcome.kind === 'filed' || outcome.kind === 'duplicate') {
+      setReportSubmitted(true);
+      setTimeout(() => { setShowReport(false); setReportSubmitted(false); }, 1800);
+      app.toast?.(outcome.kind === 'duplicate'
+        ? { msg: 'Already reported', sub: "You've reported this post before — it's with our moderators.", icon: 'check' }
+        : { msg: 'Report submitted', sub: 'Thanks for helping keep Honua safe.', icon: 'check', kind: 'success' });
+      return;
+    }
+    setReportError(outcome.kind === 'signed-out' ? 'Sign in to report a post.' : outcome.message);
   };
 
   const handleMute = (e: React.MouseEvent) => {
@@ -1038,11 +1048,16 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impac
           <Icon name="repost" size={13} /> Reposted from <strong>@{original.profile?.handle}</strong>
         </div>
       )}
-      <header style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-        <span style={{ cursor: 'pointer' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>
+      {/* The name + type block is two short lines against a 42px avatar, so it
+          leaves ~11px of slack. Top-aligning it parked all of that under the
+          type line and read as a hole; centring the column against the avatar
+          splits it. `inline-flex` on the avatar drops the line box's descender
+          gap, which otherwise made the header a stray pixel taller. */}
+      <header style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+        <span style={{ cursor: 'pointer', display: 'inline-flex' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>
           <Avatar src={displayProfile?.avatar_url} name={displayProfile?.full_name} size={42} />
         </span>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, alignSelf: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={stop(() => onNav?.('profile', { handle: displayProfile?.handle }))}>{displayProfile?.full_name}</span>
             {displayProfile?.verified && <VerifiedTick />}
@@ -1109,9 +1124,12 @@ function RealFeedCard({ post, onNav, onRefresh, onHideUser, onStoryShared, impac
                     </button>
                   ))}
                 </div>
+                {reportError && (
+                  <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--clay-tint, rgba(190,90,60,.1))', color: 'var(--clay)', fontSize: 12.5, lineHeight: 1.45 }}>{reportError}</div>
+                )}
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => setShowReport(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
-                  <button onClick={submitReport} disabled={!reportReason} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reportReason ? 'var(--clay)' : 'var(--line)', cursor: reportReason ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>Submit report</button>
+                  <button onClick={submitReport} disabled={!reportReason || reportSending} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reportReason && !reportSending ? 'var(--clay)' : 'var(--line)', cursor: reportReason && !reportSending ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>{reportSending ? 'Sending…' : 'Submit report'}</button>
                 </div>
               </>
             )}
@@ -1605,6 +1623,8 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
   const [realCommunities, setRealCommunities] = React.useState<any[]>([]);
   const [postPool, setPostPool] = React.useState<any[] | null>(null);
   const [projectCount, setProjectCount] = React.useState<number | null>(null);
+  const [projects, setProjects] = React.useState<any[] | null>(null);
+  const [people, setPeople] = React.useState<any[] | null>(null);
   const [searching, setSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<{ users: any[]; posts: any[]; communities: any[] } | null>(null);
   const searchDebounce = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1648,6 +1668,40 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
     }).catch(() => { if (!cancelled) setProjectCount(0); });
     return () => { cancelled = true; };
   }, []);
+
+  // The Projects and People tabs load the first time they are opened and then
+  // keep what they got — `null` means "not fetched", `[]` means "fetched, empty".
+  // Both used to render the trending body, which made three of the four tabs
+  // the same page.
+  React.useEffect(() => {
+    if (tab !== 'projects' || projects !== null) return;
+    let cancelled = false;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase
+        .from('projects')
+        .select('id, title, category, description, location_name, starts_at, when_label, host_name, going_count, lat, lng')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(24);
+      if (!cancelled) setProjects(data ?? []);
+    }).catch(() => { if (!cancelled) setProjects([]); });
+    return () => { cancelled = true; };
+  }, [tab, projects]);
+
+  React.useEffect(() => {
+    if (tab !== 'people' || people !== null) return;
+    let cancelled = false;
+    const me = app.user?.id;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, handle, full_name, avatar_url, verified, bio, impact_score')
+        .order('impact_score', { ascending: false, nullsFirst: false })
+        .limit(24);
+      if (!cancelled) setPeople((data ?? []).filter((u: any) => u.id !== me));
+    }).catch(() => { if (!cancelled) setPeople([]); });
+    return () => { cancelled = true; };
+  }, [tab, people, app.user?.id]);
 
   const trending = React.useMemo(
     () => [...(postPool ?? [])].sort((a, b) => trendScore(b) - trendScore(a)).slice(0, 4),
@@ -1834,7 +1888,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           </div>
         )}
 
-        {!isSearching && tab !== 'tags' && (<>
+        {!isSearching && tab === 'trending' && (<>
 
         {/* Trending spotlight — top posts of the last 30 days */}
         <TrendingSpotlight posts={trending} loading={postPool === null} onNav={onNav} />
@@ -1893,11 +1947,14 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
           })}
         </div>
 
-        {/* Project map preview */}
+        </>)}
+
+        {/* Projects tab */}
+        {!isSearching && tab === 'projects' && (<>
         <div className="explore-map-grid" style={{
           background: 'var(--surface)', borderRadius: 20,
           border: '1px solid var(--line)', overflow: 'hidden',
-          display: 'grid', gridTemplateColumns: '1.2fr 1fr',
+          display: 'grid', gridTemplateColumns: '1.2fr 1fr', marginBottom: 24,
         }}>
           <MapPreview />
           <div style={{ padding: 24 }}>
@@ -1915,6 +1972,71 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
             <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={() => onNav?.('map')}>Open map <Icon name="arrow" size={14} /></button>
           </div>
         </div>
+
+        {projects === null ? (
+          <div className="explore-community-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+            {[1, 2, 3].map(i => <div key={i} style={{ height: 150, borderRadius: 16, background: 'var(--line)', animation: 'skeleton-pulse 1.4s ease-in-out infinite' }} />)}
+          </div>
+        ) : projects.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ink-3)' }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>No projects yet</div>
+            <p style={{ fontSize: 14, marginTop: 6 }}>Organise a cleanup, a planting day, a repair café — and it shows up here.</p>
+            <button className="btn btn-green" style={{ marginTop: 16 }} onClick={() => onNav?.('map')}>Start a project</button>
+          </div>
+        ) : (
+          <div className="explore-community-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+            {projects.map((p: any) => (
+              <div key={p.id} onClick={() => onNav?.('map', { project: p.id })} className="post-card" style={{
+                background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)',
+                padding: 16, cursor: 'pointer',
+              }}>
+                <span className="chip">{p.category ?? 'Cleanup'}</span>
+                <h3 style={{ margin: '8px 0 4px', fontSize: 16, fontWeight: 600 }}>{p.title}</h3>
+                {p.description && (
+                  <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.description}</p>
+                )}
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
+                  {p.when_label || (p.starts_at ? new Date(p.starts_at).toLocaleDateString('default', { month: 'short', day: 'numeric' }) : 'Anytime')}
+                  {p.location_name ? ` · ${p.location_name}` : ''}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>
+                  Hosted by {p.host_name || 'a Honua member'} · {p.going_count ?? 0} going
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        </>)}
+
+        {/* People tab */}
+        {!isSearching && tab === 'people' && (<>
+        <h2 className="font-display" style={{ fontSize: 20, fontWeight: 600, margin: '0 0 4px' }}>People making an impact</h2>
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--ink-3)' }}>Ranked by impact score — the points earned for logged, verified action.</p>
+        {people === null ? (
+          <div className="explore-search-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 78, borderRadius: 14, background: 'var(--line)', animation: 'skeleton-pulse 1.4s ease-in-out infinite' }} />)}
+          </div>
+        ) : people.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ink-3)', fontSize: 14 }}>Nobody to show yet.</div>
+        ) : (
+          <div className="explore-search-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {people.map((u: any) => (
+              <div key={u.id} onClick={() => onNav?.('profile', { handle: u.handle })} className="row-hover"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, cursor: 'pointer' }}>
+                <Avatar src={u.avatar_url} name={u.full_name} size={48} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {u.full_name || u.handle}
+                    {u.verified && <VerifiedTick />}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
+                  {u.bio && <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.bio}</div>}
+                </div>
+                {u.impact_score > 0 && <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)', fontWeight: 600, flexShrink: 0 }}>{u.impact_score}</span>}
+              </div>
+            ))}
+          </div>
+        )}
         </>)}
       </main>
     </div>

@@ -2,7 +2,7 @@
 import React from "react";
 import Link from "next/link";
 
-const BASE = "https://api.honua.app/v1";
+const BASE = "https://api.honua.green/v1";
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 function Badge({ text, color }: { text: string; color: string }) {
@@ -208,7 +208,7 @@ export default function ApiPage() {
             </div>
 
             <div style={{ background: "var(--green-tint)", border: "1px solid var(--green-3)", borderRadius: 12, padding: "14px 18px", fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6 }}>
-              <strong style={{ color: "var(--green)" }}>Beta access:</strong> The Honua API is in private beta. <a href="mailto:api@honua.app" style={{ color: "var(--green)", fontWeight: 600 }}>Request access →</a>
+              <strong style={{ color: "var(--green)" }}>Beta access:</strong> The Honua API is in private beta. <a href="mailto:api@honua.green" style={{ color: "var(--green)", fontWeight: 600 }}>Request access →</a>
             </div>
           </section>
 
@@ -624,7 +624,7 @@ export default function ApiPage() {
             </div>
 
             <div style={{ marginTop: 24, background: "var(--green-tint)", border: "1px solid var(--green-3)", borderRadius: 12, padding: "16px 20px", fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6 }}>
-              Ready to integrate? <a href="mailto:api@honua.app" style={{ color: "var(--green)", fontWeight: 700, textDecoration: "none" }}>Request API access →</a>
+              Ready to integrate? <a href="mailto:api@honua.green" style={{ color: "var(--green)", fontWeight: 700, textDecoration: "none" }}>Request API access →</a>
             </div>
           </section>
 

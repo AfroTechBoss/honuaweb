@@ -8,7 +8,11 @@ export type NotifType =
   // Written server-side by /api/admin/verification when a reviewer decides an
   // application. Also actorless: the decision is the platform's, not a
   // reviewer's to be named for.
-  | "account_verified" | "verification_declined";
+  | "account_verified" | "verification_declined"
+  // Written entirely in SQL by admin_broadcast_notify (migration 044) — one
+  // insert…select over the whole audience, never through createNotification
+  // below. It is the only type that carries a `title`.
+  | "admin_broadcast";
 
 export async function createNotification({
   userId, actorId, type, postId, body, badgeName, communityId,

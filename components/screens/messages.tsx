@@ -186,7 +186,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
         *,
         user1_profile:profiles!user1_id(id, handle, full_name, avatar_url, verified),
         user2_profile:profiles!user2_id(id, handle, full_name, avatar_url, verified),
-        last_msg:messages(content, created_at, sender_id)
+        last_msg:messages(content, created_at, sender_id, seen_at)
       `)
       .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
       .order('last_message_at', { ascending: false, nullsFirst: false });
@@ -195,10 +195,18 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
     // inquiries and live in the seller dashboard's Messages tab instead.
     const enriched = (data ?? [])
       .filter((c: any) => c.shop_owner_id !== userId)
-      .map((c: any) => ({
-        ...c,
-        last_msg: Array.isArray(c.last_msg) ? c.last_msg[c.last_msg.length - 1] : c.last_msg,
-      }));
+      .map((c: any) => {
+        const all = Array.isArray(c.last_msg) ? c.last_msg : c.last_msg ? [c.last_msg] : [];
+        return {
+          ...c,
+          last_msg: all[all.length - 1] ?? null,
+          // The embed already carries every message in the conversation — the
+          // row list only kept the last one. Counting the unseen ones here
+          // costs nothing extra, and is what the old `const unread = false`
+          // placeholder was standing in for.
+          unread: all.filter((m: any) => !m.seen_at && m.sender_id !== userId).length,
+        };
+      });
     setConvos(enriched);
   }, [userId]);
 
@@ -240,6 +248,10 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       if (unseen.length) {
         await supabase.from('messages').update({ seen_at: new Date().toISOString() })
           .in('id', unseen.map((m: any) => m.id));
+        // The row list holds its own copy of the count. Clearing it here keeps
+        // the badge gone after you move on to another conversation, without
+        // waiting for the next loadConvos.
+        setConvos(prev => prev.map((c: any) => c.id === convoId ? { ...c, unread: 0 } : c));
       }
     }
   }, [userId]);
@@ -469,7 +481,9 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
               const disp = participantDisplay(c, other);
               const last = c.last_msg;
               const isActive = c.id === activeConvoId;
-              const unread = false; // TODO: track unread per convo
+              // Opening a conversation marks it seen, so the row you are
+              // standing in is never unread however stale `convos` is.
+              const unread = isActive ? 0 : (c.unread ?? 0);
               return (
                 <div key={c.id} onClick={() => setActiveConvoId(c.id)} className="row-hover" style={{ padding: '12px 20px', display: 'flex', gap: 12, cursor: 'pointer', background: isActive ? 'var(--green-tint)' : 'transparent', borderLeft: isActive ? '3px solid var(--green)' : '3px solid transparent' }}>
                   <Avatar src={disp.avatar} name={disp.name} size={44} />
@@ -480,9 +494,16 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
                         {disp.verified && <VerifiedTick size={13} />}
                         {disp.isShop &&<span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em', color: 'var(--green)', background: 'var(--green-tint)', borderRadius: 4, padding: '1px 5px', fontFamily: 'JetBrains Mono' }}>SHOP</span>}
                       </span>
-                      <span style={{ color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{last?.created_at ? msgTimeAgo(last.created_at) : ''}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <span style={{ color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{last?.created_at ? msgTimeAgo(last.created_at) : ''}</span>
+                        {unread > 0 && (
+                          <span style={{ background: 'var(--green)', color: '#fff', borderRadius: 999, fontSize: 10, fontWeight: 700, padding: '1px 6px', fontFamily: 'JetBrains Mono', lineHeight: 1.6 }}>
+                            {unread > 9 ? '9+' : unread}
+                          </span>
+                        )}
+                      </span>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 12, color: unread > 0 ? 'var(--ink)' : 'var(--ink-3)', fontWeight: unread > 0 ? 600 : 400, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {last ? (last.sender_id === userId ? `You: ${last.content}` : last.content) : 'No messages yet'}
                     </div>
                   </div>

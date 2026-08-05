@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
   if (!url) return NextResponse.json({ error: 'no url' }, { status: 400 });
 
   const result = await safeFetch(url, {
-    headers: { 'User-Agent': 'Honuabot/1.0 (+https://honua.earth)' },
+    headers: { 'User-Agent': 'Honuabot/1.0 (+https://honua.green)' },
     timeoutMs: 5000,
   });
 

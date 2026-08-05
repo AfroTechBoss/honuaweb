@@ -351,8 +351,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     // Sync seller status app-wide so "Sell on Honua" vs "Seller dashboard"
     // is correct everywhere (marketplace, sidebar) — not just on /sell.
-    import('@/lib/market').then(({ getMySellerApplication }) => getMySellerApplication(userId)).then(dbApp => {
-      if (!dbApp) return;
+    // The database is authoritative, including when it says there is nothing.
+    // `sellerStatus` is persisted to localStorage, so a submission that never
+    // reached the table would otherwise leave this browser claiming "in review"
+    // forever while the review queue stayed empty. Only an outright read failure
+    // leaves the cached value alone — see MySellerApplication.
+    import('@/lib/market').then(({ loadMySellerApplication }) => loadMySellerApplication(userId)).then(res => {
+      if (res.state === 'error') return;
+      if (res.state === 'none') {
+        setSt((s: any) => s.sellerStatus === 'none' ? s : ({ ...s, sellerStatus: 'none' }));
+        return;
+      }
+      const dbApp = res.app;
       const dbStatus = dbApp.status === 'approved' ? 'approved' : dbApp.status === 'rejected' ? 'rejected' : 'pending';
       setSt((s: any) => s.sellerStatus === dbStatus ? s : ({
         ...s,

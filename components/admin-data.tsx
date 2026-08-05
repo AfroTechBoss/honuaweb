@@ -14,6 +14,19 @@ Object.assign(S_STATUS, {
   removed:     { label: 'Removed',    color: 'var(--ink-3)' },
   open:        { label: 'Open',       color: 'var(--sun)'  },
   resolved:    { label: 'Resolved',   color: 'var(--green)' },
+  closed:      { label: 'Closed',     color: 'var(--ink-3)' },
+  // Support tickets waiting on the sender. A separate key from the existing
+  // 'pending' because that one is already the seller/payout token and means
+  // "waiting on us" — reusing it would flip the meaning of every badge in the
+  // payouts and verification tables.
+  'awaiting-reply': { label: 'Waiting on them', color: 'var(--sky)' },
+  // Payment state, which is a different axis from fulfilment state — an order
+  // can be 'shipped' and 'refunded' at the same time, and both badges have to
+  // be able to sit on the same row without one overwriting the other's meaning.
+  paid:        { label: 'Paid',       color: 'var(--green)' },
+  unpaid:      { label: 'Unpaid',     color: 'var(--ink-3)' },
+  failed:      { label: 'Payment failed', color: 'var(--clay)' },
+  refunded:    { label: 'Refunded',   color: 'var(--sky)'  },
   dismissed:   { label: 'Dismissed',  color: 'var(--ink-3)' },
   escalated:   { label: 'Escalated',  color: 'var(--clay)' },
   suspended:   { label: 'Suspended',  color: 'var(--sun)'  },

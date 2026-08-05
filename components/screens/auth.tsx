@@ -2,6 +2,8 @@
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
+import { usePlatform } from "@/lib/use-platform";
+import { DEFAULT_REGISTRATION_NOTE } from "@/lib/platform";
 
 const INTERESTS = [
   'Solar Energy', 'Wind Power', 'Zero Waste', 'Urban Gardening', 'Sustainable Food',
@@ -454,6 +456,11 @@ function SignInForm({ onSwitch, onSuccess, notice }: { onSwitch: () => void; onS
 // ── Signup — multi-step onboarding ────────────────────────────────────────────
 function SignUpFlow({ onSwitch, onConfirm }: { onSwitch: () => void; onConfirm?: (email: string) => void }) {
   const app = useApp();
+  // Whether Honua is taking new members (platform_settings, migration 044).
+  // The real gate is a trigger on public.profiles, which aborts the auth.users
+  // insert with it — but GoTrue reports that back as "Database error saving new
+  // user", so the honest place to say it is here, before five steps of form.
+  const platform = usePlatform();
   const [step, setStep] = React.useState(1); // 1–5
   const totalSteps = 5;
   const [loading, setLoading] = React.useState(false);
@@ -557,6 +564,24 @@ function SignUpFlow({ onSwitch, onConfirm }: { onSwitch: () => void; onConfirm?:
     'Please read and accept before joining.',
     'Review your profile before going live.',
   ];
+
+  // Shown instead of the wizard, not above it. An explanation stapled to a form
+  // that cannot succeed still invites people to fill the form in.
+  if (platform.loaded && !platform.registrationOpen) {
+    return (
+      <div style={{ width: '100%', maxWidth: 440 }}>
+        <h2 className="font-display" style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
+          Sign-ups are paused
+        </h2>
+        <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '10px 0 24px', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+          {platform.registrationNote || DEFAULT_REGISTRATION_NOTE}
+        </p>
+        <button onClick={onSwitch} className="btn-primary" style={{ width: '100%', border: 'none', borderRadius: 12, padding: '13px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+          Sign in instead
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: '100%', maxWidth: 440 }}>

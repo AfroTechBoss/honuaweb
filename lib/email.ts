@@ -16,6 +16,13 @@
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
+// Where replies land. EMAIL_FROM is a sending identity, not an inbox — it lives
+// on a send-only subdomain so transactional reputation stays off the main
+// domain's human mail. But a rejection email is exactly the message someone
+// replies to, so every send points Reply-To at the support address the support
+// page already publishes. Without this, "why was I rejected?" goes nowhere.
+export const SUPPORT_EMAIL = "support@honua.green";
+
 export type SendResult = { sent: boolean; error?: string };
 
 export async function sendEmail(opts: {

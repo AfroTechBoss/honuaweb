@@ -3,6 +3,9 @@ import React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/shared";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import { SUPPORT_CATEGORIES, REPORT_CATEGORIES, SUPPORT_LIMITS, submitSupportTicket, type ReportSeverity } from "@/lib/support";
+import { APPEAL_KINDS, APPEAL_KIND_VALUES, ACCOUNT_LEVEL_KINDS, APPEAL_LIMITS, submitAppeal } from "@/lib/appeals";
 
 // ---- Shared nav ----
 function PageNav({ back, backLabel = 'Back' }: { back: string; backLabel?: string }) {
@@ -43,16 +46,34 @@ export function ContactSupportPage() {
   const [message, setMessage] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [sending, setSending] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
+  const [sent, setSent] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const CATEGORIES = ['Order issue', 'Payment problem', 'Return or refund', 'Product not as described', 'Delivery delay', 'Account question', 'Other'];
+  const CATEGORIES = SUPPORT_CATEGORIES;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
-    await new Promise(r => setTimeout(r, 1100));
+    setError(null);
+
+    // The page is public — anyone locked out of their account can still write
+    // in — so a session is a bonus, not a requirement. When there is one, the
+    // token lets the server attach the ticket to the account.
+    let token: string | null = null;
+    try {
+      token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+    } catch { /* anonymous ticket */ }
+
+    const { ref, error: err } = await submitSupportTicket(
+      { email, category, subject, message, orderRef: order }, token,
+    );
     setSending(false);
-    setSent(true);
+
+    // Only claim it was sent if it was. The success screen used to appear
+    // unconditionally after a 1.1s timer, which is how people ended up waiting
+    // on replies to messages that had never been stored anywhere.
+    if (err || !ref) { setError(err ?? "We couldn't file your message. Please try again."); return; }
+    setSent(ref);
   };
 
   const backHref = orderRef ? `/orders/${orderRef}` : '/orders';
@@ -68,8 +89,15 @@ export function ContactSupportPage() {
           <div>
             <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px' }}>Message sent</h2>
             <p style={{ color: 'var(--ink-3)', fontSize: 15, margin: 0, lineHeight: 1.6, maxWidth: 340 }}>
-              We'll get back to you within 2 business days at <strong>{email || 'your email'}</strong>.
+              We'll get back to you within 2 business days at <strong>{email}</strong>.
             </p>
+          </div>
+          {/* The reference the database assigned. Worth showing because it is
+              what support will ask for, and because it is evidence the message
+              exists somewhere other than this screen. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 999, background: 'var(--surface)', border: '1px solid var(--line)' }}>
+            <span style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>REFERENCE</span>
+            <span style={{ fontSize: 14, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{sent}</span>
           </div>
           <button className="btn btn-ghost" onClick={() => router.push(backHref)} style={{ marginTop: 4 }}>
             Back to {orderRef ? 'order' : 'orders'}
@@ -117,18 +145,32 @@ export function ContactSupportPage() {
 
           <div>
             <Label>Order reference <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(optional)</span></Label>
-            <input style={fldStyle} placeholder="ORD-XXXXXX" value={order} onChange={e => setOrder(e.target.value)} />
+            <input style={fldStyle} placeholder="ORD-XXXXXX" value={order} onChange={e => setOrder(e.target.value)} maxLength={SUPPORT_LIMITS.orderRef} />
           </div>
 
           <div>
             <Label>Subject</Label>
-            <input style={fldStyle} placeholder="Brief description of your issue" value={subject} onChange={e => setSubject(e.target.value)} required />
+            <input style={fldStyle} placeholder="Brief description of your issue" value={subject} onChange={e => setSubject(e.target.value)} required maxLength={SUPPORT_LIMITS.subject} />
           </div>
 
           <div>
             <Label>Message</Label>
-            <textarea style={{ ...fldStyle, resize: 'vertical', minHeight: 140 }} placeholder="Please describe your issue in detail — the more context, the faster we can help." value={message} onChange={e => setMessage(e.target.value)} required rows={5} />
+            <textarea style={{ ...fldStyle, resize: 'vertical', minHeight: 140 }} placeholder="Please describe your issue in detail — the more context, the faster we can help." value={message} onChange={e => setMessage(e.target.value)} required rows={5} maxLength={SUPPORT_LIMITS.message} />
+            {/* Only once it's close enough to matter — a counter on an empty box
+                reads as a limit to write up to rather than one to stay under. */}
+            {message.length > SUPPORT_LIMITS.message * 0.8 && (
+              <div style={{ marginTop: 6, fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', textAlign: 'right' }}>
+                {SUPPORT_LIMITS.message - message.length} characters left
+              </div>
+            )}
           </div>
+
+          {error && (
+            <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 10, background: 'color-mix(in srgb, var(--clay) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--clay) 30%, transparent)', color: 'var(--clay)', fontSize: 13.5, lineHeight: 1.55 }}>
+              <span style={{ marginTop: 1, flexShrink: 0 }}><Icon name="alert" size={15} /></span>
+              <span>{error}</span>
+            </div>
+          )}
 
           <button type="submit" disabled={sending} className="btn btn-primary" style={{ justifyContent: 'center', padding: '14px', fontSize: 15, fontWeight: 700, opacity: sending ? 0.7 : 1 }}>
             {sending ? 'Sending…' : <><Icon name="msg" size={16} /> Send message</>}
@@ -161,15 +203,17 @@ export function ReportIssuePage() {
   const params = useSearchParams();
   const orderRef = params.get('order') || '';
 
-  const [issueType, setIssueType] = React.useState('Item not as described');
+  const [issueType, setIssueType] = React.useState<string>(REPORT_CATEGORIES[0]);
   const [order, setOrder] = React.useState(orderRef);
-  const [severity, setSeverity] = React.useState<'low' | 'medium' | 'high'>('medium');
+  const [email, setEmail] = React.useState('');
+  const [severity, setSeverity] = React.useState<ReportSeverity>('medium');
   const [description, setDescription] = React.useState('');
   const [sending, setSending] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
+  const [sent, setSent] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const ISSUE_TYPES = ['Item not as described', 'Item not received', 'Damaged on arrival', 'Wrong item sent', 'Counterfeit product', 'Seller not responding', 'Payment problem', 'Suspected fraud', 'Other'];
-  const SEVERITIES: { key: 'low' | 'medium' | 'high'; label: string; desc: string; color: string }[] = [
+  const ISSUE_TYPES = REPORT_CATEGORIES;
+  const SEVERITIES: { key: ReportSeverity; label: string; desc: string; color: string }[] = [
     { key: 'low',    label: 'Low',    desc: 'Minor issue, no urgent action needed', color: '#15803d' },
     { key: 'medium', label: 'Medium', desc: 'Needs attention but not time-critical', color: '#b45309' },
     { key: 'high',   label: 'High',   desc: 'Urgent — financial loss or safety risk',  color: '#dc2626' },
@@ -180,13 +224,33 @@ export function ReportIssuePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
-    await new Promise(r => setTimeout(r, 1100));
+    setError(null);
+
+    let token: string | null = null;
+    try {
+      token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+    } catch { /* anonymous report */ }
+
+    const { ref, error: err } = await submitSupportTicket({
+      kind: 'report',
+      email,
+      category: issueType,
+      // The form has no subject field on purpose — a Trust & Safety report is
+      // already slow to write and one more box before "what happened" is one
+      // more reason to abandon it. The issue type and the order it concerns are
+      // what an admin scans the queue by, so that is the line they get.
+      subject: order ? `${issueType} — ${order}` : issueType,
+      message: description,
+      orderRef: order,
+      severity,
+    }, token);
     setSending(false);
-    setSent(true);
+
+    if (err || !ref) { setError(err ?? "We couldn't file your report. Please try again."); return; }
+    setSent(ref);
   };
 
   if (sent) {
-    const ticketId = 'TKT-' + Math.random().toString(36).slice(2, 8).toUpperCase();
     return (
       <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
         <PageNav back={backHref} backLabel="Back to order" />
@@ -197,9 +261,12 @@ export function ReportIssuePage() {
           <div>
             <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px' }}>Report submitted</h2>
             <p style={{ color: 'var(--ink-3)', fontSize: 15, margin: '0 0 10px', lineHeight: 1.6, maxWidth: 340 }}>
-              Our Trust & Safety team will investigate and follow up within 24 hours for high-severity reports, 3 days for others.
+              Our Trust &amp; Safety team will investigate and follow up at <strong>{email}</strong> — within 24 hours for high-severity reports, 3 days for others.
             </p>
-            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>Ticket {ticketId}</div>
+            {/* The reference the database assigned. This used to be
+                Math.random(), shown to people who would then quote a number
+                that matched nothing. */}
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>Ticket {sent}</div>
           </div>
           <button className="btn btn-ghost" onClick={() => router.push(backHref)} style={{ marginTop: 4 }}>
             Back to {orderRef ? 'order' : 'orders'}
@@ -222,6 +289,13 @@ export function ReportIssuePage() {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 22 }}>
+          {/* The form used to collect no way of reaching the reporter, while
+              promising them a follow-up. */}
+          <div>
+            <Label>Your email</Label>
+            <input style={fldStyle} className="fld" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required maxLength={SUPPORT_LIMITS.email} />
+          </div>
+
           <div>
             <Label>Issue type</Label>
             <select style={fldStyle} value={issueType} onChange={e => setIssueType(e.target.value)}>
@@ -231,7 +305,7 @@ export function ReportIssuePage() {
 
           <div>
             <Label>Order reference <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(if applicable)</span></Label>
-            <input style={fldStyle} placeholder="ORD-XXXXXX" value={order} onChange={e => setOrder(e.target.value)} />
+            <input style={fldStyle} placeholder="ORD-XXXXXX" value={order} onChange={e => setOrder(e.target.value)} maxLength={SUPPORT_LIMITS.orderRef} />
           </div>
 
           <div>
@@ -262,8 +336,13 @@ export function ReportIssuePage() {
               placeholder="Describe the issue in detail — what you ordered, what arrived or didn't arrive, what you expected, and any steps you've already taken."
               value={description}
               onChange={e => setDescription(e.target.value)}
-              required rows={6}
+              required rows={6} maxLength={SUPPORT_LIMITS.message}
             />
+            {description.length > SUPPORT_LIMITS.message * 0.8 && (
+              <div style={{ marginTop: 6, fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', textAlign: 'right' }}>
+                {SUPPORT_LIMITS.message - description.length} characters left
+              </div>
+            )}
           </div>
 
           {/* What happens next */}
@@ -286,10 +365,248 @@ export function ReportIssuePage() {
             ))}
           </div>
 
+          {error && (
+            <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 10, background: 'color-mix(in srgb, var(--clay) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--clay) 30%, transparent)', color: 'var(--clay)', fontSize: 13.5, lineHeight: 1.55 }}>
+              <span style={{ marginTop: 1, flexShrink: 0 }}><Icon name="alert" size={15} /></span>
+              <span>{error}</span>
+            </div>
+          )}
+
           <button type="submit" disabled={sending} className="btn btn-primary" style={{ justifyContent: 'center', padding: '14px', fontSize: 15, fontWeight: 700, opacity: sending ? 0.7 : 1 }}>
             {sending ? 'Submitting…' : <><Icon name="flag" size={16} /> Submit report</>}
           </button>
         </form>
+      </main>
+    </div>
+  );
+}
+
+// =====================================================================
+// Appeal a decision page
+// =====================================================================
+//
+// Sits alongside /support and /report in middleware's PUBLIC_PATHS, and for a
+// sharper reason than either: everyone who arrives here has just been
+// restricted. A suspended account cannot write to twenty-eight tables under
+// migration 041 and a banned one may not hold a session at all, so this form
+// asks for no session, and the route behind it inserts with the service-role
+// key where neither RLS nor the freeze applies.
+//
+// Deep-linkable as /appeal?kind=suspension so a restriction notice elsewhere in
+// the app can send someone straight to the right form.
+export function AppealPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const presetKind = params.get('kind') || '';
+
+  const [kind, setKind] = React.useState<string>(
+    APPEAL_KIND_VALUES.includes(presetKind) ? presetKind : 'suspension',
+  );
+  const [target, setTarget] = React.useState(params.get('target') || '');
+  const [email, setEmail] = React.useState('');
+  const [reason, setReason] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  // What the platform currently says about this account. Read, not asserted —
+  // it is the thing being appealed, and someone writing an appeal should not
+  // have to remember the wording of the notice.
+  const [standing, setStanding] = React.useState<{ until?: string; banned?: boolean; reason?: string } | null>(null);
+
+  const isAccountLevel = ACCOUNT_LEVEL_KINDS.includes(kind);
+
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!live || !session?.user) return;
+        setEmail(e => e || session.user.email || '');
+        // A frozen account can still read — 041 restricts writes only — so this
+        // works for exactly the people who need it.
+        const { data } = await supabase
+          .from('profiles')
+          .select('suspended_until, suspended_reason, banned_at, banned_reason')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (!live || !data) return;
+        const banned = !!data.banned_at;
+        const suspended = data.suspended_until && new Date(data.suspended_until) > new Date();
+        if (!banned && !suspended) return;
+        setStanding({
+          banned,
+          until: suspended ? data.suspended_until : undefined,
+          reason: (banned ? data.banned_reason : data.suspended_reason) || undefined,
+        });
+        setKind(k => (presetKind ? k : banned ? 'ban' : 'suspension'));
+      } catch { /* no session, or offline — the form works without either */ }
+    })();
+    return () => { live = false; };
+  }, [presetKind]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    setError(null);
+
+    let token: string | null = null;
+    try {
+      token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+    } catch { /* appeal filed without an account attached */ }
+
+    const { ref, error: err } = await submitAppeal(
+      { kind, reason, email, target: isAccountLevel ? undefined : target },
+      token,
+    );
+    setSending(false);
+
+    if (err || !ref) { setError(err ?? "We couldn't file your appeal. Please try again."); return; }
+    setSent(ref);
+  };
+
+  if (sent) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+        <PageNav back="/" backLabel="Home" />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{ width: 64, height: 64, borderRadius: 20, background: 'var(--green-tint)', border: '2px solid var(--green)', display: 'grid', placeItems: 'center' }}>
+            <Icon name="check" size={28} color="var(--green)" stroke={2.5} />
+          </div>
+          <div>
+            <h2 className="font-display" style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px' }}>Appeal received</h2>
+            <p style={{ color: 'var(--ink-3)', fontSize: 15, margin: 0, lineHeight: 1.6, maxWidth: 380 }}>
+              A moderator who was not involved in the original decision will review it and write to you at <strong>{email}</strong>.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 999, background: 'var(--surface)', border: '1px solid var(--line)' }}>
+            <span style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em' }}>REFERENCE</span>
+            <span style={{ fontSize: 14, fontFamily: 'JetBrains Mono', fontWeight: 600 }}>{sent}</span>
+          </div>
+          {/* Said here rather than discovered later at a 409. */}
+          <p style={{ fontSize: 12.5, color: 'var(--ink-4)', maxWidth: 330, lineHeight: 1.55, margin: 0 }}>
+            Filing again about the same decision won't move it up the queue — this one stays open until someone answers it.
+          </p>
+          <button className="btn btn-ghost" onClick={() => router.push('/')} style={{ marginTop: 4 }}>Back to Honua</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      <PageNav back="/" backLabel="Home" />
+
+      <main style={{ flex: 1, maxWidth: 620, margin: '0 auto', width: '100%', padding: '40px 24px 80px' }}>
+        <div style={{ marginBottom: 28 }}>
+          <h1 className="font-display" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px' }}>Appeal a decision</h1>
+          <p style={{ color: 'var(--ink-3)', fontSize: 15, margin: 0, lineHeight: 1.6 }}>
+            If you think we got something wrong, tell us why. Appeals are read by a moderator who wasn't part of the original decision.
+          </p>
+        </div>
+
+        {/* The standing block. Only drawn when there is something to appeal, so
+            it never sits on the page as a hypothetical. */}
+        {standing && (
+          <div style={{ marginBottom: 26, padding: '16px 18px', borderRadius: 14, background: 'color-mix(in srgb, var(--clay) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--clay) 28%, transparent)' }}>
+            <div style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--clay)', letterSpacing: '.06em', marginBottom: 8 }}>
+              {standing.banned ? 'YOUR ACCOUNT IS BANNED' : 'YOUR ACCOUNT IS SUSPENDED'}
+            </div>
+            {standing.until && (
+              <div style={{ fontSize: 13.5, color: 'var(--ink-2)', marginBottom: standing.reason ? 6 : 0 }}>
+                Until {new Date(standing.until).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
+            )}
+            {standing.reason && (
+              <div style={{ fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                <span style={{ color: 'var(--ink-4)' }}>Reason given: </span>{standing.reason}
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 22 }}>
+          <div>
+            <Label>What are you appealing?</Label>
+            <select style={fldStyle} value={kind} onChange={e => setKind(e.target.value)}>
+              {APPEAL_KINDS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
+            </select>
+          </div>
+
+          {/* Hidden for suspensions and bans, where there is no single item to
+              point at — the account is the subject. */}
+          {!isAccountLevel && (
+            <div>
+              <Label>Which one? <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>(link, title or reference)</span></Label>
+              <input style={fldStyle} className="fld" placeholder="Paste a link, or describe it" value={target} onChange={e => setTarget(e.target.value)} maxLength={APPEAL_LIMITS.target} />
+            </div>
+          )}
+
+          <div>
+            <Label>Email for our reply</Label>
+            <input style={fldStyle} className="fld" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required maxLength={APPEAL_LIMITS.email} />
+            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-4)', lineHeight: 1.5 }}>
+              Use an address you can still reach — the decision goes here, not to your Honua inbox.
+            </div>
+          </div>
+
+          <div>
+            <Label>Why should this be reversed?</Label>
+            <textarea
+              style={{ ...fldStyle, resize: 'vertical', minHeight: 180 }}
+              placeholder="What happened, what you think was misread, and anything that supports it — links, order references, dates. The more specific this is, the more there is to weigh against the original decision."
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              required rows={7} maxLength={APPEAL_LIMITS.reason}
+            />
+            {/* The server refuses under 40 characters, so the count runs up to
+                the minimum rather than down from the maximum — a form that only
+                mentions a rule at the moment it rejects you is the thing this
+                avoids. */}
+            {reason.trim().length < 40 ? (
+              <div style={{ marginTop: 6, fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', textAlign: 'right' }}>
+                {40 - reason.trim().length} more characters needed
+              </div>
+            ) : reason.length > APPEAL_LIMITS.reason * 0.8 ? (
+              <div style={{ marginTop: 6, fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', textAlign: 'right' }}>
+                {APPEAL_LIMITS.reason - reason.length} characters left
+              </div>
+            ) : null}
+          </div>
+
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: '16px 18px' }}>
+            <div style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em', marginBottom: 10 }}>WHAT HAPPENS NEXT</div>
+            {[
+              ['clock', 'One appeal at a time', 'While this one is open, another about the same decision will be turned away'],
+              ['user', 'Reviewed by someone new', 'Not the moderator who made the original call'],
+              ['msg', 'You get the reasoning', 'Overturned or upheld, the decision comes with an explanation'],
+            ].map(([icon, title, sub]) => (
+              <div key={title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                  <Icon name={icon} size={13} color="var(--green)" stroke={2} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 1 }}>{sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 10, background: 'color-mix(in srgb, var(--clay) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--clay) 30%, transparent)', color: 'var(--clay)', fontSize: 13.5, lineHeight: 1.55 }}>
+              <span style={{ marginTop: 1, flexShrink: 0 }}><Icon name="alert" size={15} /></span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button type="submit" disabled={sending || reason.trim().length < 40} className="btn btn-primary" style={{ justifyContent: 'center', padding: '14px', fontSize: 15, fontWeight: 700, opacity: sending || reason.trim().length < 40 ? 0.6 : 1 }}>
+            {sending ? 'Sending…' : <><Icon name="check" size={16} /> Submit appeal</>}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 28, fontSize: 13, color: 'var(--ink-4)', lineHeight: 1.6, textAlign: 'center' }}>
+          Not appealing a decision? <Link href="/support" style={{ color: 'var(--green)', textDecoration: 'none', fontWeight: 500 }}>Contact support</Link> instead.
+        </div>
       </main>
     </div>
   );

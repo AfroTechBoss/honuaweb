@@ -7,8 +7,14 @@ export const runtime = 'nodejs';
 // whether an order was paid. Fires even if the buyer closes the tab after
 // paying. Configure in the Stripe dashboard:
 //   endpoint:  https://<your-domain>/api/stripe/webhook
-//   events:    payment_intent.succeeded, payment_intent.payment_failed
+//   events:    payment_intent.succeeded, payment_intent.payment_failed,
+//              transfer.reversed
 //   env:       STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SUPABASE_SERVICE_ROLE_KEY
+//
+// transfer.reversed belongs here rather than on the Connect endpoint: a transfer
+// is the *platform's* object, so its events arrive on the platform's account.
+// Onboarding events, which are the connected account's business, go to
+// /api/stripe/connect/webhook with its own secret.
 
 export async function POST(req: Request) {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -56,6 +62,31 @@ export async function POST(req: Request) {
     case 'payment_intent.payment_failed':
       await applyStatus(event.data.object, 'failed');
       break;
+    case 'transfer.reversed': {
+      // A seller payout coming back. The money is in the platform balance again,
+      // so the payout has to leave 'paid' — otherwise the console shows a
+      // settlement that undid itself and nobody sends it a second time.
+      //
+      // Note there is no 'transfer.failed': Stripe transfers either raise at
+      // creation or succeed, and reversal is the only way one comes undone
+      // afterwards. See lib/stripe-connect's transferOutcome.
+      const transfer = event.data.object;
+      const { error } = await admin.rpc('payout_provider_settle', {
+        p_provider: 'stripe',
+        // Matched on Stripe's own transfer id, which is what admin_dispatch_settle
+        // wrote as provider_ref. An event naming a transfer this platform did not
+        // create matches nothing and is ignored.
+        p_ref: transfer?.id ?? null,
+        p_item_ref: null,
+        p_outcome: 'failed',
+        p_status: 'REVERSED',
+        p_error: 'Stripe reversed this transfer — the money came back to the platform balance. Check the transfer in the Stripe dashboard before sending it again.',
+      });
+      if (error && error.code !== 'PGRST202' && error.code !== '42883') {
+        console.error('[stripe/webhook] could not settle reversed transfer', error);
+      }
+      break;
+    }
     default:
       // Ignore other event types
       break;

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { dispatchFor } from "@/lib/payout-methods";
 
 // ---------------------------------------------------------------------------
 // Marketplace / orders / carbon / map data layer.
@@ -345,17 +346,40 @@ function mapPayout(r: any) {
     amount: (r.amount_cents ?? 0) / 100,
     net: (r.net_cents ?? 0) / 100,
     fee: (r.fee_cents ?? 0) / 100,
-    destination: r.destination ?? '—',
+    // destination_label is the snapshot taken when the request was made;
+    // `destination` is the pre-042 free-text column, kept in step for rows
+    // written since. Older rows fall through to the honest third option.
+    destination: r.destination_label ?? r.destination ?? 'No method connected',
     requestedAt: relTime(r.created_at),
     status: r.status ?? 'pending',
     rejectReason: r.reject_reason ?? undefined,
+    paidAt: r.paid_at ?? undefined,
+    paymentReference: r.payment_reference ?? undefined,
     sellerId: r.seller_id,
     _db: true,
   };
 }
 
-export async function requestPayout(sellerId: string, amount: number, destination: string): Promise<boolean> {
+/**
+ * Requests a withdrawal to a connected payout method.
+ *
+ * `method` is required, and is where this differs from the version it replaces.
+ * That one took a free-text `destination` string, and both call sites in the
+ * seller dashboard passed the literal 'Default payout method' — so every payout
+ * row on the platform named a destination that did not exist and could not be
+ * paid to, and the admin console rendered that string next to an Approve button.
+ *
+ * The label is snapshotted alongside the id: migration 042's FK is
+ * `on delete set null` so a seller may retire a method, and a payout that was
+ * already sent must still say where it went.
+ */
+export async function requestPayout(
+  sellerId: string,
+  amount: number,
+  method: { id: string; label: string; kind: string },
+): Promise<{ ok: boolean; error?: string }> {
   try {
+    if (!method?.id) return { ok: false, error: 'Connect a payout method first.' };
     const amountCents = Math.round(amount * 100);
     const feeCents = Math.round(amountCents * WITHDRAWAL_FEE);
     const { error } = await supabase.from('payout_requests').insert({
@@ -363,54 +387,46 @@ export async function requestPayout(sellerId: string, amount: number, destinatio
       amount_cents: amountCents,
       fee_cents: feeCents,
       net_cents: amountCents - feeCents,
-      destination,
+      method_id: method.id,
+      destination_label: method.label,
+      // Records which kinds are *meant* to settle through an API. Nothing in
+      // this codebase settles automatically yet — see lib/payout-methods.ts.
+      dispatch: dispatchFor(method.kind),
+      // Kept in step with destination_label for the pre-042 column, so an older
+      // query reading `destination` sees the same thing the queue does.
+      destination: method.label,
       status: 'pending',
     });
-    return !error;
-  } catch { return false; }
+    if (error) {
+      // 041's freeze reaches payout_requests, so a suspended seller's insert is
+      // refused by RLS with no rows and no obvious cause. Naming it beats
+      // "Could not submit request".
+      if (error.code === '42501') {
+        return { ok: false, error: 'Withdrawals are paused while your account is restricted. You can appeal at /appeal.' };
+      }
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch { return { ok: false, error: 'Could not reach the server.' }; }
 }
 
-function accountAge(createdAt?: string): string {
-  if (!createdAt) return 'new';
-  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000);
-  if (days < 31) return `${Math.max(1, days)} day${days === 1 ? '' : 's'}`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months} month${months === 1 ? '' : 's'}`;
-  return `${Math.floor(months / 12)} year${Math.floor(months / 12) === 1 ? '' : 's'}`;
-}
 
-// Admin: pending queue with seller identity. Risk signals (trust/disputes)
-// aren't modelled yet, so we surface honest neutral defaults rather than
-// fabricated scores; account age is real.
-export async function getPendingPayouts(): Promise<any[]> {
-  try {
-    const { data, error } = await supabase
-      .from('payout_requests')
-      .select('*, seller:profiles!payout_requests_seller_id_fkey(full_name, handle, created_at, impact_score)')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (error || !data) return [];
-    return data.map((r: any) => ({
-      ...mapPayout(r),
-      seller: r.seller?.full_name ?? 'Seller',
-      handle: r.seller?.handle ?? '—',
-      accountAge: accountAge(r.seller?.created_at),
-      // No trust/dispute model yet — neutral, non-blocking defaults
-      trustScore: '—',
-      openDisputes: 0,
-      available: (r.amount_cents ?? 0) / 100,
-    }));
-  } catch { return []; }
-}
-
-export async function reviewPayout(id: string, status: 'approved' | 'rejected' | 'on_hold', rejectReason?: string): Promise<boolean> {
-  try {
-    const { error } = await supabase.from('payout_requests')
-      .update({ status, reject_reason: rejectReason ?? null, reviewed_at: new Date().toISOString() })
-      .eq('id', id);
-    return !error;
-  } catch { return false; }
-}
+// The admin queue and the admin review used to live here, as browser queries.
+// They are gone rather than deprecated, because leaving them importable is how
+// the next screen ends up calling them again.
+//
+// Both were unreachable in practice. Migration 022 gave payout_requests two
+// admin RLS policies keyed on `auth.uid()`, and the console signs in with Privy
+// — it has no Supabase session at all, so auth.uid() is null and neither policy
+// has ever matched a row. getPendingPayouts() returned an empty array on a table
+// with payouts in it, and reviewPayout() sent an UPDATE that changed nothing and
+// reported success, because PostgREST does not treat "matched no rows" as an
+// error.
+//
+// The replacements are listPayouts / reviewPayout / markPayoutPaid in
+// lib/admin-payouts.ts, which go through /api/admin/payouts — service-role,
+// gated on `payouts.manage`, and with a balance guard the browser could never
+// have enforced.
 
 export async function getDbOrders(userId: string): Promise<any[]> {
   try {
@@ -471,17 +487,70 @@ export async function getCarbonCredits(): Promise<CarbonCredit[]> {
   } catch { return []; }
 }
 
-export async function purchaseCredit(userId: string, credit: { id?: string; name: string }, tonnes: number, totalCents: number): Promise<boolean> {
+/** One retirement, as the database recorded it — not as the browser proposed it. */
+export type Retirement = {
+  id: string;
+  serial: string;
+  creditName: string;
+  tonnes: number;
+  unitCents: number;
+  totalCents: number;
+  retiredAt: string;
+  paymentState: 'unpaid' | 'paid' | 'refunded';
+};
+
+export type RetireOutcome =
+  | { kind: 'retired'; retirement: Retirement }
+  | { kind: 'signed-out' }
+  | { kind: 'unavailable' }
+  | { kind: 'rejected'; message: string };
+
+// Retire tonnes against a credit.
+//
+// The caller no longer says what it costs. `total_cents` used to be computed in
+// the browser and inserted as given, alongside a `tonnes` figure nothing checked
+// against remaining stock — so a crafted request could retire any volume for
+// nothing and the inventory trigger would follow it down. Migration 047 moved
+// the write into retire_carbon_credit(), which reads the price from
+// carbon_credits, takes a row lock, refuses to oversell, and stamps a serial.
+//
+// The price argument is gone deliberately rather than kept and ignored: leaving
+// it would imply the caller still has a say.
+export async function retireCredit(creditId: string, tonnes: number): Promise<RetireOutcome> {
   try {
-    const { error } = await supabase.from('carbon_purchases').insert({
-      user_id: userId,
-      credit_id: credit.id ?? null,
-      credit_name: credit.name,
-      tonnes,
-      total_cents: totalCents,
+    const { data, error } = await supabase.rpc('retire_carbon_credit', {
+      p_credit: creditId,
+      p_tonnes: tonnes,
     });
-    return !error;
-  } catch { return false; }
+
+    if (error) {
+      // Not applied yet — say so rather than reporting a failed retirement.
+      if (error.code === 'PGRST202' || error.code === '42883') return { kind: 'unavailable' };
+      if (error.code === '42501') return { kind: 'signed-out' };
+      // 22023 / P0002 carry sentences written for the person reading them —
+      // "Only 4 t left on this credit" — so they pass through unchanged.
+      return { kind: 'rejected', message: error.message || 'That retirement was refused.' };
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { kind: 'rejected', message: 'That retirement was refused.' };
+
+    return {
+      kind: 'retired',
+      retirement: {
+        id: row.id,
+        serial: row.serial,
+        creditName: row.credit_name,
+        tonnes: Number(row.tonnes ?? 0),
+        unitCents: Number(row.unit_cents ?? 0),
+        totalCents: Number(row.total_cents ?? 0),
+        retiredAt: row.retired_at,
+        paymentState: row.payment_state ?? 'unpaid',
+      },
+    };
+  } catch {
+    return { kind: 'rejected', message: 'Could not reach the server.' };
+  }
 }
 
 export async function getMyOffsets(userId: string): Promise<{ tonnes: number; totalCents: number; purchases: any[] }> {
@@ -567,7 +636,25 @@ export async function toggleRsvp(userId: string, projectId: string, going: boole
 }
 
 // ---- Seller applications ----
-export async function submitSellerApplication(userId: string, f: any): Promise<boolean> {
+
+/**
+ * The outcome of trying to file an application, in words the wizard can show.
+ *
+ * This used to be a bare boolean that every caller threw away, and the cost of
+ * that was a real bug: the wizard flipped the local status to `pending`, said
+ * "Application submitted", and never checked whether a row had actually been
+ * written. When the insert failed there was nothing on file, nothing in the
+ * admin queue, and — once the browser's cached state was gone — the seller was
+ * asked to apply all over again with no explanation.
+ *
+ * A string discriminant rather than a boolean one: tsconfig has `strict: false`,
+ * so TypeScript does not narrow a union on `ok: true | false`. See lib/paypal.
+ */
+export type ApplicationSubmit =
+  | { state: 'saved' }
+  | { state: 'failed'; message: string };
+
+export async function submitSellerApplication(userId: string, f: any): Promise<ApplicationSubmit> {
   try {
     const row: any = {
       user_id: userId,
@@ -594,8 +681,24 @@ export async function submitSellerApplication(userId: string, f: any): Promise<b
       const { logo_url: _l, ...noLogo } = row;
       ({ error } = await supabase.from('seller_applications').insert(noLogo));
     }
-    return !error;
-  } catch { return false; }
+    if (!error) return { state: 'saved' };
+
+    // Read back before believing the error. PostgREST reports a write it cannot
+    // then SELECT as an RLS failure even when the INSERT itself landed, so a row
+    // that exists must not be reported as a lost application.
+    const check = await getMySellerApplication(userId);
+    if (check) return { state: 'saved' };
+
+    // 42501 is the only one worth translating: it means RLS refused, which on
+    // this table means there is no Supabase session behind the request. The
+    // rest are passed through — a message from Postgres beats a shrug.
+    const message = (error as any)?.code === '42501'
+      ? 'You appear to be signed out. Sign in again and resubmit — nothing was saved.'
+      : (error.message || 'The application could not be saved.');
+    return { state: 'failed', message };
+  } catch (err: any) {
+    return { state: 'failed', message: err?.message || 'The application could not be saved.' };
+  }
 }
 
 // A seller's shop identity (name + logo + handle) for shop-branded
@@ -646,7 +749,21 @@ export async function getShopConversations(sellerId: string): Promise<any[]> {
   } catch { return []; }
 }
 
-export async function getMySellerApplication(userId: string): Promise<any | null> {
+/**
+ * The three answers the seller screen has to tell apart, and used to collapse
+ * into one `null`.
+ *
+ * `none` means the table has no application for this account — the screen should
+ * offer to apply. `error` means we could not find out, which is not the same
+ * thing at all: showing "apply to sell" to someone whose application is sitting
+ * in the review queue is the bug this type exists to prevent.
+ */
+export type MySellerApplication =
+  | { state: 'found'; app: any }
+  | { state: 'none' }
+  | { state: 'error' };
+
+export async function loadMySellerApplication(userId: string): Promise<MySellerApplication> {
   try {
     const { data, error } = await supabase
       .from('seller_applications')
@@ -655,9 +772,15 @@ export async function getMySellerApplication(userId: string): Promise<any | null
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (error || !data) return null;
-    return data;
-  } catch { return null; }
+    if (error) return { state: 'error' };
+    return data ? { state: 'found', app: data } : { state: 'none' };
+  } catch { return { state: 'error' }; }
+}
+
+/** Kept for callers that only want the row. Prefer loadMySellerApplication. */
+export async function getMySellerApplication(userId: string): Promise<any | null> {
+  const r = await loadMySellerApplication(userId);
+  return r.state === 'found' ? r.app : null;
 }
 
 export async function getPendingSellerApplications(): Promise<any[]> {

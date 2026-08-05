@@ -669,7 +669,13 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
               CARBON MARKET{marketOpen ? ' · LIVE' : ''}
             </div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Offset what you can't avoid.</h1>
-            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Every credit on Honua is on-chain verified, third-party audited, and traceable to a project you can actually visit.</p>
+            {/* Was: "on-chain verified, third-party audited, and traceable to a
+                project you can actually visit". Nothing is on-chain, and
+                `verifier` is free text an admin typed — there is no registry
+                lookup behind it. The claim now matches what the row actually
+                holds: a named standard and a vintage. See docs/BLOCKCHAIN.md
+                for what it would take to make the stronger claim true. */}
+            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Every credit lists its standard, vintage and project so you can check it against the registry yourself.</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-ghost" onClick={() => app.openModal?.('wallet')}>Wallet{myOffsets && myOffsets.tonnes > 0 ? ` · ${offsetsDisplay} retired` : ''}</button>
@@ -775,7 +781,8 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
                 </div>
                 <div>
                   <div style={{ fontWeight: 600 }}>{c.name}</div>
-                  <span className="verified-impact" style={{ marginTop: 4 }}>on-chain · {c.tag}</span>
+                  {/* The tag alone. "on-chain ·" prefixed a claim nothing backs. */}
+                  <span className="verified-impact" style={{ marginTop: 4 }}>{c.tag}</span>
                 </div>
               </div>
               <span>{c.type || '—'}</span>
@@ -807,11 +814,15 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
             padding: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18,
           }}>
             <div>
-              <span className="chip chip-sky">Auto-offset</span>
+              {/* No subscription record is written anywhere and nothing
+                  recurs — the old "Start auto-offset · $14/mo" button took a
+                  commitment the platform cannot keep. Billing has to exist
+                  before this can be sold. */}
+              <span className="chip chip-sky">Auto-offset · planned</span>
               <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>Subscribe & forget</h2>
-              <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.5 }}>We auto-purchase credits monthly to match your tracked footprint. Pause anytime. Receipts emailed quarterly.</p>
+              <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.5 }}>Monthly retirements matched to your tracked footprint, without thinking about it. Not available yet — retire manually below in the meantime.</p>
               <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                <button className="btn btn-primary" onClick={() => app.openModal?.('autooffset')}>Start auto-offset · $14/mo</button>
+                <button className="btn btn-ghost" onClick={() => app.openModal?.('autooffset')}>What's planned</button>
               </div>
             </div>
             <ImagePlaceholder label="forest canopy from above" height={160} />
@@ -820,15 +831,18 @@ export function DesktopCarbon({ onNav, params }: { onNav: any; params?: Record<s
             background: 'var(--ink-solid)', color: '#fff', borderRadius: 16, padding: 22,
             position: 'relative', overflow: 'hidden',
           }}>
+            {/* Was labelled NEW with a "Mint 2026" button that opened a
+                celebration modal saying the token was on-chain. There is no
+                wallet, no contract and no token — and minting against
+                retirements that carry no registry serial would put a permanent
+                claim around unverified data. Kept as a stated intention, which
+                is what it actually is. docs/BLOCKCHAIN.md §A.1/A.2. */}
             <span style={{
               background: 'rgba(255,255,255,.12)', color: '#fff', padding: '3px 10px', borderRadius: 999,
               fontSize: 11, fontFamily: 'JetBrains Mono', fontWeight: 600,
-            }}>NEW</span>
-            <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>Honua impact NFT</h2>
-            <p style={{ margin: 0, color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>Mint a soulbound token tied to your offsets. Wears your year on-chain.</p>
-            <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
-              <button className="btn" style={{ background: '#fff', color: '#0a0d0b' }} onClick={() => app.openModal?.('celebrate', { title: 'Impact NFT minted', sub: 'Your soulbound 2026 token is on-chain. It updates as your verified offsets grow.' })}>Mint 2026</button>
-            </div>
+            }}>PLANNED</span>
+            <h2 className="font-display" style={{ margin: '10px 0 6px', fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>Honua impact record</h2>
+            <p style={{ margin: 0, color: 'rgba(255,255,255,.7)', fontSize: 13, lineHeight: 1.5 }}>A portable, non-transferable record of your retirements — verifiable outside Honua. Not built yet; your retirements are being recorded with serials in the meantime.</p>
           </div>
         </div>
         )}

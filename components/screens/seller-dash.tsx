@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { PAYOUT_KINDS, PAYOUT_KIND_LABEL, BANK_COUNTRIES, CONNECT_COUNTRIES, countryFor, validateMethod, type ConnectStatus } from "@/lib/payout-methods";
 
 
 // =====================================================================
@@ -17,6 +18,8 @@ const SELLER_TABS = [
   ['storefront','Storefront', 'settings'],
 ];
 
+// Signed-out preview only. A signed-in seller sees their real history — including
+// an empty one, which used to be papered over with these four rows.
 const MOCK_PAYOUT_HISTORY = [
   { id: 'pw-s001', amount: 820.00, destination: 'GTBank ••4521', requestedAt: '2 days ago', status: 'approved' },
   { id: 'pw-s002', amount: 1540.00, destination: 'GTBank ••4521', requestedAt: '2 weeks ago', status: 'approved' },
@@ -24,15 +27,25 @@ const MOCK_PAYOUT_HISTORY = [
   { id: 'pw-s004', amount: 600.00, destination: 'GTBank ••4521', requestedAt: '6 weeks ago', status: 'approved' },
 ];
 
+// The Supabase session token, for the seller-facing payout-method route. Read at
+// call time rather than held in state — it rotates.
+async function sellerToken(): Promise<string | null> {
+  const { supabase } = await import('@/lib/supabase');
+  return (await supabase.auth.getSession()).data.session?.access_token ?? null;
+}
+
 export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const approved = app.state?.sellerStatus === 'approved';
   const [tab, setTab] = React.useState('overview');
-  const [products, setProducts] = React.useState(MOCK_SELLER.products);
-  const [orders, setOrders] = React.useState<any[]>(MOCK_SELLER.orders);
-  const [editing, setEditing] = React.useState(null); // product being edited / 'new'
   // Real mode: signed-in sellers manage actual marketplace listings
   const dbMode = !!app.user?.id;
+  // A signed-in seller starts empty and fills from Supabase. Seeding with the
+  // demo rows meant a real shop flashed someone else's products and orders
+  // before the fetch landed — and kept showing them if the shop was new.
+  const [products, setProducts] = React.useState<any[]>(dbMode ? [] : MOCK_SELLER.products);
+  const [orders, setOrders] = React.useState<any[]>(dbMode ? [] : MOCK_SELLER.orders);
+  const [editing, setEditing] = React.useState(null); // product being edited / 'new'
 
   const reloadProducts = React.useCallback(async () => {
     if (!app.user?.id) return;
@@ -58,21 +71,49 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
     }).catch(() => {});
   }, [app.user?.id]);
 
-  // Real payout balance + history (null balance = demo mode)
+  // Real payout balance + history (null = demo mode, so the mock still renders
+  // for a signed-out preview; an empty array is a real seller with no payouts).
   const [balance, setBalance] = React.useState<any>(null);
-  const [payouts, setPayouts] = React.useState<any[]>(MOCK_PAYOUT_HISTORY);
+  const [payouts, setPayouts] = React.useState<any[] | null>(null);
   const reloadPayouts = React.useCallback(async () => {
     if (!app.user?.id) return;
     const { getSellerBalance, getMyPayouts } = await import('@/lib/market');
     const [bal, hist] = await Promise.all([getSellerBalance(app.user.id), getMyPayouts(app.user.id)]);
     setBalance(bal);
-    if (hist.length) setPayouts(hist);
+    setPayouts(hist);
   }, [app.user?.id]);
 
+  // Where the money goes. Withdrawals are refused server-side without one, so
+  // this is loaded alongside the balance rather than on first click.
+  const [methods, setMethods] = React.useState<any[]>([]);
+  const [methodsReady, setMethodsReady] = React.useState(false);
+  const reloadMethods = React.useCallback(async () => {
+    if (!app.user?.id) return;
+    const { listPayoutMethods } = await import('@/lib/payout-methods');
+    const { methods: rows } = await listPayoutMethods(await sellerToken());
+    setMethods(rows ?? []);
+    setMethodsReady(true);
+  }, [app.user?.id]);
+  const primaryMethod = React.useMemo(
+    () => methods.find((m: any) => m.isPrimary) ?? methods[0] ?? null,
+    [methods],
+  );
+
   React.useEffect(() => {
-    if (approved && dbMode) { reloadProducts(); reloadOrders(); reloadPayouts(); }
+    if (approved && dbMode) { reloadProducts(); reloadOrders(); reloadPayouts(); reloadMethods(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approved, dbMode, reloadProducts, reloadOrders, reloadPayouts]);
+  }, [approved, dbMode, reloadProducts, reloadOrders, reloadPayouts, reloadMethods]);
+
+  // Coming back from Stripe's hosted onboarding. Their return URL is
+  // /seller?connect=return (or ?connect=refresh when a link expired mid-flow),
+  // and the default tab is Overview — so without this the seller lands on a
+  // screen with no mention of the thing they just spent five minutes doing.
+  // The parameter is left in place for StripeConnectCard, which clears it.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search).get('connect');
+    if (q === 'return' || q === 'refresh') setTab('payouts');
+  }, []);
 
   // Realtime: new sales pop in while the dashboard is open
   React.useEffect(() => {
@@ -186,13 +227,13 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
 
         {/* Tab body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }} className="no-scrollbar">
-          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} balance={balance} onRequest={reloadPayouts} />}
+          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} balance={balance} onRequest={reloadPayouts} method={primaryMethod} demo={!dbMode} />}
           {tab === 'products'  && <ProductsTab products={productsView} onEdit={setEditing} onRemove={removeProduct} onToggle={toggleProduct} />}
           {tab === 'orders'    && <OrdersTab orders={orders} onAdvance={advanceOrder} />}
-          {tab === 'analytics' && <AnalyticsTab products={productsView} orders={orders} />}
-          {tab === 'customers' && <CustomersTab />}
+          {tab === 'analytics' && <AnalyticsTab products={productsView} orders={orders} demo={!dbMode} />}
+          {tab === 'customers' && <CustomersTab orders={orders} onNav={onNav} />}
           {tab === 'messages'  && <MessagesTab />}
-          {tab === 'payouts'   && <PayoutsTab orders={orders} balance={balance} payouts={payouts} onRequest={reloadPayouts} />}
+          {tab === 'payouts'   && <PayoutsTab orders={orders} balance={balance} payouts={payouts} onRequest={reloadPayouts} methods={methods} methodsReady={methodsReady} onMethods={reloadMethods} />}
           {tab === 'storefront'&& <StorefrontTab shop={shop} />}
         </div>
       </main>
@@ -235,13 +276,14 @@ function dailySeries(orders: any[], value: (o: any) => number, days = 30): numbe
   return buckets;
 }
 const revenueSeries = (orders: any[]) => dailySeries(orders, o => o.total);
-const unitSeries = (orders: any[]) => dailySeries(orders, o => o.qty ?? 1) ?? MOCK_SELLER.viewsSeries;
 
 // =====================================================================
 // Overview tab
 // =====================================================================
-function OverviewTab({ products, orders, onTab, balance, onRequest }) {
+function OverviewTab({ products, orders, onTab, balance, onRequest, method, demo = false }) {
   const app = useApp();
+  // A real seller with no sales yet gets a flat line, not the demo's revenue.
+  const chartSeries = revenueSeries(orders) ?? (demo ? MOCK_SELLER.revenueSeries : new Array(30).fill(0));
   const realSeries = revenueSeries(orders);
   const confirmed = orders.filter(o => ['confirmed', 'shipped', 'delivered'].includes(o.status)).reduce((s, o) => s + o.total, 0);
   const pending = balance ? balance.pendingClear : orders.filter(o => o.status === 'processing').reduce((s, o) => s + o.total, 0);
@@ -275,12 +317,12 @@ function OverviewTab({ products, orders, onTab, balance, onRequest }) {
             <span style={{ fontSize: 14, fontWeight: 600 }}>Revenue</span>
             <span className="chip" style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>Last 30 days</span>
           </div>
-          <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em' }}>{sMoney((realSeries ?? MOCK_SELLER.revenueSeries).reduce((a, b) => a + b, 0), 0)}</div>
-          <div style={{ marginTop: 10 }}><SSpark data={realSeries ?? MOCK_SELLER.revenueSeries} color="var(--green)" w={520} h={90} /></div>
+          <div className="font-display tabular" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-0.03em' }}>{sMoney(chartSeries.reduce((a, b) => a + b, 0), 0)}</div>
+          <div style={{ marginTop: 10 }}><SSpark data={chartSeries} color="var(--green)" w={520} h={90} /></div>
         </div>
 
         {/* Payout card */}
-        <PayoutCard net={net} onTab={onTab} onRequest={onRequest} />
+        <PayoutCard net={net} onTab={onTab} onRequest={onRequest} method={method} />
       </div>
 
       {/* Recent orders + top products */}
@@ -521,9 +563,14 @@ function OrdersTab({ orders, onAdvance }) {
 // =====================================================================
 // Analytics tab
 // =====================================================================
-function AnalyticsTab({ products, orders = [] }: { products: any[]; orders?: any[] }) {
+function AnalyticsTab({ products, orders = [], demo = false }: { products: any[]; orders?: any[]; demo?: boolean }) {
   const realSeries = revenueSeries(orders);
-  const isReal = realSeries !== null;
+  // Signed in means real, even with nothing sold yet — a new shop should read
+  // zeroes, not the demo's 6.8% add-to-cart rate.
+  const isReal = !demo;
+  const zeros = React.useMemo(() => new Array(30).fill(0), []);
+  const revChart = realSeries ?? (demo ? MOCK_SELLER.revenueSeries : zeros);
+  const unitChart = isReal ? (dailySeries(orders, (o: any) => o.qty ?? 1) ?? zeros) : MOCK_SELLER.viewsSeries;
   const nonCancelled = orders.filter((o: any) => o.status !== 'cancelled');
   const totalViews = products.reduce((s, p) => s + p.views, 0);
   const totalSales = products.reduce((s, p) => s + p.sales, 0);
@@ -549,7 +596,7 @@ function AnalyticsTab({ products, orders = [] }: { products: any[]; orders?: any
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {isReal ? (
           <>
-            <SStat label="Revenue · 30d" value={sMoney(realSeries!.reduce((a, b) => a + b, 0), 0)} icon="coin" sub="from real orders" />
+            <SStat label="Revenue · 30d" value={sMoney(revChart.reduce((a, b) => a + b, 0), 0)} icon="coin" sub="from real orders" />
             <SStat label="Units sold" value={realUnits.toLocaleString()} icon="cart" accent="var(--sky)" sub="all time" />
             <SStat label="Avg order value" value={sMoney(avgOrder, 0)} icon="bolt" accent="var(--sun)" sub={`${nonCancelled.length} order${nonCancelled.length === 1 ? '' : 's'}`} />
             <SStat label="Unique buyers" value={String(uniqueBuyers)} icon="users" sub={repeatBuyers != null ? `${repeatBuyers}% repeat` : ''} />
@@ -566,11 +613,11 @@ function AnalyticsTab({ products, orders = [] }: { products: any[]; orders?: any
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
           <span style={{ fontSize: 14, fontWeight: 600 }}>{isReal ? 'Units sold · 30 days' : 'Views · 30 days'}</span>
-          <div style={{ marginTop: 14 }}><SSpark data={isReal ? unitSeries(orders) : MOCK_SELLER.viewsSeries} color="var(--sky)" w={460} h={110} /></div>
+          <div style={{ marginTop: 14 }}><SSpark data={unitChart} color="var(--sky)" w={460} h={110} /></div>
         </div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
           <span style={{ fontSize: 14, fontWeight: 600 }}>Revenue · 30 days</span>
-          <div style={{ marginTop: 14 }}><SSpark data={realSeries ?? MOCK_SELLER.revenueSeries} color="var(--green)" w={460} h={110} /></div>
+          <div style={{ marginTop: 14 }}><SSpark data={revChart} color="var(--green)" w={460} h={110} /></div>
         </div>
       </div>
       {/* Product performance */}
@@ -598,21 +645,53 @@ function AnalyticsTab({ products, orders = [] }: { products: any[]; orders?: any
 // =====================================================================
 // Customers tab
 // =====================================================================
-function CustomersTab() {
-  const [sel, setSel] = React.useState(null);
-  const cust = MOCK_SELLER.customers.find(c => c.handle === sel);
+// Customers are not a table — they are the distinct buyers behind this seller's
+// order items, rolled up here. That is why there is no "Location" column any
+// more: the demo rows carried a city, real order items do not.
+function CustomersTab({ orders = [], onNav }: { orders?: any[]; onNav?: any }) {
+  const [sel, setSel] = React.useState<string | null>(null);
+
+  const customers = React.useMemo(() => {
+    const by = new Map<string, any>();
+    for (const o of orders) {
+      if (o.status === 'cancelled') continue;
+      const key = o.handle || o.buyer || 'unknown';
+      const cur = by.get(key) ?? { handle: o.handle, name: o.buyer, orders: 0, spent: 0, last: '', lastAt: 0 };
+      cur.orders += 1;
+      cur.spent += o.total ?? 0;
+      const at = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+      if (at >= cur.lastAt) { cur.lastAt = at; cur.last = o.date || ''; }
+      by.set(key, cur);
+    }
+    return [...by.values()].sort((a, b) => b.spent - a.spent);
+  }, [orders]);
+
+  const cust = customers.find(c => c.handle === sel);
+  const custOrders = cust ? orders.filter(o => (o.handle || o.buyer) === (cust.handle || cust.name)) : [];
+
+  if (customers.length === 0) {
+    return (
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '56px 24px', textAlign: 'center' }}>
+        <Icon name="users" size={28} color="var(--ink-4)" />
+        <div style={{ fontSize: 16, fontWeight: 600, marginTop: 12 }}>No customers yet</div>
+        <p style={{ fontSize: 13.5, color: 'var(--ink-3)', marginTop: 6, maxWidth: 380, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.6 }}>
+          Everyone who buys from your shop shows up here, with what they have spent and how often they come back.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: sel ? '1fr 380px' : '1fr', gap: 16, alignItems: 'start' }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.2fr 1fr', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
-          <span>Customer</span><span>Orders</span><span>Spent</span><span>Location</span><span>Last</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--line)', fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+          <span>Customer</span><span>Orders</span><span>Spent</span><span>Last</span>
         </div>
-        {MOCK_SELLER.customers.map(c => (
-          <button key={c.handle} onClick={() => setSel(c.handle === sel ? null : c.handle)} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1.2fr 1fr', gap: 12, width: '100%', textAlign: 'left', padding: '14px 18px', border: 'none', borderBottom: '1px solid var(--line)', cursor: 'pointer', alignItems: 'center', background: c.handle === sel ? 'var(--green-tint)' : 'transparent' }}>
+        {customers.map(c => (
+          <button key={c.handle ?? c.name} onClick={() => setSel(c.handle === sel ? null : c.handle)} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12, width: '100%', textAlign: 'left', padding: '14px 18px', border: 'none', borderBottom: '1px solid var(--line)', cursor: 'pointer', alignItems: 'center', background: c.handle === sel ? 'var(--green-tint)' : 'transparent' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Avatar name={c.name} size={32} /><span style={{ fontSize: 13.5, fontWeight: 500 }}>{c.name}</span></span>
             <span className="tabular" style={{ fontSize: 13 }}>{c.orders}</span>
             <span className="tabular" style={{ fontSize: 13.5, fontWeight: 600 }}>{sMoney(c.spent, 0)}</span>
-            <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{c.city}</span>
             <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>{c.last}</span>
           </button>
         ))}
@@ -621,7 +700,7 @@ function CustomersTab() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Avatar name={cust.name} size={48} />
-            <div><div className="font-display" style={{ fontSize: 18, fontWeight: 600 }}>{cust.name}</div><div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{cust.handle} · {cust.city}</div></div>
+            <div><div className="font-display" style={{ fontSize: 18, fontWeight: 600 }}>{cust.name}</div><div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{cust.handle}</div></div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
             <MiniStat label="Lifetime spend" value={sMoney(cust.spent, 0)} />
@@ -629,14 +708,19 @@ function CustomersTab() {
           </div>
           <div style={{ marginTop: 16 }}>
             <span className="fld-label">Recent orders</span>
-            {MOCK_SELLER.orders.filter(o => o.handle === cust.handle).slice(0, 3).map(o => (
+            {custOrders.slice(0, 3).map(o => (
               <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderTop: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 13 }}>{o.product.split(' · ')[0]}</span>
+                <span style={{ fontSize: 13 }}>{String(o.product ?? '').split(' · ')[0]}</span>
                 <SBadge status={o.status} size="sm" />
               </div>
             ))}
           </div>
-          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 16 }}><Icon name="msg" size={14} /> Message {cust.name.split(' ')[0]}</button>
+          {cust.handle && cust.handle !== '—' && (
+            <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 16 }}
+              onClick={() => onNav?.('messages', { handle: cust.handle })}>
+              <Icon name="msg" size={14} /> Message {String(cust.name ?? '').split(' ')[0]}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -761,7 +845,7 @@ function MessagesTab() {
 // =====================================================================
 // Payout card (overview inline)
 // =====================================================================
-function PayoutCard({ net, onTab, onRequest }) {
+function PayoutCard({ net, onTab, onRequest, method }) {
   const app = useApp();
   const [showRequest, setShowRequest] = React.useState(false);
   const [amount, setAmount] = React.useState('');
@@ -772,9 +856,13 @@ function PayoutCard({ net, onTab, onRequest }) {
     if (!val || val <= 0 || val > net) return;
     setSubmitting(true);
     if (app.user?.id) {
+      if (!method) {
+        app.toast?.({ msg: 'Connect a payout method first', sub: 'We need somewhere to send it.', kind: 'error', icon: 'coin' });
+        setSubmitting(false); onTab('payouts'); return;
+      }
       const { requestPayout } = await import('@/lib/market');
-      const ok = await requestPayout(app.user.id, val, 'Default payout method');
-      if (!ok) { app.toast?.({ msg: 'Could not submit request', sub: 'Check migration 022 has been run.', kind: 'error', icon: 'close' }); setSubmitting(false); return; }
+      const res = await requestPayout(app.user.id, val, { id: method.id, label: method.label, kind: method.kind });
+      if (!res.ok) { app.toast?.({ msg: 'Could not submit request', sub: res.error ?? 'Try again in a moment.', kind: 'error', icon: 'close' }); setSubmitting(false); return; }
       await onRequest?.();
     }
     app.toast?.({ msg: 'Withdrawal request submitted', sub: sMoney(val) + ' · under review', kind: 'success', icon: 'coin' });
@@ -813,6 +901,9 @@ function PayoutCard({ net, onTab, onRequest }) {
           {parseFloat(amount) > net && (
             <div style={{ fontSize: 12, color: '#f87171', fontFamily: 'JetBrains Mono' }}>Amount exceeds available balance</div>
           )}
+          <div style={{ fontSize: 12, opacity: .55, fontFamily: 'JetBrains Mono' }}>
+            {method ? <>To {method.label}</> : <span style={{ color: '#fbbf24' }}>No payout method connected — <button onClick={() => onTab('payouts')} style={{ background: 'transparent', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer', font: 'inherit', padding: 0 }}>add one</button></span>}
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => { setShowRequest(false); setAmount(''); }} style={{ flex: 1, background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, padding: '10px', cursor: 'pointer' }}>Cancel</button>
             <button onClick={handleRequest} disabled={!amount || parseFloat(amount) <= 0 || parseFloat(amount) > net} style={{ flex: 2, background: '#fff', border: 'none', borderRadius: 10, color: 'var(--ink)', fontSize: 13, fontWeight: 700, padding: '10px', cursor: 'pointer', opacity: (!amount || parseFloat(amount) <= 0 || parseFloat(amount) > net) ? 0.4 : 1 }}>Submit Request</button>
@@ -831,7 +922,7 @@ function PayoutCard({ net, onTab, onRequest }) {
 // =====================================================================
 // Payouts tab
 // =====================================================================
-function PayoutsTab({ orders, balance, payouts, onRequest }) {
+function PayoutsTab({ orders, balance, payouts, onRequest, methods, methodsReady, onMethods }) {
   const app = useApp();
   // Real balance when DB-backed; else the demo estimate
   const available = balance ? balance.available : orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0) * 0.95 * 0.98;
@@ -840,18 +931,26 @@ function PayoutsTab({ orders, balance, payouts, onRequest }) {
   const [showRequest, setShowRequest] = React.useState(false);
   const [amount, setAmount] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  const [methodId, setMethodId] = React.useState<string>('');
 
-  const statusColor = { approved: 'var(--green)', rejected: 'var(--clay)', pending: 'var(--sun)', on_hold: 'var(--ink-3)' };
-  const statusLabel = { approved: 'Approved', rejected: 'Rejected', pending: 'Pending review', on_hold: 'On Hold' };
+  const primary = (methods ?? []).find((m: any) => m.isPrimary) ?? (methods ?? [])[0] ?? null;
+  const chosen = (methods ?? []).find((m: any) => m.id === methodId) ?? primary;
+
+  const statusColor = { approved: 'var(--green)', rejected: 'var(--clay)', pending: 'var(--sun)', on_hold: 'var(--ink-3)', paid: 'var(--green)' };
+  const statusLabel = { approved: 'Approved', rejected: 'Rejected', pending: 'Pending review', on_hold: 'On hold', paid: 'Sent' };
 
   const handleRequest = async () => {
     const val = parseFloat(amount);
     if (!val || val <= 0 || val > available) return;
     setSubmitting(true);
     if (app.user?.id) {
+      if (!chosen) {
+        app.toast?.({ msg: 'Connect a payout method first', sub: 'We need somewhere to send it.', kind: 'error', icon: 'coin' });
+        setSubmitting(false); return;
+      }
       const { requestPayout } = await import('@/lib/market');
-      const ok = await requestPayout(app.user.id, val, 'Default payout method');
-      if (!ok) { app.toast?.({ msg: 'Could not submit request', sub: 'Check migration 022 has been run.', kind: 'error', icon: 'close' }); setSubmitting(false); return; }
+      const res = await requestPayout(app.user.id, val, { id: chosen.id, label: chosen.label, kind: chosen.kind });
+      if (!res.ok) { app.toast?.({ msg: 'Could not submit request', sub: res.error ?? 'Try again in a moment.', kind: 'error', icon: 'close' }); setSubmitting(false); return; }
       await onRequest?.();
     }
     app.toast?.({ msg: 'Withdrawal request submitted', sub: sMoney(val) + ' · under review', kind: 'success', icon: 'coin' });
@@ -879,6 +978,9 @@ function PayoutsTab({ orders, balance, payouts, onRequest }) {
         </div>
       </div>
 
+      {/* Where the money goes */}
+      <PayoutMethods methods={methods} ready={methodsReady} onChange={onMethods} />
+
       {/* Info banner */}
       <div style={{ padding: '12px 16px', borderRadius: 12, background: 'var(--green-tint)', border: '1px solid color-mix(in srgb, var(--green) 25%, transparent)', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55 }}>
         Withdrawals are reviewed by Honua within <strong>1–2 business days</strong>. Funds are released once the review is complete. Minimum withdrawal is <strong>$10.00</strong>.
@@ -893,7 +995,20 @@ function PayoutsTab({ orders, balance, payouts, onRequest }) {
             {parseFloat(amount) > available && (
               <div style={{ fontSize: 12.5, color: 'var(--clay)', fontFamily: 'JetBrains Mono' }}>Amount exceeds available balance of {sMoney(available)}</div>
             )}
-            <DashFld label="Destination account" value="GTBank ••4521" onChange={() => {}} />
+            <label style={{ display: 'block' }}>
+              <span className="fld-label">Send it to</span>
+              {(methods ?? []).length > 0 ? (
+                <select className="fld" value={chosen?.id ?? ''} onChange={e => setMethodId(e.target.value)}>
+                  {(methods ?? []).map((m: any) => (
+                    <option key={m.id} value={m.id}>{m.label}{m.isPrimary ? ' · primary' : ''}</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--clay)', padding: '10px 0' }}>
+                  You haven't connected a payout method yet — add one above and we'll send it there.
+                </div>
+              )}
+            </label>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
               <button className="btn btn-ghost" onClick={() => { setShowRequest(false); setAmount(''); }}>Cancel</button>
               <button className="btn btn-green" disabled={submitting || !amount || parseFloat(amount) < 10 || parseFloat(amount) > available} onClick={handleRequest} style={{ opacity: (submitting || !amount || parseFloat(amount) < 10 || parseFloat(amount) > available) ? 0.5 : 1 }}>
@@ -923,9 +1038,16 @@ function PayoutsTab({ orders, balance, payouts, onRequest }) {
             <span className="tabular" style={{ fontSize: 14, fontWeight: 700 }}>{sMoney(h.amount)}</span>
             <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{h.destination}</span>
             <div>
-              <span style={{ fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[h.status]} 12%, transparent)`, color: statusColor[h.status], fontFamily: 'JetBrains Mono', display: 'inline-block' }}>
-                {statusLabel[h.status]}
+              <span style={{ fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 6, background: `color-mix(in srgb, ${statusColor[h.status] ?? 'var(--ink-3)'} 12%, transparent)`, color: statusColor[h.status] ?? 'var(--ink-3)', fontFamily: 'JetBrains Mono', display: 'inline-block' }}>
+                {statusLabel[h.status] ?? h.status}
               </span>
+              {/* Approved means the decision was made; sent means the money left. */}
+              {h.status === 'approved' && (
+                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 4, lineHeight: 1.4 }}>Cleared for transfer</div>
+              )}
+              {h.paymentReference && (
+                <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 4, lineHeight: 1.4, fontFamily: 'JetBrains Mono' }}>Ref {h.paymentReference}</div>
+              )}
               {h.rejectReason && (
                 <div style={{ fontSize: 11.5, color: 'var(--clay)', marginTop: 4, lineHeight: 1.4 }}>{h.rejectReason}</div>
               )}
@@ -933,6 +1055,413 @@ function PayoutsTab({ orders, balance, payouts, onRequest }) {
           </div>
         ))}
         {history.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>No withdrawal history yet.</div>}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Payout methods — where a seller's money actually goes
+// =====================================================================
+//
+// Four kinds. Stripe (through Connect) and PayPal settle through an API;
+// UglyCash and bank transfers are sent by a person. That distinction is shown
+// per row rather than claimed once at the top, because it is not a property of
+// the *kind* — a Stripe row created by pasting an account id into the form below
+// is sent by hand, and migration 045 refuses to dispatch to it. Only an account
+// this platform opened through Connect can be paid automatically, so only those
+// rows say so.
+function PayoutMethods({ methods, ready, onChange }) {
+  const app = useApp();
+  const [adding, setAdding] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const list = methods ?? [];
+
+  const makePrimary = async (id: string) => {
+    setBusy(id);
+    const { setPrimaryPayoutMethod } = await import('@/lib/payout-methods');
+    const { error } = await setPrimaryPayoutMethod(await sellerToken(), id);
+    setBusy(null);
+    if (error) { app.toast?.({ msg: 'Could not change it', sub: error, kind: 'error', icon: 'close' }); return; }
+    await onChange?.();
+    app.toast?.({ msg: 'Primary payout method updated', kind: 'success', icon: 'check' });
+  };
+
+  const remove = async (id: string) => {
+    setBusy(id);
+    const { removePayoutMethod } = await import('@/lib/payout-methods');
+    const { error } = await removePayoutMethod(await sellerToken(), id);
+    setBusy(null);
+    // The route refuses while a pending or approved payout still points at it —
+    // that message is worth showing verbatim.
+    if (error) { app.toast?.({ msg: 'Could not remove it', sub: error, kind: 'error', icon: 'close' }); return; }
+    await onChange?.();
+    app.toast?.({ msg: 'Payout method removed', icon: 'trash' });
+  };
+
+  return (
+    <>
+    <StripeConnectCard onChange={onChange} />
+
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 20px', borderBottom: '1px solid var(--line)' }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Payout methods</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>Withdrawals go to your primary method.</div>
+        </div>
+        {!adding && (
+          <button className="btn btn-ghost" onClick={() => setAdding(true)} style={{ padding: '8px 14px' }}>
+            <Icon name="plus" size={14} stroke={2.4} /> Add method
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <MethodForm
+          onCancel={() => setAdding(false)}
+          onSaved={async () => { setAdding(false); await onChange?.(); }}
+          first={list.length === 0}
+        />
+      )}
+
+      {list.map((m: any) => (
+        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--line)' }}>
+          <span style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--bg-2)', color: 'var(--ink-3)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <Icon name="coin" size={16} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 500 }}>{m.label}</span>
+              {m.isPrimary && <span className="chip" style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono', color: 'var(--green)', background: 'var(--green-tint)' }}>PRIMARY</span>}
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
+              {PAYOUT_KIND_LABEL[m.kind] ?? m.kind}
+              {m.bankCurrency ? ` · ${m.bankCurrency}` : ''}
+              {/* Per row, from the server. A Stripe account id typed into the
+                  form below reads "sent by hand" and is — nothing dispatches
+                  to it. See the note on `automatic` in lib/payout-methods. */}
+              {m.automatic ? ' · sent automatically' : ' · sent by hand'}
+            </div>
+          </div>
+          {!m.isPrimary && (
+            <button className="btn btn-ghost" disabled={busy === m.id} onClick={() => makePrimary(m.id)} style={{ padding: '6px 12px', fontSize: 12.5 }}>Make primary</button>
+          )}
+          <button className="btn btn-ghost" disabled={busy === m.id} onClick={() => remove(m.id)} style={{ padding: '6px 10px', color: 'var(--clay)' }} aria-label="Remove payout method">
+            <Icon name="trash" size={14} />
+          </button>
+        </div>
+      ))}
+
+      {list.length === 0 && !adding && (
+        <div style={{ padding: 30, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>
+          {ready ? 'No payout method connected yet. Add one so we know where to send your money.' : 'Loading…'}
+        </div>
+      )}
+    </div>
+    </>
+  );
+}
+
+// ── Stripe Connect ──────────────────────────────────────────────────────────
+//
+// The account is opened by Honua under its own platform and the id comes back
+// from Stripe. The seller never types it, which is the difference between this
+// card and the Stripe option in the form below: an account id someone pastes in
+// proves nothing about who controls it, so migration 045 will not send money to
+// one. Both still exist, because a seller whose Stripe account predates this
+// and who is happy being paid by hand shouldn't be forced through onboarding.
+//
+// Stripe Connect does not operate in Nigeria, Ghana or Kenya. For those sellers
+// the bank-transfer and UglyCash paths are the main road, not a consolation —
+// so an unsupported country is answered here with the alternative named, rather
+// than by hiding the card or sending them into a flow that rejects them at the
+// end.
+function StripeConnectCard({ onChange }) {
+  const app = useApp();
+  const [status, setStatus] = React.useState<ConnectStatus | null>(null);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [picking, setPicking] = React.useState(false);
+  const [country, setCountry] = React.useState('US');
+  const [err, setErr] = React.useState<string | null>(null);
+  const [landed, setLanded] = React.useState<'return' | 'refresh' | null>(null);
+
+  const load = React.useCallback(async () => {
+    const { getConnectStatus } = await import('@/lib/payout-methods');
+    setStatus(await getConnectStatus(await sellerToken()));
+  }, []);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  // Landing from Stripe's hosted flow. The parameter is cleared immediately so
+  // a reload doesn't replay a banner about something that happened once.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const q = url.searchParams.get('connect');
+    if (q !== 'return' && q !== 'refresh') return;
+    setLanded(q as 'return' | 'refresh');
+    url.searchParams.delete('connect');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    // `return` does not mean finished — Stripe sends the seller back whenever
+    // they leave, including part-way. The account is re-read rather than assumed
+    // good, and what it says is what the card shows.
+    load();
+  }, [load]);
+
+  const go = async (opts: { country?: string; action?: 'resume' | 'dashboard' }) => {
+    setBusy(opts.action ?? 'start');
+    setErr(null);
+    const { startConnect } = await import('@/lib/payout-methods');
+    const res = await startConnect(await sellerToken(), opts);
+    setBusy(null);
+    if (res.error || !res.url) {
+      setErr(res.error ?? 'Stripe did not return a link. Try again in a moment.');
+      return;
+    }
+    // Account links are single-use and expire in minutes, so this navigates on
+    // the click rather than sitting in an href that goes stale on the page.
+    window.location.href = res.url;
+  };
+
+  if (!status) return null;
+
+  // Stripe unconfigured, or 045 not applied. Silent rather than a broken button:
+  // the four methods below still work and still get paid.
+  if (!status.available && !status.connected) return null;
+
+  const st = status.state;
+  const done = !!st?.canReceive;
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '15px 20px', borderBottom: '1px solid var(--line)' }}>
+        <span style={{ width: 34, height: 34, borderRadius: 9, background: done ? 'var(--green-tint)' : 'var(--bg-2)', color: done ? 'var(--green)' : 'var(--ink-3)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+          <Icon name={done ? 'check' : 'bolt'} size={16} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Get paid automatically with Stripe</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>
+            {done
+              ? 'Connected. Approved withdrawals are transferred without anyone touching them.'
+              : status.connected
+                ? 'Started, but Stripe still needs a few details before it will accept transfers.'
+                : 'Honua opens the account for you — there is nothing to copy across.'}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+        {landed === 'refresh' && (
+          <div style={{ padding: '11px 14px', borderRadius: 11, background: 'var(--bg-2)', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.55 }}>
+            That Stripe link expired before you finished — they only last a few minutes. Pick up where you left off below.
+          </div>
+        )}
+        {landed === 'return' && !done && (
+          <div style={{ padding: '11px 14px', borderRadius: 11, background: 'var(--bg-2)', fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.55 }}>
+            You&rsquo;re back from Stripe, but they haven&rsquo;t cleared the account for transfers yet. If you finished everything, this can take a few minutes — or Stripe may still want something below.
+          </div>
+        )}
+
+        {/* Stripe was unreachable, so the flags on screen are the last known
+            ones. Said plainly, because "connected" going quiet is exactly the
+            claim a seller would act on. */}
+        {status.staleReason && (
+          <div style={{ padding: '11px 14px', borderRadius: 11, background: sTint('var(--sun)', 12), border: '1px solid ' + sTint('var(--sun)', 26), fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.55 }}>
+            Couldn&rsquo;t reach Stripe just now, so this is what we last knew: {status.staleReason}
+          </div>
+        )}
+
+        {status.connected && st && (
+          <div style={{ padding: 14, borderRadius: 12, background: 'var(--bg-2)', display: 'grid', gap: 8, fontSize: 12.5 }}>
+            <ConnectFlag ok={st.canReceive} label="Honua can send you money" no="Stripe won't accept transfers into this account yet" />
+            {/* Not a blocker for the transfer — the money arrives either way. It
+                just stops at their Stripe balance instead of their bank, which
+                is a thing to know before wondering where it went. */}
+            <ConnectFlag ok={st.canPayOut} label="Stripe can move it to your bank" no="Money will sit in your Stripe balance until this is done" />
+            {st.disabledReason && (
+              <div style={{ fontSize: 12, color: 'var(--clay)', lineHeight: 1.5 }}>Stripe has restricted this account: {st.disabledReason}</div>
+            )}
+            {st.requirementsDue?.length > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+                <div style={{ color: 'var(--ink-4)', marginBottom: 2 }}>Stripe still wants:</div>
+                {st.requirementsDue.slice(0, 6).map(r => (
+                  <div key={r} style={{ fontFamily: 'JetBrains Mono', fontSize: 11.5 }}>· {r.replace(/[._]/g, ' ')}</div>
+                ))}
+                {st.requirementsDue.length > 6 && <div style={{ color: 'var(--ink-4)' }}>· and {st.requirementsDue.length - 6} more</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {err && <div style={{ fontSize: 12.5, color: 'var(--clay)', lineHeight: 1.5 }}>{err}</div>}
+
+        {/* Not connected: pick a country first. Stripe fixes the country at
+            account creation and it cannot be changed afterwards, so this is
+            asked deliberately rather than guessed from a locale. */}
+        {!status.connected && !picking && (
+          <button className="btn btn-green" onClick={() => setPicking(true)} style={{ justifyContent: 'center', padding: '12px' }}>
+            <Icon name="bolt" size={15} /> Connect with Stripe
+          </button>
+        )}
+
+        {!status.connected && picking && (
+          <>
+            <label style={{ display: 'block' }}>
+              <span className="fld-label">Country of your bank account</span>
+              <select className="fld" value={country} onChange={e => { setCountry(e.target.value); setErr(null); }}>
+                {CONNECT_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </select>
+            </label>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-4)', lineHeight: 1.5 }}>
+              Stripe can&rsquo;t change this later. If your country isn&rsquo;t listed, Stripe doesn&rsquo;t operate there — use a bank transfer or UglyCash below and your withdrawals are sent by hand instead.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn btn-ghost" onClick={() => setPicking(false)}>Cancel</button>
+              <button className="btn btn-green" disabled={!!busy} onClick={() => go({ country })} style={{ opacity: busy ? .5 : 1 }}>
+                {busy ? 'Opening Stripe…' : 'Continue to Stripe'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {status.connected && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            {!done && (
+              <button className="btn btn-green" disabled={!!busy} onClick={() => go({ action: 'resume' })} style={{ flex: 1, justifyContent: 'center', opacity: busy ? .5 : 1 }}>
+                {busy === 'resume' ? 'Opening Stripe…' : 'Finish setting up'}
+              </button>
+            )}
+            <button className="btn btn-ghost" disabled={!!busy} onClick={() => go({ action: 'dashboard' })} style={{ flex: 1, justifyContent: 'center' }}>
+              {busy === 'dashboard' ? 'Opening…' : 'Open Stripe dashboard'}
+            </button>
+          </div>
+        )}
+
+        <div style={{ fontSize: 11.5, color: 'var(--ink-4)', lineHeight: 1.5 }}>
+          Stripe collects and holds your identity and bank details directly — Honua never sees them. All we store is the account id Stripe gives us.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConnectFlag({ ok, label, no }: { ok: boolean; label: string; no: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, color: ok ? 'var(--ink-2)' : 'var(--ink-3)', lineHeight: 1.5 }}>
+      <span style={{ color: ok ? 'var(--green)' : 'var(--ink-4)', flexShrink: 0, marginTop: 1 }}>
+        <Icon name={ok ? 'check' : 'clock'} size={14} />
+      </span>
+      <span>{ok ? label : no}</span>
+    </div>
+  );
+}
+
+function MethodForm({ onCancel, onSaved, first }) {
+  const app = useApp();
+  const [kind, setKind] = React.useState<any>('paypal');
+  const [d, setD] = React.useState<any>({ bankCountry: 'NG' });
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  const set = (k: string) => (v: any) => { setD((prev: any) => ({ ...prev, [k]: v })); setErr(null); };
+  const country = countryFor(d.bankCountry ?? '');
+
+  const save = async () => {
+    const draft = { ...d, kind, makePrimary: first || !!d.makePrimary };
+    const problem = validateMethod(draft);
+    if (problem) { setErr(problem); return; }
+    setSaving(true);
+    const { addPayoutMethod } = await import('@/lib/payout-methods');
+    const { error } = await addPayoutMethod(await sellerToken(), draft);
+    setSaving(false);
+    if (error) { setErr(error); return; }
+    app.toast?.({ msg: 'Payout method connected', sub: PAYOUT_KIND_LABEL[kind], kind: 'success', icon: 'check' });
+    await onSaved?.();
+  };
+
+  return (
+    <div style={{ padding: 20, borderBottom: '1px solid var(--line)', background: 'var(--bg-2)' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {PAYOUT_KINDS.map(k => (
+          <button key={k} onClick={() => { setKind(k); setErr(null); }} style={{
+            padding: '8px 14px', borderRadius: 10, fontSize: 13, cursor: 'pointer',
+            border: '1px solid ' + (kind === k ? 'var(--green)' : 'var(--line)'),
+            background: kind === k ? 'var(--green-tint)' : 'var(--surface)',
+            color: kind === k ? 'var(--green)' : 'var(--ink-2)', fontWeight: kind === k ? 600 : 500,
+          }}>{PAYOUT_KIND_LABEL[k]}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gap: 12 }}>
+        {kind === 'paypal' && (
+          <DashFld label="PayPal email" type="email" value={d.paypalEmail ?? ''} onChange={set('paypalEmail')}
+            placeholder="you@example.com" hint="The address on your PayPal account." />
+        )}
+
+        {/* Kept, but demoted. An account id typed in here is just a note for
+            whoever sends the transfer — Honua has no relationship with that
+            account and migration 045 refuses to dispatch to it, so saying
+            "connected to Stripe" without saying "by hand" would be the
+            misleading half of a true sentence. The card above is the real path. */}
+        {kind === 'stripe' && (
+          <>
+            <div style={{ padding: '11px 14px', borderRadius: 11, background: 'var(--green-tint)', border: '1px solid color-mix(in srgb, var(--green) 25%, transparent)', fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+              To be paid <strong>automatically</strong>, use <strong>Connect with Stripe</strong> at the top of this page instead. Honua opens the account for you and transfers land without anyone pressing anything.
+            </div>
+            <DashFld label="Stripe account ID" value={d.stripeAccountId ?? ''} onChange={set('stripeAccountId')}
+              placeholder="acct_1A2b3C4d5E6f" hint="Only if you already have a Stripe account and are happy being paid by hand. It starts with acct_ — never paste an API key here." />
+          </>
+        )}
+
+        {kind === 'uglycash' && (
+          <DashFld label="UglyCash handle" prefix="$" value={d.uglycashHandle ?? ''} onChange={set('uglycashHandle')}
+            placeholder="afrotechboss" hint="The handle people send to, e.g. $afrotechboss." />
+        )}
+
+        {kind === 'bank' && (
+          <>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <label style={{ display: 'block', flex: 1 }}>
+                <span className="fld-label">Country</span>
+                <select className="fld" value={d.bankCountry ?? ''} onChange={e => set('bankCountry')(e.target.value)}>
+                  {BANK_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </label>
+              <label style={{ display: 'block', flex: 1 }}>
+                <span className="fld-label">Currency</span>
+                {/* Derived from the country, on the server too — never sent from here. */}
+                <input className="fld" value={country?.currency ?? ''} readOnly tabIndex={-1} style={{ color: 'var(--ink-3)' }} />
+              </label>
+            </div>
+            <DashFld label="Bank name" value={d.bankName ?? ''} onChange={set('bankName')} placeholder="e.g. GTBank" />
+            <DashFld label="Account holder name" value={d.bankAccountName ?? ''} onChange={set('bankAccountName')}
+              placeholder="As it appears on the account" hint="Must match your account name — transfers to a different name bounce." />
+            <div style={{ display: 'flex', gap: 12 }}>
+              <DashFld label="Account number" value={d.bankAccountNumber ?? ''} onChange={set('bankAccountNumber')} placeholder="0123456789" />
+              <DashFld label={country?.extraLabel ?? 'Bank code'} value={d.bankExtra ?? ''} onChange={set('bankExtra')} hint={country?.extraHint} />
+            </div>
+          </>
+        )}
+
+        {!first && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!d.makePrimary} onChange={e => set('makePrimary')(e.target.checked)} />
+            Make this my primary payout method
+          </label>
+        )}
+
+        {err && <div style={{ fontSize: 12.5, color: 'var(--clay)', lineHeight: 1.5 }}>{err}</div>}
+
+        <div style={{ fontSize: 11.5, color: 'var(--ink-4)', lineHeight: 1.5 }}>
+          Honua stores these details to send your withdrawals. Reviewers see a masked label; the full details are only opened when someone is sending your transfer, and every time they are opened it is recorded.
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-green" disabled={saving} onClick={save} style={{ opacity: saving ? 0.5 : 1 }}>
+            {saving ? 'Connecting…' : 'Connect'}
+          </button>
+        </div>
       </div>
     </div>
   );

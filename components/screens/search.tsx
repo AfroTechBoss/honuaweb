@@ -4,26 +4,9 @@ import React from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { Avatar, ImagePlaceholder } from "@/components/primitives";
-import { MOCK } from "@/components/post-card";
-import { MOCK_SELLER } from "@/components/seller-data";
 import { useApp } from "@/components/app-context";
 import { DesktopSidebar } from "@/components/sidebar";
 import { supabase } from "@/lib/supabase";
-
-// Products remain mock (no products table yet)
-const ALL_PRODUCTS = [
-  ...MOCK.products.map(p => ({ ...p, _type: 'product' as const })),
-  ...MOCK_SELLER.products.map(p => ({
-    name: p.title, price: `$${p.price}`, brand: MOCK_SELLER.shop.name,
-    tag: p.tag, img: p.img, imgUrl: null, _type: 'product' as const,
-  })),
-];
-
-function match(query: string, ...fields: (string | undefined | null)[]): boolean {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  return fields.some(f => f?.toLowerCase().includes(q));
-}
 
 function timeAgo(ts: string): string {
   const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -37,7 +20,7 @@ type Tab = 'all' | 'products' | 'people' | 'posts';
 
 function ProductCard({ product, onNav }: { product: any; onNav: any }) {
   return (
-    <div onClick={() => onNav?.('marketplace')} style={{
+    <div onClick={() => onNav?.('product', { id: product.id })} style={{
       background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14,
       overflow: 'hidden', cursor: 'pointer', transition: 'border-color .15s',
     }}
@@ -130,6 +113,7 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
   const [tab, setTab] = React.useState<Tab>('all');
   const [dbPeople, setDbPeople] = React.useState<any[]>([]);
   const [dbPosts, setDbPosts] = React.useState<any[]>([]);
+  const [dbProducts, setDbProducts] = React.useState<any[]>([]);
   const [searching, setSearching] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const { nav } = useApp();
@@ -142,12 +126,13 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
     if (query.length < 2) {
       setDbPeople([]);
       setDbPosts([]);
+      setDbProducts([]);
       setSearching(false);
       return;
     }
     setSearching(true);
     const t = setTimeout(async () => {
-      const [{ data: people }, { data: posts }] = await Promise.all([
+      const [{ data: people }, { data: posts }, { data: prods }] = await Promise.all([
         supabase
           .from('profiles')
           .select('id, handle, full_name, avatar_url, bio, impact_score')
@@ -159,15 +144,31 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
           .ilike('content', `%${query}%`)
           .order('created_at', { ascending: false })
           .limit(20),
+        // Live listings only — a search result that leads to a delisted or
+        // flagged product is worse than no result.
+        supabase
+          .from('products')
+          .select('id, name, brand, tag, price_cents, image_url')
+          .eq('status', 'live')
+          .or(`name.ilike.%${query}%,brand.ilike.%${query}%,tag.ilike.%${query}%`)
+          .limit(20),
       ]);
       setDbPeople(people ?? []);
       setDbPosts(posts ?? []);
+      setDbProducts((prods ?? []).filter((r: any) => r.name && r.price_cents != null).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        brand: r.brand,
+        tag: r.tag ?? '',
+        price: `$${(r.price_cents / 100) % 1 === 0 ? (r.price_cents / 100).toFixed(0) : (r.price_cents / 100).toFixed(2)}`,
+        imgUrl: r.image_url ?? null,
+      })));
       setSearching(false);
     }, 350);
     return () => clearTimeout(t);
   }, [query]);
 
-  const products = ALL_PRODUCTS.filter(p => match(query, p.name, p.brand, p.tag));
+  const products = dbProducts;
   const people = dbPeople;
   const posts = dbPosts;
 
@@ -198,8 +199,8 @@ export function DesktopSearch({ onNav }: { onNav?: any }) {
         {(tab === 'all' || tab === 'products') && products.length > 0 && (
           <Section label="Products" count={products.length} showAll={tab === 'all' && products.length > 4} onShowAll={() => setTab('products')}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
-              {(tab === 'all' ? products.slice(0, 4) : products).map((p, i) => (
-                <ProductCard key={i} product={p} onNav={handleNav} />
+              {(tab === 'all' ? products.slice(0, 4) : products).map((p: any) => (
+                <ProductCard key={p.id} product={p} onNav={handleNav} />
               ))}
             </div>
           </Section>

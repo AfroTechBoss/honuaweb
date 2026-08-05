@@ -7,6 +7,12 @@ export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor", f
     home: <path d="M3 11l9-8 9 8M5 10v10h14V10" />,
     compass: <><circle cx="12" cy="12" r="9" /><path d="M16 8l-2 6-6 2 2-6z" /></>,
     bag: <><path d="M5 8h14l-1 12H6L5 8z" /><path d="M9 8a3 3 0 016 0" /></>,
+    // A storefront, not a bag. `bag` is the Products rail — a shop is the thing
+    // the listings hang off, and the two need to read apart at 18px.
+    store: <><path d="M3 9l1.5-5h15L21 9" /><path d="M3 9a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0" /><path d="M5 11v9h14v-9" /><path d="M10 20v-5h4v5" /></>,
+    // A bank, for the payout destination that isn't a brand. `globe` used to
+    // stand in for it, which read as "international" rather than "a bank".
+    bank: <><path d="M3 9l9-5 9 5" /><path d="M4 9h16" /><path d="M6 11v7M10 11v7M14 11v7M18 11v7" /><path d="M3 21h18" /></>,
     bookmark: <path d="M6 3h12v18l-6-4-6 4V3z" />,
     bell: <><path d="M6 8a6 6 0 1112 0c0 7 3 7 3 9H3c0-2 3-2 3-9z" /><path d="M10 21a2 2 0 004 0" /></>,
     msg: <path d="M3 5h18v12H7l-4 4V5z" />,
@@ -60,6 +66,10 @@ export function Icon({ name, size = 18, stroke = 1.75, color = "currentColor", f
     bars: <path d="M3 6h18M3 12h18M3 18h18" />,
     tag: <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01" />,
     at: <><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/></>,
+    // Money on its way but not yet arrived — the audit log and the payout queue
+    // both need a mark for "submitted", distinct from `coin` (sent) and `check`
+    // (approved). Falling through to the default would have drawn a house.
+    send: <><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">

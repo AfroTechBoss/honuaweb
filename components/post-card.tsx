@@ -172,8 +172,8 @@ export function PostCard({ post, dense = false }) {
       marginBottom: 12, cursor: 'pointer',
     }}>
       <header style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-        <span onClick={stop(() => app.nav?.('profile', { handle: user.handle }))}><Avatar src={user.avatar} name={user.name} size={42} /></span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'inline-flex' }} onClick={stop(() => app.nav?.('profile', { handle: user.handle }))}><Avatar src={user.avatar} name={user.name} size={42} /></span>
+        <div style={{ flex: 1, minWidth: 0, alignSelf: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <span onClick={stop(() => app.nav?.('profile', { handle: user.handle }))} style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>{user.name}</span>
             {user.verified && <VerifiedTick />}
@@ -492,14 +492,21 @@ export function formatCount(n) {
 };
 
 // Right column trending widget for desktop — real tag counts from recent posts
+// Module-level so switching screens doesn't re-run the query — the panel is
+// mounted by a dozen screens. It used to have no expiry at all, which meant a
+// tab left open overnight showed yesterday's trends forever; ten minutes is
+// long enough to cost nothing and short enough that "trending now" is true.
+const TRENDS_TTL_MS = 10 * 60_000;
 let _trendsCache: { tag: string; posts: string }[] | null = null;
+let _trendsAt = 0;
+const trendsFresh = () => !!_trendsCache && Date.now() - _trendsAt < TRENDS_TTL_MS;
+
 export function TrendingPanel() {
   const app = useApp();
-  const [trends, setTrends] = React.useState<{ tag: string; posts: string }[]>(_trendsCache ?? []);
-  const [isReal, setIsReal] = React.useState(!!_trendsCache);
+  const [trends, setTrends] = React.useState<{ tag: string; posts: string }[]>(trendsFresh() ? _trendsCache! : []);
 
   React.useEffect(() => {
-    if (_trendsCache) return;
+    if (trendsFresh()) return;
     import('@/lib/supabase').then(async ({ supabase }) => {
       // Tags + hashtags from the last 7 days of posts
       const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -522,8 +529,8 @@ export function TrendingPanel() {
         .map(([tag, n]) => ({ tag, posts: String(n) }));
       if (top.length) {
         _trendsCache = top;
+        _trendsAt = Date.now();
         setTrends(top);
-        setIsReal(true);
       }
     }).catch(() => {});
   }, []);
@@ -549,7 +556,9 @@ export function TrendingPanel() {
           <div>
             <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>#{i + 1} · trending</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginTop: 2 }}>#{t.tag}</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.posts} post{t.posts === '1' ? '' : 's'}{isReal ? ' this week' : ' today'}</div>
+            {/* Always "this week" — the query window is 7 days. The old
+                ternary had a " today" branch that nothing could ever reach. */}
+            <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{t.posts} post{t.posts === '1' ? '' : 's'} this week</div>
           </div>
           <Icon name="arrow" size={16} color="var(--ink-4)" />
         </div>
@@ -720,12 +729,17 @@ function __removeNode(list, id) {
 
 const COMMENT_REPORT_OPTIONS = ['Spam or misleading', 'Hate speech or harassment', 'Violence or dangerous content', 'False information', 'Off-topic', 'Other'];
 
-function CommentMoreMenu({ usr, isOwn, onDelete, onNav }: { usr: any; isOwn: boolean; onDelete: () => void; onNav?: (screen: string, params?: any) => void }) {
+// `node` is the comment itself, and it is here only so the report can name what
+// it is about. The menu used to receive only the author, which is why reporting
+// a comment could never have written anything even if it had tried to.
+function CommentMoreMenu({ usr, node, isOwn, onDelete, onNav }: { usr: any; node?: any; isOwn: boolean; onDelete: () => void; onNav?: (screen: string, params?: any) => void }) {
   const app = useApp();
   const [open, setOpen] = React.useState(false);
   const [showReport, setShowReport] = React.useState(false);
   const [reportReason, setReportReason] = React.useState('');
   const [reportDone, setReportDone] = React.useState(false);
+  const [reportSending, setReportSending] = React.useState(false);
+  const [reportError, setReportError] = React.useState('');
 
   const close = () => setOpen(false);
 
@@ -737,9 +751,28 @@ function CommentMoreMenu({ usr, isOwn, onDelete, onNav }: { usr: any; isOwn: boo
     close();
     app.toast?.({ msg: `Blocked @${usr.handle}`, sub: 'They can no longer interact with you.', icon: 'lock' });
   };
-  const submitReport = () => {
-    setReportDone(true);
-    setTimeout(() => { setShowReport(false); setReportDone(false); setReportReason(''); }, 1800);
+  const submitReport = async () => {
+    if (!reportReason || reportSending) return;
+    setReportSending(true);
+    setReportError('');
+    const { fileReport } = await import('@/lib/content-reports');
+    const outcome = await fileReport({
+      targetType: 'comment',
+      targetId: node?.id,
+      targetOwnerId: node?.user_id,
+      reporterId: app.user?.id,
+      reason: reportReason,
+    });
+    setReportSending(false);
+
+    if (outcome.kind === 'filed' || outcome.kind === 'duplicate') {
+      setReportDone(true);
+      setTimeout(() => { setShowReport(false); setReportDone(false); setReportReason(''); }, 1800);
+      return;
+    }
+    // 'unavailable' covers the seeded demo comments, whose ids are a counter
+    // rather than a row — there is nothing on the other end to report.
+    setReportError(outcome.kind === 'signed-out' ? 'Sign in to report a comment.' : outcome.message);
   };
 
   return (
@@ -769,7 +802,7 @@ function CommentMoreMenu({ usr, isOwn, onDelete, onNav }: { usr: any; isOwn: boo
               <button onClick={handleBlock} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--ink-2)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
                 <Icon name="lock" size={14} /> Block @{usr.handle}
               </button>
-              <button onClick={() => { close(); setShowReport(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
+              <button onClick={() => { close(); setReportError(''); setReportDone(false); setShowReport(true); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '11px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: 'var(--clay)', textAlign: 'left', borderTop: '1px solid var(--line)' }}>
                 <Icon name="flag" size={14} /> Report comment
               </button>
             </>)}
@@ -799,9 +832,12 @@ function CommentMoreMenu({ usr, isOwn, onDelete, onNav }: { usr: any; isOwn: boo
                   </button>
                 ))}
               </div>
+              {reportError && (
+                <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(190,90,60,.1)', color: 'var(--clay)', fontSize: 12.5, lineHeight: 1.45 }}>{reportError}</div>
+              )}
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setShowReport(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer', fontSize: 14, color: 'var(--ink-2)' }}>Cancel</button>
-                <button onClick={submitReport} disabled={!reportReason} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reportReason ? 'var(--clay)' : 'var(--line)', cursor: reportReason ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>Submit</button>
+                <button onClick={submitReport} disabled={!reportReason || reportSending} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: 'none', background: reportReason && !reportSending ? 'var(--clay)' : 'var(--line)', cursor: reportReason && !reportSending ? 'pointer' : 'not-allowed', fontSize: 14, color: '#fff', fontWeight: 600 }}>{reportSending ? 'Sending…' : 'Submit'}</button>
               </div>
             </>)}
           </div>
@@ -854,7 +890,7 @@ export function CommentNode({ node, depth, like, reply, remove, dense, defaultOp
           <span onClick={goProfile} style={{ fontSize: dense ? 13 : 13.5, fontWeight: 600, cursor: usr.handle && usr.handle !== 'you' ? 'pointer' : 'default' }}>{usr.name}</span>
           {usr.verified && <VerifiedTick size={13} />}
           <span style={{ fontSize: 11.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>@{usr.handle} · {displayTime}</span>
-          <CommentMoreMenu usr={usr} isOwn={isOwn} onDelete={() => remove?.(node.id)} onNav={onNav} />
+          <CommentMoreMenu usr={usr} node={node} isOwn={isOwn} onDelete={() => remove?.(node.id)} onNav={onNav} />
         </div>
         <p style={{ margin: '3px 0 6px', fontSize: dense ? 13.5 : 14, lineHeight: 1.5, color: 'var(--ink-2)', textWrap: 'pretty' }}>{displayText}</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, color: 'var(--ink-3)' }}>
