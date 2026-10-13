@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { logError, logWarn } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 
@@ -55,11 +56,71 @@ export async function POST(req: Request) {
     }
   };
 
+  // A checkout started by /api/checkout has a server-priced quote in
+  // checkout_intents (migration 048). The order is created here, and only
+  // here, once Stripe's captured amount matches that quote — the browser never
+  // writes an order and never names a price.
+  //
+  // Returns false when there is no quote to finalize against, so intents from
+  // before 048 still get the legacy status update below.
+  const finalizeCheckout = async (pi: any): Promise<boolean> => {
+    const orderId = pi?.metadata?.order_id;
+    if (!orderId) return false;
+    const ship = pi.shipping;
+    const address = ship ? {
+      name: ship.name ?? null,
+      street: [ship.address?.line1, ship.address?.line2].filter(Boolean).join(', ') || null,
+      city: ship.address?.city ?? null,
+      zip: ship.address?.postal_code ?? null,
+      state: ship.address?.state ?? null,
+      country: ship.address?.country ?? null,
+    } : null;
+    const { data, error } = await admin.rpc('finalize_checkout', {
+      p_order_id: String(orderId),
+      p_payment_intent: pi.id,
+      p_amount_cents: pi.amount_received ?? 0,
+      p_currency: pi.currency ?? '',
+      p_email: pi.receipt_email ?? null,
+      p_address: address,
+    });
+    if (error) {
+      // 048 not applied yet — fall back to the old behaviour rather than drop
+      // the payment on the floor.
+      if (error.code === 'PGRST202' || error.code === '42883') return false;
+      // Anything else is a real failure: throw so Stripe retries the event.
+      throw error;
+    }
+    if (data === 'missing') return false;
+    if (data === 'mismatch') {
+      // Money arrived that does not match the quote. Acknowledged (a retry
+      // would not change the answer) but loud: someone has to refund or
+      // reconcile it by hand. The reason is on the checkout_intents row.
+      logError('stripe/webhook', 'payment does not match checkout quote — order NOT created', null, {
+        orderId, paymentIntent: pi.id, amountReceived: pi.amount_received, currency: pi.currency,
+      });
+    }
+    return true;
+  };
+
   switch (event.type) {
-    case 'payment_intent.succeeded':
-      await applyStatus(event.data.object, 'paid');
+    case 'payment_intent.succeeded': {
+      const pi = event.data.object;
+      try {
+        if (!(await finalizeCheckout(pi))) {
+          logWarn('stripe/webhook', 'succeeded intent has no checkout quote — legacy status update only', {
+            paymentIntent: pi?.id, orderId: pi?.metadata?.order_id ?? null,
+          });
+          await applyStatus(pi, 'paid');
+        }
+      } catch (err) {
+        logError('stripe/webhook', 'could not finalize checkout', err, { paymentIntent: pi?.id });
+        return NextResponse.json({ error: 'finalize_failed' }, { status: 500 });
+      }
       break;
+    }
     case 'payment_intent.payment_failed':
+      // No order exists for a failed checkout any more; this only touches
+      // orders written before 048.
       await applyStatus(event.data.object, 'failed');
       break;
     case 'transfer.reversed': {

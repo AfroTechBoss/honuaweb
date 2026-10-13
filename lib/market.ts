@@ -185,58 +185,9 @@ export async function deleteSellerProduct(id: string, sellerId: string): Promise
 }
 
 // ---- Orders ----
-const parseCentsStr = (price: any) => Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) || 0;
-const isUuid = (v: any) => /^[0-9a-f-]{36}$/.test(String(v));
-
-export async function createDbOrder(userId: string, order: {
-  id: string; items: any[]; subtotal: number; shipping: number; total: number;
-  email?: string; address?: any; paymentIntentId?: string | null; paymentStatus?: string;
-}): Promise<boolean> {
-  try {
-    const base: any = {
-      id: order.id,
-      user_id: userId,
-      items: order.items,
-      subtotal_cents: Math.round(order.subtotal * 100),
-      shipping_cents: Math.round(order.shipping * 100),
-      total_cents: Math.round(order.total * 100),
-      email: order.email ?? null,
-      address: order.address ?? null,
-      payment_status: order.paymentStatus ?? 'unpaid',
-      payment_intent_id: order.paymentIntentId ?? null,
-    };
-    let { error } = await supabase.from('orders').insert(base);
-    if (error) {
-      // Payment columns may not exist yet (migration 023 not run) — retry bare
-      const { payment_status: _ps, payment_intent_id: _pi, ...noPayment } = base;
-      ({ error } = await supabase.from('orders').insert(noPayment));
-    }
-    if (error) return false;
-
-    // Line items (migration 020) — carry seller_id so sellers can fulfil.
-    // Failure here is non-fatal: the order itself is already recorded.
-    try {
-      const productIds = order.items.map((i: any) => i.id).filter(isUuid);
-      let sellerByProduct: Record<string, { seller_id: string | null; image_url: string | null }> = {};
-      if (productIds.length) {
-        const { data: prods } = await supabase.from('products').select('id, seller_id, image_url').in('id', productIds);
-        for (const p of prods ?? []) sellerByProduct[p.id] = { seller_id: p.seller_id, image_url: p.image_url };
-      }
-      const rows = order.items.map((i: any) => ({
-        order_id: order.id,
-        buyer_id: userId,
-        product_id: isUuid(i.id) ? i.id : null,
-        seller_id: isUuid(i.id) ? sellerByProduct[i.id]?.seller_id ?? null : null,
-        name: i.name,
-        price_cents: parseCentsStr(i.price),
-        quantity: i.quantity || 1,
-        image_url: i.imgUrl ?? (isUuid(i.id) ? sellerByProduct[i.id]?.image_url ?? null : null),
-      }));
-      if (rows.length) await supabase.from('order_items').insert(rows);
-    } catch {}
-    return true;
-  } catch { return false; }
-}
+// There is deliberately no client-side "create order" here. Orders are priced
+// by /api/checkout and written by the Stripe webhook once the payment clears
+// (migration 048); the browser has no insert rights on orders or order_items.
 
 // ---- Seller-side orders (line items sold by this seller) ----
 export async function getSellerOrders(sellerId: string): Promise<any[]> {
@@ -265,6 +216,8 @@ export async function getSellerOrders(sellerId: string): Promise<any[]> {
       qty: r.quantity ?? 1,
       total: ((r.price_cents ?? 0) * (r.quantity ?? 1)) / 100,
       status: r.status ?? 'processing',
+      // Since 048, line items are only ever written by the webhook after a
+      // payment clears, so a seller-visible item is a paid one.
       payment: 'paid',
       date: r.created_at ? rel(r.created_at) : '',
       dateFull: r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',

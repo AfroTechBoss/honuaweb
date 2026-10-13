@@ -46,15 +46,19 @@ Stripe (optional — checkout runs in mock mode without these):
 STRIPE_SECRET_KEY=sk_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 STRIPE_WEBHOOK_SECRET=whsec_...          # for /api/stripe/webhook
-SUPABASE_SERVICE_ROLE_KEY=...            # webhook writes order payment status
+SUPABASE_SERVICE_ROLE_KEY=...            # checkout prices carts; webhook creates orders
 ```
 
 Stripe webhook endpoint (Stripe Dashboard → Developers → Webhooks):
 
 ```
 URL:    https://<your-domain>/api/stripe/webhook
-events: payment_intent.succeeded, payment_intent.payment_failed
+events: payment_intent.succeeded, payment_intent.payment_failed, transfer.reversed
 ```
+
+Since migration 048 the webhook is the only thing that creates orders: an order
+appears only after Stripe reports a captured amount equal to the server's quote.
+Without a working webhook, buyers are charged and no order is recorded.
 
 ## Granting yourself admin
 
