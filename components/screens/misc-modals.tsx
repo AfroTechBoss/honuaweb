@@ -22,12 +22,42 @@ export function Toggle({ on }) {
 // ====================================================================
 // Content / detail modals  (referenced by ModalContent in desktop-rest)
 // ====================================================================
+// The number is a text field: typing is how you enter 1,000; the buttons only
+// nudge by one. The draft is kept as text so the field can be emptied while
+// typing; a number above max snaps to max as you type, and anything below min
+// is corrected on blur / Enter.
 export function QtyStepper({ value, set, min = 1, max = 99, suffix }: { value: number; set: React.Dispatch<React.SetStateAction<number>>; min?: number; max?: number; suffix?: string | number }) {
+  const [draft, setDraft] = React.useState(String(value));
+  React.useEffect(() => { setDraft(String(value)); }, [value]);
+  const clamp = (n: number) => Math.min(max, Math.max(min, Math.floor(n)));
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value.replace(/[^0-9]/g, '');
+    setDraft(text);
+    const n = parseInt(text, 10);
+    if (n > max) { set(max); setDraft(String(max)); }
+    else if (n >= min) set(n);
+  };
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    const next = Number.isFinite(n) ? clamp(n) : value;
+    set(next);
+    setDraft(String(next));
+  };
+  const btn: React.CSSProperties = { width: 36, height: 38, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' };
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 0, border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
-      <button onClick={() => set(Math.max(min, value - 1))} style={{ width: 36, height: 38, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' }}><Icon name="minus" size={15} /></button>
-      <span style={{ minWidth: 56, textAlign: 'center', fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 14 }}>{value}{suffix}</span>
-      <button onClick={() => set(Math.min(max, value + 1))} style={{ width: 36, height: 38, border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--ink-2)', display: 'grid', placeItems: 'center' }}><Icon name="plus" size={15} /></button>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 0, border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
+      <button type="button" aria-label="Decrease" disabled={value <= min} onClick={() => set(Math.max(min, value - 1))} style={{ ...btn, opacity: value <= min ? .45 : 1 }}><Icon name="minus" size={15} /></button>
+      <label style={{ minWidth: 56, padding: '0 8px', display: 'inline-flex', alignItems: 'baseline', justifyContent: 'center', cursor: 'text', fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 14 }}>
+        <input
+          type="text" inputMode="numeric" pattern="[0-9]*" aria-label="Quantity"
+          value={draft} onChange={onChange} onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+          onFocus={e => e.currentTarget.select()}
+          style={{ width: `${Math.max(2, draft.length) + 0.5}ch`, border: 'none', outline: 'none', background: 'transparent', textAlign: 'center', font: 'inherit', color: 'inherit', padding: 0 }}
+        />
+        {suffix != null && <span style={{ marginLeft: 4 }}>{String(suffix).trim()}</span>}
+      </label>
+      <button type="button" aria-label="Increase" disabled={value >= max} onClick={() => set(Math.min(max, value + 1))} style={{ ...btn, opacity: value >= max ? .45 : 1 }}><Icon name="plus" size={15} /></button>
     </div>
   );
 };
@@ -102,6 +132,8 @@ export function MCredit({ data, close }) {
   const [paying, setPaying] = React.useState(false);
   // Display only — the server prices the retirement and that is what is charged.
   const unit = parseFloat(String(data.price).replace(/[^0-9.]/g, '')) || 20;
+  // Up to what's left on the credit; 100,000 t is the checkout route's own cap.
+  const maxTonnes = Math.max(1, Math.min(100000, Math.floor(Number(data.volume_t) || 100000)));
 
   const handleBuy = () => {
     // A retirement is only recordable against a credit that exists in the registry.
@@ -161,7 +193,7 @@ export function MCredit({ data, close }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, padding: 14, background: 'var(--green-tint)', borderRadius: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Tonnes of CO₂</div>
-            <QtyStepper value={qty} set={setQty} suffix=" t" />
+            <QtyStepper value={qty} set={setQty} max={maxTonnes} suffix=" t" />
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Total</div>
