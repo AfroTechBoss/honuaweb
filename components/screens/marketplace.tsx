@@ -9,6 +9,9 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
   const app = useApp();
   const [mob, setMob] = React.useState(false);
   const [dbProducts, setDbProducts] = React.useState<any[]>([]);
+  // 'loading' until the first answer; 'error' when the catalogue could not be
+  // read. Either way the grid says so instead of showing invented products.
+  const [load, setLoad] = React.useState<'loading' | 'ready' | 'error'>('loading');
   const [cat, setCat] = React.useState('All');
   React.useEffect(() => {
     const check = () => setMob(window.innerWidth <= 768);
@@ -17,13 +20,15 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Real products from Supabase — falls back to demo catalogue if table is empty
+  // Real products only. This used to fall back to a demo catalogue whenever the
+  // table was empty or slow, so a new marketplace showed products nobody sells.
   React.useEffect(() => {
-    import('@/lib/market').then(({ getProducts }) => getProducts()).then(setDbProducts).catch(() => {});
+    import('@/lib/market').then(({ getProducts }) => getProducts())
+      .then(rows => { setDbProducts(rows); setLoad('ready'); })
+      .catch(() => setLoad('error'));
   }, []);
-  const useDb = dbProducts.length > 0;
-  const featured = useDb ? dbProducts.find((p: any) => p.featured) : null;
-  const gridProducts = useDb ? dbProducts.filter((p: any) => !p.featured) : MOCK.products;
+  const featured = dbProducts.find((p: any) => p.featured) ?? null;
+  const gridProducts = dbProducts.filter((p: any) => !p.featured);
   const shownProducts = cat === 'All' ? gridProducts : gridProducts.filter((p: any) => (p.category ?? 'Home') === cat);
 
   return (
@@ -45,31 +50,29 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
           </div>
         </div>
 
-        {/* Feature banner */}
+        {/* Feature banner — only for a product a seller actually marked featured */}
+        {featured && (
         <div style={{
           background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)',
           overflow: 'hidden', display: 'grid', gridTemplateColumns: mob ? '1fr' : '1.3fr 1fr', marginBottom: 20,
         }}>
           <div style={{ padding: mob ? 18 : 28 }}>
-            <span className="chip chip-green">Featured drop · 24h</span>
-            <h2 className="font-display" style={{ margin: '10px 0 8px', fontSize: mob ? 20 : 30, fontWeight: 600, letterSpacing: '-0.02em' }}>{featured ? `${featured.name}.` : 'The repair kit. 92 tools, one foldable case.'}</h2>
-            <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>{featured?.description ?? 'By the Fix-it Collective. Every purchase funds a community repair café for a month.'}</p>
+            <span className="chip chip-green">Featured</span>
+            <h2 className="font-display" style={{ margin: '10px 0 8px', fontSize: mob ? 20 : 30, fontWeight: 600, letterSpacing: '-0.02em' }}>{featured.name}.</h2>
+            {featured.description && <p style={{ margin: 0, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>{featured.description}</p>}
             <div style={{ display: 'flex', gap: 14, marginTop: 16, alignItems: 'center' }}>
-              <span style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Lora' }}>{featured?.price ?? '$84'}</span>
-              {(featured ? featured.compare_at_cents : true) && <span style={{ fontSize: 14, color: 'var(--ink-3)', textDecoration: 'line-through' }}>{featured?.compare_at_cents ? `$${(featured.compare_at_cents / 100).toFixed(0)}` : '$120'}</span>}
+              <span style={{ fontSize: 24, fontWeight: 600, fontFamily: 'Lora' }}>{featured.price}</span>
+              {featured.compare_at_cents && <span style={{ fontSize: 14, color: 'var(--ink-3)', textDecoration: 'line-through' }}>${(featured.compare_at_cents / 100).toFixed(0)}</span>}
               <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => {
-                const item = featured
-                  ? { id: featured.id, name: featured.name, price: featured.price, brand: featured.brand, tag: featured.tag, imgUrl: featured.imgUrl, quantity: 1 }
-                  : { id: 'featured-repair-kit', name: 'The repair kit', price: '$84', brand: 'Fix-it Collective', tag: 'Repairable', quantity: 1 };
+                const item = { id: featured.id, name: featured.name, price: featured.price, brand: featured.brand, tag: featured.tag, imgUrl: featured.imgUrl, quantity: 1 };
                 app.addToCart(item);
                 app.toast?.({ msg: 'Added to cart', sub: `${item.name} · ${item.price}`, kind: 'success', icon: 'cart' });
               }}>Add to cart</button>
             </div>
           </div>
-          {!mob && (featured?.imgUrl
-            ? <img src={featured.imgUrl} alt={featured.name} style={{ width: '100%', height: 280, objectFit: 'cover' }} />
-            : <ImagePlaceholder label="repair kit hero — folded leather case open with tools" height={280} />)}
+          {!mob && <ImagePlaceholder label={featured.name} height={280} src={featured.imgUrl} />}
         </div>
+        )}
 
         {/* Filters */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 8, flexWrap: 'wrap', minWidth: 0, overflow: 'hidden' }}>
@@ -87,10 +90,10 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
         {/* Product grid */}
         <div style={{ display: 'grid', gridTemplateColumns: mob ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: mob ? 10 : 14 }}>
           {shownProducts.map((p: any, i: number) => {
-            const productId = useDb ? p.id : `m${i + 1}`;
+            const productId = p.id;
             const wished = app.wishlist?.has(productId) || app.wishlist?.has(p.name);
             return (
-            <div key={i} className="post-card" onClick={() => app.nav?.('product', { id: productId })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer' }}>
+            <div key={productId} className="post-card" onClick={() => app.nav?.('product', { id: productId })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', overflow: 'hidden', cursor: 'pointer' }}>
               <div style={{ position: 'relative' }}>
                 <ImagePlaceholder label={p.img} height={mob ? 140 : 200} src={p.imgUrl} />
                 <span className="chip chip-green" style={{ position: 'absolute', top: 8, left: 8, fontSize: 10 }}>{p.tag}</span>
@@ -112,11 +115,11 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
                 </div>
                 {!mob && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{useDb
-                      ? (p.review_count > 0 ? `★ ${p.rating} · ${p.review_count}` : 'New listing')
-                      : `★★★★★ 4.${7 + i % 3} · ${120 + i * 14}`}</div>
-                    {(!useDb || p.sellerHandle) && (
-                      <button onClick={(e) => { e.stopPropagation(); app.nav?.('messages', { handle: useDb ? p.sellerHandle : p.brand.toLowerCase().replace(/\s+/g, ''), shop: 1 }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--sky)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
+                      {p.review_count > 0 ? `★ ${p.rating} · ${p.review_count}` : 'New listing'}
+                    </div>
+                    {p.sellerHandle && (
+                      <button onClick={(e) => { e.stopPropagation(); app.nav?.('messages', { handle: p.sellerHandle, shop: 1 }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--sky)', fontWeight: 600, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
                         <Icon name="msg" size={11} /> Ask
                       </button>
                     )}
@@ -127,6 +130,14 @@ export function DesktopMarketplace({ onNav, params }: { onNav: any; params?: Rec
             );
           })}
         </div>
+        {shownProducts.length === 0 && (
+          <div style={{ padding: '48px 20px', textAlign: 'center', background: 'var(--surface)', border: '1px dashed var(--line)', borderRadius: 14, color: 'var(--ink-3)', fontSize: 14, lineHeight: 1.6 }}>
+            {load === 'loading' ? 'Loading products…'
+              : load === 'error' ? "The marketplace couldn't be loaded. Check your connection and try again."
+              : dbProducts.length === 0 ? 'No products are listed yet. Sellers are being onboarded — check back soon.'
+              : `Nothing in ${cat} yet.`}
+          </div>
+        )}
       </main>
     </div>
   );

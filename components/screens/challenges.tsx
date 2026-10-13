@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logTaskImpact, taskImpact } from "@/lib/impact";
 
@@ -13,7 +13,9 @@ const TODAY_TASKS: string[] = [
 export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [dbChallenges, setDbChallenges] = React.useState<any[]>([]);
-  const [dbLoaded, setDbLoaded] = React.useState(false);
+  const [load, setLoad] = React.useState<'loading' | 'ready' | 'error'>('loading');
+  // challenge id -> when this user joined it, for the "Day N of M" line
+  const [joinedAt, setJoinedAt] = React.useState<Record<string, string>>({});
   const [loggedToday, setLoggedToday] = React.useState<Set<string>>(new Set());
 
   const loadToday = React.useCallback(async () => {
@@ -40,22 +42,22 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
     import('@/lib/supabase').then(async ({ supabase }) => {
       const [{ data: challs, error }, { data: joined }] = await Promise.all([
         supabase.from('challenges').select('id, title, description, category, days, reward, participant_count').order('participant_count', { ascending: false }),
-        supabase.from('challenge_participants').select('challenge_id').eq('user_id', app.user.id),
+        supabase.from('challenge_participants').select('challenge_id, joined_at').eq('user_id', app.user.id),
       ]);
-      if (!error && challs && challs.length > 0) {
-        setDbChallenges(challs.map((c: any) => ({
-          id: c.id, title: c.title, joined: `${(c.participant_count ?? 0).toLocaleString()}`,
-          days: c.days, reward: c.reward ?? '', cat: c.category ?? 'General',
-        })));
-        setDbLoaded(true);
-        if (joined) {
-          const joinedSet = new Set(joined.map((j: any) => j.challenge_id));
-          challs.forEach((c: any) => {
-            if (joinedSet.has(c.id) && !app.challenge.has(c.id)) app.challenge.add(c.id);
-          });
-        }
+      if (error) { setLoad('error'); return; }
+      setDbChallenges((challs ?? []).map((c: any) => ({
+        id: c.id, title: c.title, joined: `${(c.participant_count ?? 0).toLocaleString()}`,
+        days: c.days, reward: c.reward ?? '', cat: c.category ?? 'General',
+      })));
+      setLoad('ready');
+      if (joined) {
+        setJoinedAt(Object.fromEntries(joined.map((j: any) => [j.challenge_id, j.joined_at])));
+        const joinedSet = new Set(joined.map((j: any) => j.challenge_id));
+        (challs ?? []).forEach((c: any) => {
+          if (joinedSet.has(c.id) && !app.challenge.has(c.id)) app.challenge.add(c.id);
+        });
       }
-    }).catch(() => {});
+    }).catch(() => setLoad('error'));
   }, [app.user?.id]);
 
   const handleLogTask = (taskName: string) => {
@@ -83,10 +85,23 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
     }
   };
 
-  const allChallenges = dbLoaded ? dbChallenges : MOCK.challenges.concat([
-    { id: 5, title: "Repair, don't replace", joined: '6.2k', days: 30, reward: '180 GP', cat: 'Waste' },
-    { id: 6, title: 'Library card month', joined: '15.4k', days: 30, reward: '90 GP', cat: 'Consume' },
-  ]);
+  const allChallenges = dbChallenges;
+  const activeChallenges = dbChallenges.filter(c => app.challenge?.has(c.id)).map((c, i) => {
+    const since = joinedAt[c.id] ? new Date(joinedAt[c.id]).getTime() : Date.now();
+    const day = Math.min(c.days, Math.max(1, Math.floor((Date.now() - since) / 86_400_000) + 1));
+    return { ...c, day, p: day / Math.max(1, c.days), col: i % 2 ? 'var(--sky)' : 'var(--green)' };
+  });
+
+  const now = new Date();
+  const todayLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  // ISO week number, for the page eyebrow
+  const isoWeek = (() => {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dow = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dow);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  })();
 
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -94,7 +109,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
       <main style={{ flex: 1, padding: '24px 32px', overflow: 'auto', height: '100%' }} className="no-scrollbar">
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CHALLENGES · WEEK 19</div>
+            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CHALLENGES · WEEK {isoWeek}</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Small streaks. Big swings.</h1>
             <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Pick a challenge, log daily, watch your numbers move. Community multipliers stack with personal streaks.</p>
           </div>
@@ -104,7 +119,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
         {/* Today's tasks */}
         <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 22, marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Today · Thursday May 22</h2>
+            <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Today · {todayLabel}</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{loggedToday.size} / {TODAY_TASKS.length} logged</span>
               <div style={{ width: 100, height: 6, background: 'var(--line)', borderRadius: 999 }}>
@@ -144,25 +159,26 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
 
         {/* Active challenges */}
         <h2 className="font-display" style={{ fontSize: 22, fontWeight: 600, margin: '0 0 14px' }}>Active challenges</h2>
+        {activeChallenges.length === 0 ? (
+          <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px dashed var(--line-2)', padding: 20, marginBottom: 24, fontSize: 14, color: 'var(--ink-3)' }}>
+            You haven&apos;t joined a challenge yet. Pick one below to start a streak.
+          </div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 24 }}>
-          {[
-            { t: 'Bike-to-work week', sub: 'Day 4 of 7', p: 0.57, joined: '12.4k', reward: '+120 GP + Cyclist badge', col: 'var(--green)' },
-            { t: '30-day plastic free', sub: 'Day 18 of 30', p: 0.6, joined: '38.2k', reward: '+50 GP /wk · 2× streak', col: 'var(--sky)' },
-          ].map((c, i) => (
-            <div key={i} style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20 }}>
+          {activeChallenges.map((c) => (
+            <div key={c.id} style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: c.col, color: '#fff', display: 'grid', placeItems: 'center' }}>
                   <Icon name="flame" size={22} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>{c.t}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.sub} · {c.joined} joined</div>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>{c.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>Day {c.day} of {c.days} · {c.joined} joined</div>
                 </div>
                 <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={async () => {
-                  app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.t}" streak continues — ${c.sub.toLowerCase()}. Keep it going.` });
+                  app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.title}" streak continues — day ${c.day} of ${c.days}. Keep it going.` });
                   if (app.user?.id) {
-                    const cat = c.col === 'var(--green)' ? 'Transport' : 'Lifestyle';
-                    await logTaskImpact(app.user.id, c.t, cat);
+                    await logTaskImpact(app.user.id, c.title, c.cat);
                     window.dispatchEvent(new Event('honua:impact-logged'));
                   }
                 }}>Log today</button>
@@ -170,10 +186,11 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
               <div style={{ height: 8, background: 'var(--line)', borderRadius: 999, marginBottom: 8 }}>
                 <div style={{ width: (c.p * 100) + '%', height: '100%', background: c.col, borderRadius: 999 }} />
               </div>
-              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Reward at finish: <strong style={{ color: 'var(--ink)' }}>{c.reward}</strong></div>
+              {c.reward && <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Reward at finish: <strong style={{ color: 'var(--ink)' }}>{c.reward}</strong></div>}
             </div>
           ))}
         </div>
+        )}
 
         {/* Browse challenges */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -202,6 +219,13 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
             );
           })}
         </div>
+        {allChallenges.length === 0 && (
+          <div style={{ padding: '28px 0', textAlign: 'center', fontSize: 14, color: 'var(--ink-3)' }}>
+            {load === 'loading' ? 'Loading challenges…'
+              : load === 'error' ? 'Challenges could not be loaded. Try again in a moment.'
+              : 'No challenges yet. Start one with “Create challenge”.'}
+          </div>
+        )}
       </main>
     </div>
   );

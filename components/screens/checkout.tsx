@@ -90,7 +90,11 @@ function getStripePromise(publishableKey: string) {
 // Stable, module-level payment form. It MUST NOT be redefined on each render —
 // otherwise React remounts the PaymentElement and confirmPayment can't find its
 // mounted Element ("could not retrieve data from the specified Element").
-function StripePaymentForm({ total, onSuccess }: { total: number; onSuccess: () => void }) {
+// What the payment forms need from the contact/shipping fields at the moment
+// "Pay" is pressed: either the details Stripe should record, or why not yet.
+type PayDetails = { error: string } | { error?: undefined; email: string; shipping: any };
+
+function StripePaymentForm({ total, onSuccess, getDetails }: { total: number; onSuccess: () => void; getDetails: () => PayDetails }) {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = React.useState(false);
@@ -100,12 +104,20 @@ function StripePaymentForm({ total, onSuccess }: { total: number; onSuccess: () 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stripe || !elements) return;
+    const details = getDetails();
+    if (!('email' in details)) { setError(details.error); return; }
     setLoading(true);
     setError('');
     const { error: stripeError } = await stripe.confirmPayment({
       elements,
-      // Stripe appends ?payment_intent=…&redirect_status=succeeded|failed on return
-      confirmParams: { return_url: window.location.origin + '/checkout' },
+      confirmParams: {
+        // Stripe appends ?payment_intent=…&redirect_status=succeeded|failed on return
+        return_url: window.location.origin + '/checkout',
+        // Recorded on the PaymentIntent, which is where the webhook reads them
+        // from when it creates the order — the browser no longer writes it.
+        receipt_email: details.email,
+        shipping: details.shipping,
+      },
       redirect: 'if_required',
     });
     if (stripeError) {
@@ -136,11 +148,11 @@ function StripePaymentForm({ total, onSuccess }: { total: number; onSuccess: () 
 }
 
 // ---- Stripe-aware payment section ----
-function StripeCheckout({ clientSecret, publishableKey, total, onSuccess }: { clientSecret: string; publishableKey: string; total: number; onSuccess: () => void }) {
+function StripeCheckout({ clientSecret, publishableKey, total, onSuccess, getDetails }: { clientSecret: string; publishableKey: string; total: number; onSuccess: () => void; getDetails: () => PayDetails }) {
   const stripePromise = React.useMemo(() => getStripePromise(publishableKey), [publishableKey]);
   return (
     <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#22c55e', borderRadius: '10px', fontFamily: 'Satoshi, sans-serif' } } }}>
-      <StripePaymentForm total={total} onSuccess={onSuccess} />
+      <StripePaymentForm total={total} onSuccess={onSuccess} getDetails={getDetails} />
     </Elements>
   );
 }
@@ -357,7 +369,12 @@ export function DesktopCheckout() {
   const router = useRouter();
   const { cart = [], clearCart } = app;
   const [clientSecret, setClientSecret] = React.useState<string | null>(null);
-  const [stripeMode, setStripeMode] = React.useState<'loading' | 'live' | 'mock'>('loading');
+  const [stripeMode, setStripeMode] = React.useState<'loading' | 'live' | 'mock' | 'signin' | 'error'>('loading');
+  const [startError, setStartError] = React.useState('');
+  // The server's priced quote. Once it arrives it is the only source for what
+  // the buyer sees as the total, because it is the amount that gets charged.
+  const [quote, setQuote] = React.useState<{ orderId: string; items: any[]; subtotal: number; shipping: number; total: number } | null>(null);
+  const [attempt, setAttempt] = React.useState(0);
   const [orderSnapshot, setOrderSnapshot] = React.useState<{ id: string; total: number; itemCount: number; items: any[]; address: any } | null>(null);
   const [showOrderModal, setShowOrderModal] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
@@ -377,6 +394,9 @@ export function DesktopCheckout() {
   const [city, setCity] = React.useState('');
   const [zip, setZip] = React.useState('');
   const [country, setCountry] = React.useState('United States');
+  // ISO code for Stripe, which rejects free-text country names. Filled from the
+  // address lookup; null means "leave it off" rather than guess.
+  const [countryCode, setCountryCode] = React.useState<string | null>('US');
   const [streetFocused, setStreetFocused] = React.useState(false);
   const addressSuggestions = useAddressAutocomplete(street);
   const showSuggestions = streetFocused && addressSuggestions.length > 0;
@@ -388,48 +408,86 @@ export function DesktopCheckout() {
     setCity(a.city || a.town || a.village || a.county || '');
     setZip(a.postcode || '');
     setCountry(a.country || '');
+    setCountryCode(a.country_code ? a.country_code.toUpperCase() : null);
     setStreetFocused(false);
   };
 
-  const subtotal = cart.reduce((s: number, i: any) => s + parseCents(i.price) * (i.quantity || 1), 0) / 100;
-  const shipping = subtotal > 0 ? (subtotal >= 75 ? 0 : 5.99) : 0;
-  const total = subtotal + shipping;
-  const itemCount = cart.reduce((n: number, i: any) => n + (i.quantity || 1), 0);
+  // Cart-based estimate until the server's quote lands; the quote wins after.
+  const estSubtotal = cart.reduce((s: number, i: any) => s + parseCents(i.price) * (i.quantity || 1), 0) / 100;
+  const estShipping = estSubtotal > 0 ? (estSubtotal >= 75 ? 0 : 5.99) : 0;
+  const lineItems: any[] = quote?.items ?? cart;
+  const subtotal = quote?.subtotal ?? estSubtotal;
+  const shipping = quote?.shipping ?? estShipping;
+  const total = quote?.total ?? estSubtotal + estShipping;
+  const itemCount = lineItems.reduce((n: number, i: any) => n + (i.quantity || 1), 0);
 
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
-  // Generate the order id up front so it can ride along in the payment intent
-  // metadata — the webhook uses it to mark this exact order paid server-side.
-  const orderIdRef = React.useRef('ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase());
-  const paymentIntentIdRef = React.useRef<string | null>(null);
+  // Mock mode only: there is no server quote, so the id is made up locally.
+  const mockOrderIdRef = React.useRef('ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase());
 
+  // Ask the server to price the cart. Only ids and quantities go up — the
+  // server reads prices from the catalogue and the webhook creates the order
+  // once Stripe confirms that exact amount (see app/api/checkout/route.ts).
   React.useEffect(() => {
-    if (cart.length === 0) { setStripeMode('mock'); return; }
-    fetch('/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: cart, orderId: orderIdRef.current }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (data.clientSecret && publishableKey) {
+    if (cart.length === 0) return;
+    let cancelled = false;
+    setStripeMode('loading');
+    setStartError('');
+    (async () => {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ items: cart.map((i: any) => ({ id: i.id, quantity: i.quantity || 1 })) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data.clientSecret && publishableKey) {
           setClientSecret(data.clientSecret);
-          paymentIntentIdRef.current = data.paymentIntentId ?? null;
+          setQuote({ orderId: data.orderId, items: data.items, subtotal: data.subtotal, shipping: data.shipping, total: data.total });
           setStripeMode('live');
-        } else {
+        } else if (data.error === 'stripe_not_configured' || (res.ok && !publishableKey)) {
+          // Local development without Stripe keys: simulate, record nothing.
           setStripeMode('mock');
+        } else if (res.status === 401) {
+          setStripeMode('signin');
+        } else {
+          setStartError(data.message || 'We could not start checkout. Please try again.');
+          setStripeMode('error');
         }
-      })
-      .catch(() => setStripeMode('mock'));
-  }, []);
+      } catch {
+        if (!cancelled) { setStartError('We could not reach the server. Check your connection and try again.'); setStripeMode('error'); }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
+
+  const getDetails = (): PayDetails => {
+    const name = [firstName, lastName].map(v => v.trim()).filter(Boolean).join(' ');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return { error: 'Enter the email address for your receipt.' };
+    if (!name || !street.trim() || !city.trim()) return { error: 'Enter your name and shipping address.' };
+    return {
+      email: email.trim(),
+      shipping: {
+        name,
+        address: {
+          line1: street.trim(), city: city.trim(), postal_code: zip.trim() || undefined,
+          ...(countryCode ? { country: countryCode } : {}),
+        },
+      },
+    };
+  };
 
   const [paymentFailed, setPaymentFailed] = React.useState(false);
 
   const buildSnapshot = () => ({
-    orderId: orderIdRef.current,
-    items: [...cart], subtotal, shipping, total, itemCount,
+    orderId: quote?.orderId ?? mockOrderIdRef.current,
+    items: [...lineItems], subtotal, shipping, total, itemCount,
     address: { firstName, lastName, street, city, zip, country, email }, email,
-    paymentIntentId: paymentIntentIdRef.current, userId: app.user?.id ?? null,
   });
 
   // Persist a pending-order snapshot so a redirect-based payment (3D Secure)
@@ -438,28 +496,21 @@ export function DesktopCheckout() {
     if (!cart.length) return;
     try { localStorage.setItem('honua_pending_checkout', JSON.stringify(buildSnapshot())); } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, firstName, lastName, street, city, zip, country, email, subtotal, shipping, total]);
+  }, [cart, quote, firstName, lastName, street, city, zip, country, email, subtotal, shipping, total]);
 
-  const finalize = (snap: any, paid: boolean) => {
+  // Shows the confirmation. Deliberately writes no order to the database: the
+  // Stripe webhook does that from the server's quote once the payment clears,
+  // so nothing the browser does here can mark anything paid.
+  const finalize = (snap: any) => {
     const address = snap.address;
     saveOrder({ id: snap.orderId, total: snap.total, itemCount: snap.itemCount, items: snap.items, address, subtotal: snap.subtotal, shipping: snap.shipping, createdAt: new Date().toISOString(), status: 'processing' });
-    if (snap.userId) {
-      import('@/lib/market')
-        .then(({ createDbOrder }) => createDbOrder(snap.userId, {
-          id: snap.orderId, items: snap.items, subtotal: snap.subtotal, shipping: snap.shipping, total: snap.total, email: snap.email, address,
-          paymentIntentId: snap.paymentIntentId, paymentStatus: paid ? 'paid' : 'unpaid',
-        }))
-        .catch(() => {});
-    }
     setOrderSnapshot({ id: snap.orderId, total: snap.total, itemCount: snap.itemCount, items: snap.items, address });
     clearCart?.();
     setSuccess(true);
     try { localStorage.removeItem('honua_pending_checkout'); } catch {}
   };
 
-  // Live Stripe mode: the client already saw payment succeed; the webhook is
-  // the authoritative confirmation (and covers closed tabs).
-  const handleSuccess = () => finalize(buildSnapshot(), stripeMode === 'live');
+  const handleSuccess = () => finalize(buildSnapshot());
 
   // Handle return from a redirect-based payment (e.g. 3D Secure). Stripe appends
   // ?redirect_status=succeeded|failed to the return_url.
@@ -471,7 +522,7 @@ export function DesktopCheckout() {
     if (status === 'succeeded') {
       try {
         const snap = JSON.parse(localStorage.getItem('honua_pending_checkout') || 'null');
-        if (snap) finalize(snap, true);
+        if (snap) finalize(snap);
       } catch {}
     } else {
       // failed / canceled — card wasn't charged
@@ -582,7 +633,7 @@ export function DesktopCheckout() {
                 <input className="fld" placeholder="City" style={{ gridColumn: '1 / 3' }} value={city} onChange={e => setCity(e.target.value)} />
                 <input className="fld" placeholder="ZIP" value={zip} onChange={e => setZip(e.target.value)} />
               </div>
-              <input className="fld" placeholder="Country" value={country} onChange={e => setCountry(e.target.value)} />
+              <input className="fld" placeholder="Country" value={country} onChange={e => { setCountry(e.target.value); setCountryCode(/^united states$|^usa?$/i.test(e.target.value.trim()) ? 'US' : null); }} />
             </div>
           </div>
 
@@ -595,7 +646,19 @@ export function DesktopCheckout() {
               </div>
             )}
             {stripeMode === 'live' && clientSecret && (
-              <StripeCheckout clientSecret={clientSecret} publishableKey={publishableKey} total={total} onSuccess={handleSuccess} />
+              <StripeCheckout clientSecret={clientSecret} publishableKey={publishableKey} total={total} onSuccess={handleSuccess} getDetails={getDetails} />
+            )}
+            {stripeMode === 'signin' && (
+              <div style={{ padding: '18px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--bg-2)', display: 'grid', gap: 12 }}>
+                <div style={{ fontSize: 14, color: 'var(--ink-2)' }}>Sign in to finish your purchase — the order is saved to your account so you can track it.</div>
+                <button className="btn btn-primary" onClick={() => router.push('/login')} style={{ justifyContent: 'center', padding: '13px' }}>Sign in to continue</button>
+              </div>
+            )}
+            {stripeMode === 'error' && (
+              <div style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(220,38,38,.08)', border: '1px solid rgba(220,38,38,.2)', display: 'grid', gap: 10 }}>
+                <div style={{ fontSize: 13.5, color: '#dc2626' }}>{startError}</div>
+                <button className="btn btn-ghost" onClick={() => setAttempt(a => a + 1)} style={{ justifySelf: 'start', padding: '9px 16px' }}>Try again</button>
+              </div>
             )}
             {stripeMode === 'mock' && (
               <MockPaymentForm total={total} onSuccess={handleSuccess} />
@@ -609,7 +672,7 @@ export function DesktopCheckout() {
 
           {/* Items */}
           <div style={{ display: 'grid', gap: 14, marginBottom: 18 }}>
-            {cart.map((item: any) => {
+            {lineItems.map((item: any) => {
               const key = item.id || item.name;
               const qty = item.quantity || 1;
               const lineTotal = parseCents(item.price) * qty / 100;

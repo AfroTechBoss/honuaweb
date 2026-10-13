@@ -1,31 +1,6 @@
 "use client";
 import React from "react";
 import { Icon, Avatar, ImagePlaceholder, useApp, DesktopSidebar } from "@/components/shared";
-import { MOCK } from "@/components/post-card";
-import { MOCK_SELLER } from "@/components/seller-data";
-
-const SELLER_IMGS: Record<string, string> = {
-  p1: '1558618666-fcd25c85cd64',
-  p2: '1527799820374-087123a265e2',
-  p3: '1558618666-fcd25c85cd64',
-  p4: '1481627834876-b7833e8f5459',
-};
-
-const PRODUCT_DESCRIPTIONS: Record<string, string> = {
-  'Refillable shampoo bar': 'A concentrated, plastic-free shampoo bar that lasts up to 80 washes. Made with cold-pressed coconut oil and botanical extracts. Comes in a compostable kraft paper wrapper. Works on all hair types and leaves zero residue.',
-  'Solar phone charger': 'Dual USB solar panel with a 10,000 mAh battery pack. Charges a smartphone twice from a single day of sunlight. Rugged, water-resistant casing built for the outdoors. No grid electricity needed.',
-  'Bamboo cutlery set': 'A compact roll of five utensils — fork, knife, spoon, chopsticks, and straw — carved from FSC-certified bamboo. The canvas carry roll is made from organic cotton. Fits in any bag or lunch box.',
-  'Reusable produce bags': 'Set of nine fine-mesh bags in three sizes. Made from GOTS-certified organic cotton. Tare weight marked on each bag. Machine washable. Replaces hundreds of single-use plastic produce bags.',
-  'Wool insulation panel': 'Natural sheep\'s wool insulation with zero synthetic binders. Effective from -20°C to +60°C. Fire-resistant without chemical treatment. Fully biodegradable at end of life. R-value: R-13 per 3.5-inch panel.',
-  'Compost starter kit': 'Everything to get a worm bin running in a weekend: 500g of red wrigglers, a coco coir block, a moisture meter, and a 24-page guide. Works indoors in a standard kitchen cabinet or under a sink.',
-};
-
-const SELLER_DESCRIPTIONS: Record<string, string> = {
-  p1: 'Ninety-two quality tools in a full-grain leather roll. Designed for repair-not-replace thinking: every tool is serviceable, replaceable, and sourced from European workshops with living wages. The most-gifted product in the Honua marketplace.',
-  p2: 'A solid brass darning mushroom turned by a family workshop in Portugal. Weighted for stability. The ergonomic handle reduces hand fatigue for long mending sessions. Brass naturally develops a warm patina over time.',
-  p3: 'Sixteen functions machined from 420-grade stainless steel. Includes chain tool, spoke key, and two tyre levers. Fits in a jersey pocket. Backed by The Fix-it Collective\'s lifetime repair guarantee.',
-  p4: 'A forty-eight-page zine covering everything you need to run your own repair café: venue setup, tool lists, facilitator scripts, and liability notes. Print-ready PDF, delivered instantly.',
-};
 
 const ECO_DETAILS: Record<string, { icon: string; label: string }[]> = {
   'Plastic-free': [{ icon: 'leaf', label: 'Zero plastic packaging' }, { icon: 'bolt', label: 'Biodegradable ingredients' }],
@@ -34,43 +9,9 @@ const ECO_DETAILS: Record<string, { icon: string; label: string }[]> = {
   'Zero-waste': [{ icon: 'leaf', label: 'No single-use plastic' }, { icon: 'bolt', label: 'Reusable for life' }],
   'Carbon-neg': [{ icon: 'bolt', label: 'Negative carbon footprint' }, { icon: 'leaf', label: 'Natural material' }],
   'Soil': [{ icon: 'leaf', label: 'Rebuilds living soil' }, { icon: 'bolt', label: 'Zero synthetics' }],
-  'Repairable': [{ icon: 'bolt', label: 'Designed to be repaired' }, { icon: 'leaf', label: 'European made' }],
+  'Repairable': [{ icon: 'bolt', label: 'Designed to be repaired' }, { icon: 'leaf', label: 'Built to last' }],
   'Digital': [{ icon: 'bolt', label: 'Instant delivery' }, { icon: 'leaf', label: 'Zero shipping emissions' }],
 };
-
-// ─── Combined product catalog ────────────────────────────────────────────────
-export const ALL_PRODUCTS = [
-  ...MOCK.products.map((p, i) => ({
-    id: `m${i + 1}`,
-    title: p.name,
-    price: parseFloat(p.price.replace('$', '')),
-    brand: p.brand,
-    tag: p.tag,
-    imgUrl: p.imgUrl,
-    img: p.img,
-    category: 'Sustainable Living',
-    seller: { name: p.brand, handle: p.brand.toLowerCase().replace(/\s+/g, ''), rating: 4.7 + (i * 0.04 % 0.3), reviews: 120 + i * 28 },
-    description: PRODUCT_DESCRIPTIONS[p.name] || `${p.name} from ${p.brand}. Sustainably made with planet-friendly materials.`,
-    eco: ECO_DETAILS[p.tag] || [],
-    inStock: true,
-    stock: 40 + i * 7,
-  })),
-  ...MOCK_SELLER.products.filter(p => p.status === 'active').map(p => ({
-    id: p.id,
-    title: p.title,
-    price: p.price,
-    brand: MOCK_SELLER.shop.name,
-    tag: p.tag,
-    imgUrl: `https://images.unsplash.com/photo-${SELLER_IMGS[p.id] || '1558618666-fcd25c85cd64'}?w=800&q=80`,
-    img: p.img,
-    category: p.category,
-    seller: { name: MOCK_SELLER.shop.name, handle: MOCK_SELLER.shop.handle, rating: MOCK_SELLER.shop.rating, reviews: MOCK_SELLER.shop.reviews },
-    description: SELLER_DESCRIPTIONS[p.id] || p.title,
-    eco: ECO_DETAILS[p.tag] || [],
-    inStock: p.stock === null || p.stock > 0,
-    stock: p.stock,
-  })),
-];
 
 // ─── Load / save reviews ─────────────────────────────────────────────────────
 function loadReviews() {
@@ -283,8 +224,9 @@ function ReportListing({ product }: { product: any }) {
 // ─── Product detail page ─────────────────────────────────────────────────────
 export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any }) {
   const app = useApp();
+  // Only real listings have a page. Ids that are not uuids came from the old
+  // demo catalogue (m1, p1, …) and now land on "Product not found".
   const isDbId = /^[0-9a-f-]{36}$/.test(String(id));
-  const mockProduct = ALL_PRODUCTS.find(p => p.id === id);
   const [dbProduct, setDbProduct] = React.useState<any>(null);
   const [dbRelated, setDbRelated] = React.useState<any[]>([]);
   const [dbLoading, setDbLoading] = React.useState(isDbId);
@@ -309,7 +251,9 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
           seller: { name: p.sellerShopName || p.sellerName || p.brand, handle: p.sellerHandle || null, shopHandle: p.sellerShopHandle || null, logo: p.sellerLogo || null, rating: p.rating, reviews: p.review_count, id: p.sellerId || null },
           description: p.description || `${p.name} from ${p.brand}. Sustainably made with planet-friendly materials.`,
           eco: ECO_DETAILS[p.tag] || [],
-          inStock: true, stock: 40,
+          // Real stock, not a made-up "40 in stock". null means untracked.
+          inStock: p.status === 'live' && (p.stock == null || p.stock > 0),
+          stock: p.stock,
         });
       }
       setDbLoading(false);
@@ -341,7 +285,7 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
     return () => { alive = false; };
   }, [isDbId, dbProduct?.id, dbProduct?.tag, dbProduct?.brand]);
 
-  const product = mockProduct ?? dbProduct;
+  const product = dbProduct;
 
   React.useEffect(() => {
     if (!product) return;
@@ -403,12 +347,8 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
     );
   };
 
-  // Real listings share a tag or a brand with this one. The demo catalogue is
-  // only consulted for the seeded "m1"-style ids the marketplace hands out when
-  // the products table is empty — a real product must never suggest a fake one.
-  const relatedProducts = isDbId
-    ? dbRelated
-    : ALL_PRODUCTS.filter(p => p.id !== product.id && (p.tag === product.tag || p.brand === product.brand)).slice(0, 4);
+  // Real listings that share a tag or a brand with this one.
+  const relatedProducts = dbRelated;
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)', overflow: 'hidden' }}>

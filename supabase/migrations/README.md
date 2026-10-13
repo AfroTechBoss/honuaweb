@@ -46,15 +46,29 @@ Stripe (optional — checkout runs in mock mode without these):
 STRIPE_SECRET_KEY=sk_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_...
 STRIPE_WEBHOOK_SECRET=whsec_...          # for /api/stripe/webhook
-SUPABASE_SERVICE_ROLE_KEY=...            # webhook writes order payment status
+SUPABASE_SERVICE_ROLE_KEY=...            # checkout prices carts; webhook creates orders
 ```
 
 Stripe webhook endpoint (Stripe Dashboard → Developers → Webhooks):
 
 ```
 URL:    https://<your-domain>/api/stripe/webhook
-events: payment_intent.succeeded, payment_intent.payment_failed
+events: payment_intent.succeeded, payment_intent.payment_failed, transfer.reversed
 ```
+
+Since migration 048 the webhook is the only thing that creates orders: an order
+appears only after Stripe reports a captured amount equal to the server's quote.
+Without a working webhook, buyers are charged and no order is recorded.
+
+Since migration 049 the same webhook retires carbon credits: a retirement is
+recorded only after the payment matches the server's quote, and a payment that
+can no longer be honoured (credit sold out, changed or removed) is refunded
+automatically. Apply 049 after 048.
+
+Migration 050 removes the invented numbers from the early seeds: community and
+challenge counts are reset to real row counts, the seven seller-less demo
+products are taken down (status `removed`, order history kept), and every
+product's rating is recomputed from real reviews. It is safe to re-run.
 
 ## Granting yourself admin
 

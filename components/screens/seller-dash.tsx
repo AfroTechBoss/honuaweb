@@ -18,15 +18,6 @@ const SELLER_TABS = [
   ['storefront','Storefront', 'settings'],
 ];
 
-// Signed-out preview only. A signed-in seller sees their real history — including
-// an empty one, which used to be papered over with these four rows.
-const MOCK_PAYOUT_HISTORY = [
-  { id: 'pw-s001', amount: 820.00, destination: 'GTBank ••4521', requestedAt: '2 days ago', status: 'approved' },
-  { id: 'pw-s002', amount: 1540.00, destination: 'GTBank ••4521', requestedAt: '2 weeks ago', status: 'approved' },
-  { id: 'pw-s003', amount: 290.00, destination: 'GTBank ••4521', requestedAt: '1 month ago', status: 'rejected', rejectReason: 'Open dispute pending resolution.' },
-  { id: 'pw-s004', amount: 600.00, destination: 'GTBank ••4521', requestedAt: '6 weeks ago', status: 'approved' },
-];
-
 // The Supabase session token, for the seller-facing payout-method route. Read at
 // call time rather than held in state — it rotates.
 async function sellerToken(): Promise<string | null> {
@@ -38,13 +29,13 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
   const app = useApp();
   const approved = app.state?.sellerStatus === 'approved';
   const [tab, setTab] = React.useState('overview');
-  // Real mode: signed-in sellers manage actual marketplace listings
+  // /seller is behind sign-in, so there is no signed-out demo any more. It used
+  // to seed products, orders, payouts and the shop header from MOCK_SELLER —
+  // and because sellerStatus is cached in localStorage, a real seller saw that
+  // invented shop for a moment on every load before their own rows arrived.
   const dbMode = !!app.user?.id;
-  // A signed-in seller starts empty and fills from Supabase. Seeding with the
-  // demo rows meant a real shop flashed someone else's products and orders
-  // before the fetch landed — and kept showing them if the shop was new.
-  const [products, setProducts] = React.useState<any[]>(dbMode ? [] : MOCK_SELLER.products);
-  const [orders, setOrders] = React.useState<any[]>(dbMode ? [] : MOCK_SELLER.orders);
+  const [products, setProducts] = React.useState<any[]>([]);
+  const [orders, setOrders] = React.useState<any[]>([]);
   const [editing, setEditing] = React.useState(null); // product being edited / 'new'
 
   const reloadProducts = React.useCallback(async () => {
@@ -60,19 +51,25 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
     setOrders(await getSellerOrders(app.user.id));
   }, [app.user?.id]);
 
-  // Shop identity (logo + handle) for the header + storefront link
-  const [shopLogo, setShopLogo] = React.useState<string | null>(null);
-  const [shopHandle, setShopHandle] = React.useState<string | null>(null);
+  // Shop identity for the header, storefront link and Storefront tab — the
+  // seller's own application row.
+  const [shopDetails, setShopDetails] = React.useState<any>(null);
+  const shopLogo = shopDetails?.logo ?? null;
+  const shopHandle = shopDetails?.handle ?? null;
   React.useEffect(() => {
     if (!app.user?.id) return;
-    import('@/lib/market').then(({ getShopForOwner }) => getShopForOwner(app.user.id)).then(shop => {
-      if (shop?.logo) setShopLogo(shop.logo);
-      if (shop?.handle) setShopHandle(shop.handle);
-    }).catch(() => {});
+    import('@/lib/market').then(({ getMyShopDetails }) => getMyShopDetails(app.user.id)).then(setShopDetails).catch(() => {});
   }, [app.user?.id]);
 
-  // Real payout balance + history (null = demo mode, so the mock still renders
-  // for a signed-out preview; an empty array is a real seller with no payouts).
+  // Shop rating from real product_reviews across this seller's listings.
+  const [rating, setRating] = React.useState<{ avg: number; count: number } | null>(null);
+  const productIds = React.useMemo(() => products.map((p: any) => p.id).filter(Boolean).join(','), [products]);
+  React.useEffect(() => {
+    if (!productIds) { setRating(null); return; }
+    import('@/lib/market').then(({ getShopRating }) => getShopRating(productIds.split(','))).then(setRating).catch(() => {});
+  }, [productIds]);
+
+  // Real payout balance + history (null = still loading, [] = no payouts yet).
   const [balance, setBalance] = React.useState<any>(null);
   const [payouts, setPayouts] = React.useState<any[] | null>(null);
   const reloadPayouts = React.useCallback(async () => {
@@ -144,7 +141,14 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
 
   if (!approved) return <DashGate onNav={onNav} status={app.state?.sellerStatus} />;
 
-  const shop = app.state?.sellerShop?.name ? { ...MOCK_SELLER.shop, name: app.state.sellerShop.name, handle: app.state.sellerShop.handle || MOCK_SELLER.shop.handle } : MOCK_SELLER.shop;
+  const shop = {
+    name: shopDetails?.name || app.state?.sellerShop?.name || 'Your shop',
+    handle: shopDetails?.handle || app.state?.sellerShop?.handle || '',
+    tagline: shopDetails?.tagline ?? app.state?.sellerShop?.tagline ?? '',
+    location: shopDetails?.location ?? '',
+    categories: shopDetails?.categories ?? [],
+    joined: shopDetails?.createdAt ? new Date(shopDetails.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : '',
+  };
 
   const saveProduct = async (p) => {
     if (dbMode) {
@@ -204,9 +208,11 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <h1 className="font-display" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>{shop.name}</h1>
-                <span className="verified-impact">verified · {shop.impactScore} impact</span>
+                <span className="verified-impact">verified shop</span>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>honua.green/shop/{shop.handle} · ★ {shop.rating} ({shop.reviews})</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
+                {shop.handle ? `honua.green/shop/${shop.handle} · ` : ''}{rating && rating.count > 0 ? `★ ${rating.avg.toFixed(1)} (${rating.count})` : 'no reviews yet'}
+              </div>
             </div>
             <button className="btn btn-ghost" onClick={() => shopHandle ? onNav?.('shop', { handle: shopHandle }) : onNav?.('marketplace')} style={{ padding: '8px 14px' }}>View storefront <Icon name="arrow" size={14} /></button>
             <button className="btn btn-green" onClick={() => setEditing('new')} style={{ padding: '8px 16px' }}><Icon name="plus" size={15} stroke={2.4} /> Add product</button>
@@ -227,14 +233,14 @@ export function DesktopSellerDashboard({ onNav, params }: { onNav: any; params?:
 
         {/* Tab body */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }} className="no-scrollbar">
-          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} balance={balance} onRequest={reloadPayouts} method={primaryMethod} demo={!dbMode} />}
+          {tab === 'overview'  && <OverviewTab products={productsView} orders={orders} onTab={setTab} balance={balance} onRequest={reloadPayouts} method={primaryMethod} />}
           {tab === 'products'  && <ProductsTab products={productsView} onEdit={setEditing} onRemove={removeProduct} onToggle={toggleProduct} />}
           {tab === 'orders'    && <OrdersTab orders={orders} onAdvance={advanceOrder} />}
-          {tab === 'analytics' && <AnalyticsTab products={productsView} orders={orders} demo={!dbMode} />}
+          {tab === 'analytics' && <AnalyticsTab products={productsView} orders={orders} />}
           {tab === 'customers' && <CustomersTab orders={orders} onNav={onNav} />}
           {tab === 'messages'  && <MessagesTab />}
           {tab === 'payouts'   && <PayoutsTab orders={orders} balance={balance} payouts={payouts} onRequest={reloadPayouts} methods={methods} methodsReady={methodsReady} onMethods={reloadMethods} />}
-          {tab === 'storefront'&& <StorefrontTab shop={shop} />}
+          {tab === 'storefront'&& <StorefrontTab shop={shop} rating={rating} />}
         </div>
       </main>
 
@@ -263,7 +269,7 @@ function DashGate({ onNav, status }) {
 }
 
 // Daily buckets for the last `days` days from real order rows.
-// Returns null when the rows aren't DB-backed (demo mode keeps its mock chart).
+// Returns null when there are no dated orders yet.
 function dailySeries(orders: any[], value: (o: any) => number, days = 30): number[] | null {
   if (!orders.some((o: any) => o._db && o.createdAt)) return null;
   const buckets = new Array(days).fill(0);
@@ -280,10 +286,10 @@ const revenueSeries = (orders: any[]) => dailySeries(orders, o => o.total);
 // =====================================================================
 // Overview tab
 // =====================================================================
-function OverviewTab({ products, orders, onTab, balance, onRequest, method, demo = false }) {
+function OverviewTab({ products, orders, onTab, balance, onRequest, method }) {
   const app = useApp();
-  // A real seller with no sales yet gets a flat line, not the demo's revenue.
-  const chartSeries = revenueSeries(orders) ?? (demo ? MOCK_SELLER.revenueSeries : new Array(30).fill(0));
+  // A seller with no sales yet gets a flat line.
+  const chartSeries = revenueSeries(orders) ?? new Array(30).fill(0);
   const realSeries = revenueSeries(orders);
   const confirmed = orders.filter(o => ['confirmed', 'shipped', 'delivered'].includes(o.status)).reduce((s, o) => s + o.total, 0);
   const pending = balance ? balance.pendingClear : orders.filter(o => o.status === 'processing').reduce((s, o) => s + o.total, 0);
@@ -563,18 +569,14 @@ function OrdersTab({ orders, onAdvance }) {
 // =====================================================================
 // Analytics tab
 // =====================================================================
-function AnalyticsTab({ products, orders = [], demo = false }: { products: any[]; orders?: any[]; demo?: boolean }) {
-  const realSeries = revenueSeries(orders);
-  // Signed in means real, even with nothing sold yet — a new shop should read
-  // zeroes, not the demo's 6.8% add-to-cart rate.
-  const isReal = !demo;
+function AnalyticsTab({ products, orders = [] }: { products: any[]; orders?: any[] }) {
+  // Everything here comes from the seller's order items. A new shop reads
+  // zeroes — there used to be a demo branch with a hardcoded 6.8% add-to-cart
+  // rate and 34% repeat buyers.
   const zeros = React.useMemo(() => new Array(30).fill(0), []);
-  const revChart = realSeries ?? (demo ? MOCK_SELLER.revenueSeries : zeros);
-  const unitChart = isReal ? (dailySeries(orders, (o: any) => o.qty ?? 1) ?? zeros) : MOCK_SELLER.viewsSeries;
+  const revChart = revenueSeries(orders) ?? zeros;
+  const unitChart = dailySeries(orders, (o: any) => o.qty ?? 1) ?? zeros;
   const nonCancelled = orders.filter((o: any) => o.status !== 'cancelled');
-  const totalViews = products.reduce((s, p) => s + p.views, 0);
-  const totalSales = products.reduce((s, p) => s + p.sales, 0);
-  const conv = totalViews > 0 ? ((totalSales / totalViews) * 100).toFixed(1) : '0.0';
 
   // Real metrics computed from actual order items
   const realRevenue = nonCancelled.reduce((s: number, o: any) => s + o.total, 0);
@@ -587,32 +589,21 @@ function AnalyticsTab({ products, orders = [], demo = false }: { products: any[]
     : null;
   const avgOrder = nonCancelled.length > 0 ? realRevenue / nonCancelled.length : 0;
 
-  // Product performance: real mode ranks by units sold; demo ranks by views
-  const perfKey = isReal ? 'sales' : 'views';
+  // Product performance, ranked by units sold
+  const perfKey = 'sales';
   const perfTotal = Math.max(1, products.reduce((s, p) => s + (p[perfKey] ?? 0), 0));
 
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        {isReal ? (
-          <>
-            <SStat label="Revenue · 30d" value={sMoney(revChart.reduce((a, b) => a + b, 0), 0)} icon="coin" sub="from real orders" />
-            <SStat label="Units sold" value={realUnits.toLocaleString()} icon="cart" accent="var(--sky)" sub="all time" />
-            <SStat label="Avg order value" value={sMoney(avgOrder, 0)} icon="bolt" accent="var(--sun)" sub={`${nonCancelled.length} order${nonCancelled.length === 1 ? '' : 's'}`} />
-            <SStat label="Unique buyers" value={String(uniqueBuyers)} icon="users" sub={repeatBuyers != null ? `${repeatBuyers}% repeat` : ''} />
-          </>
-        ) : (
-          <>
-            <SStat label="Storefront views" value={totalViews.toLocaleString()} icon="leaf" trend={14} sub="30d" />
-            <SStat label="Add-to-cart rate" value="6.8%" icon="cart" trend={3} accent="var(--sky)" />
-            <SStat label="Conversion" value={conv + '%'} icon="bolt" trend={1.2} accent="var(--sun)" />
-            <SStat label="Repeat buyers" value="34%" icon="users" trend={5} />
-          </>
-        )}
+          <SStat label="Revenue · 30d" value={sMoney(revChart.reduce((a, b) => a + b, 0), 0)} icon="coin" sub="from real orders" />
+          <SStat label="Units sold" value={realUnits.toLocaleString()} icon="cart" accent="var(--sky)" sub="all time" />
+          <SStat label="Avg order value" value={sMoney(avgOrder, 0)} icon="bolt" accent="var(--sun)" sub={`${nonCancelled.length} order${nonCancelled.length === 1 ? '' : 's'}`} />
+          <SStat label="Unique buyers" value={String(uniqueBuyers)} icon="users" sub={repeatBuyers != null ? `${repeatBuyers}% repeat` : ''} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>{isReal ? 'Units sold · 30 days' : 'Views · 30 days'}</span>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Units sold · 30 days</span>
           <div style={{ marginTop: 14 }}><SSpark data={unitChart} color="var(--sky)" w={460} h={110} /></div>
         </div>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20 }}>
@@ -622,7 +613,7 @@ function AnalyticsTab({ products, orders = [], demo = false }: { products: any[]
       </div>
       {/* Product performance */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 20, marginTop: 16 }}>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Product performance {isReal && <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginLeft: 6 }}>BY UNITS SOLD</span>}</span>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Product performance <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginLeft: 6 }}>BY UNITS SOLD</span></span>
         <div style={{ marginTop: 14, display: 'grid', gap: 12 }}>
           {[...products].sort((a, b) => (b[perfKey] ?? 0) - (a[perfKey] ?? 0)).map(p => {
             const pct = Math.round(((p[perfKey] ?? 0) / perfTotal) * 100);
@@ -927,7 +918,7 @@ function PayoutsTab({ orders, balance, payouts, onRequest, methods, methodsReady
   // Real balance when DB-backed; else the demo estimate
   const available = balance ? balance.available : orders.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0) * 0.95 * 0.98;
   const pending = balance ? balance.pendingClear : orders.filter(o => o.status !== 'delivered').reduce((s, o) => s + o.total, 0);
-  const history = payouts ?? MOCK_PAYOUT_HISTORY;
+  const history = payouts ?? [];
   const [showRequest, setShowRequest] = React.useState(false);
   const [amount, setAmount] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
@@ -1470,15 +1461,15 @@ function MethodForm({ onCancel, onSaved, first }) {
 // =====================================================================
 // Storefront settings tab
 // =====================================================================
-function StorefrontTab({ shop }) {
-  const app = useApp();
-  const [bio, setBio] = React.useState(shop.tagline);
+function StorefrontTab({ shop, rating }) {
+  // Read-only for now. These come from the seller's application, and sellers
+  // have no update policy on seller_applications — the old "Save changes" only
+  // fired a toast, so edits were silently thrown away.
+  const ro = { background: 'var(--bg-2)', color: 'var(--ink-2)' };
   return (
     <div style={{ maxWidth: 720 }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ height: 120, position: 'relative', background: 'linear-gradient(120deg, var(--green-3), var(--sky-tint))' }}>
-          <button className="btn btn-ghost" style={{ position: 'absolute', right: 14, top: 14, background: 'var(--surface)', padding: '6px 12px', fontSize: 12 }}><Icon name="image" size={13} /> Change cover</button>
-        </div>
+        <div style={{ height: 120, background: 'linear-gradient(120deg, var(--green-3), var(--sky-tint))' }} />
         <div style={{ padding: '0 24px 24px' }}>
           <div style={{ marginTop: -32, display: 'flex', alignItems: 'flex-end', gap: 14 }}>
             <Avatar name={shop.name} size={72} />
@@ -1487,20 +1478,22 @@ function StorefrontTab({ shop }) {
                 <span className="font-display" style={{ fontSize: 22, fontWeight: 600 }}>{shop.name}</span>
                 <span className="verified-impact">verified shop</span>
               </div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>honua.green/shop/{shop.handle}</div>
+              {shop.handle && <div style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>honua.green/shop/{shop.handle}</div>}
             </div>
           </div>
           <div style={{ marginTop: 20, display: 'grid', gap: 16 }}>
-            <DashFld label="Shop name" value={shop.name} onChange={() => {}} />
-            <DashFld label="Tagline" area value={bio} onChange={setBio} />
+            <label><span className="fld-label">Shop name</span><input className="fld" readOnly value={shop.name} style={ro} /></label>
+            <label><span className="fld-label">Tagline</span><textarea className="fld" readOnly value={shop.tagline || ''} placeholder="No tagline" style={{ ...ro, minHeight: 70 }} /></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <DashFld label="Location" value={shop.location} onChange={() => {}} />
-              <label><span className="fld-label">Primary category</span><select className="fld">{SELLER_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></label>
+              <label><span className="fld-label">Location</span><input className="fld" readOnly value={shop.location || ''} placeholder="Not set" style={ro} /></label>
+              <label><span className="fld-label">Categories</span><input className="fld" readOnly value={(shop.categories || []).join(', ')} placeholder="Not set" style={ro} /></label>
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
-            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>Joined {shop.joined} · ★ {shop.rating}</span>
-            <button className="btn btn-green" onClick={() => app.toast?.({ msg: 'Storefront saved', kind: 'success', icon: 'check' })}>Save changes</button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
+              {shop.joined ? `Joined ${shop.joined}` : ''}{shop.joined ? ' · ' : ''}{rating && rating.count > 0 ? `★ ${rating.avg.toFixed(1)} from ${rating.count} review${rating.count === 1 ? '' : 's'}` : 'No reviews yet'}
+            </span>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'right' }}>Editing your storefront isn&apos;t available yet. Contact support to change these details.</span>
           </div>
         </div>
       </div>

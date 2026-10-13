@@ -123,11 +123,11 @@ were pre-implementation names and don't exist in the code.)
 tonnes.
 
 **`MCredit` modal** (`misc-modals.tsx:175`) shows a verifier / available / spot
-price triptych and a quantity stepper. On confirm it calls
-`purchaseCredit(userId, {id, name}, qty, totalCents)`, dispatches a
-`honua:offset-purchased` window event so the page can refresh, and opens the
-`celebrate` modal. It refuses to write anything when `data.id` is missing — a
-retirement is only recordable against a credit that exists.
+price triptych and a quantity stepper. On confirm it swaps to the payment step
+(`components/carbon-payment.tsx`); once the retirement is recorded it dispatches
+a `honua:offset-purchased` window event so the page can refresh and opens the
+`celebrate` modal with the serial. It refuses to start when `data.id` is
+missing — a retirement is only recordable against a credit that exists.
 
 **`MOffsetYear` modal** (`modals.tsx:1748`) is the same purchase against a
 cheapest-first list of credits with `volume_t > 0`. Its header comment records a
@@ -135,16 +135,33 @@ deliberate product decision: the app logs CO₂ *saved*, never CO₂ *emitted*, 
 there is no footprint to estimate and the modal makes the user choose a tonnage
 rather than inventing one for them.
 
-### What "buy" actually does
+### What "buy" actually does (migration 049)
 
 ```
-purchaseCredit() → insert into carbon_purchases → trigger decrements volume_t
+POST /api/carbon/checkout {creditId, tonnes}
+  → server prices it from carbon_credits, writes a carbon_checkouts quote,
+    creates a Stripe PaymentIntent (no redirects) and returns its client secret
+browser confirms the card in the modal (PaymentElement)
+Stripe → /api/stripe/webhook (payment_intent.succeeded, metadata.kind = 'carbon')
+  → finalize_carbon_checkout(): amount + currency must match the quote, the
+    credit row is locked and must still have the tonnes; then volume_t is
+    decremented and a carbon_purchases row is written with a HONUA-YYYY-NNNNNN
+    serial and payment_state = 'paid'
+browser polls GET /api/carbon/checkout?id=… for the serial
 ```
 
-That is the whole transaction. **No payment is processed.** No Stripe, no
-invoice, no fulfilment. The insert immediately grants a retirement record and
-the tonnes count toward the user's offsets. This is prototype-level and should
-be treated as such.
+The browser never names a price and cannot retire anything itself:
+`retire_carbon_credit` (047) is no longer executable by `authenticated`.
+
+Inventory is not reserved at quote time. If the credit sold out, changed or
+was deleted between quote and payment, the webhook gets `oversold` /
+`mismatch` / `missing` and **refunds the payment automatically** (idempotency
+key `carbon-refund:<pi>`); the modal shows that the payment was refunded. A
+failed card leaves the quote open and nothing happens.
+
+Retirements recorded before 049 have `payment_state = 'unpaid'` — no money
+was taken for them. They are left in place for the record but excluded from a
+user's offsets (`getMyOffsets`) and from admin revenue.
 
 ---
 
@@ -168,21 +185,16 @@ Worth being explicit about, because the copy is more confident than the code:
 
 ## 7. Known gaps
 
-1. **Client-controlled price and quantity.** `tonnes` and `total_cents` are both
-   computed in the browser and inserted as-is; RLS only checks `user_id`. A
-   crafted insert can retire an arbitrary tonnage for `total_cents = 0`, and the
-   trigger will happily decrement real inventory to match. Same class of problem
-   as the checkout pricing issue already filed. Fixing it means moving the write
-   behind a server route that recomputes the total from `carbon_credits`, or a
-   `security definer` function that does the same.
-2. **No stock guard.** `volume_t` is floored at 0 by the trigger, but nothing
-   rejects a purchase larger than the remaining volume — it silently clamps, and
-   the buyer is still charged for the full quantity in `total_cents`.
+1. ~~Client-controlled price and quantity~~ — fixed in 049: priced on the
+   server, recorded only by the webhook.
+2. ~~No stock guard~~ — fixed in 047/049: the finalize step locks the credit and
+   refunds rather than oversells.
 3. **`region` is a country string.** The carbon table cannot be plotted on the
    action map without geocoding; `map-carbon.tsx` renders the map and the credit
    table as separate concerns in one file.
-4. **No `retired_at` / serial number**, so a retirement cannot be reconciled
-   against a real registry even if one were wired up later.
+4. **Serials are Honua's own.** Each retirement has a `HONUA-…` serial and a
+   timestamp, but nothing is retired on an external registry; that still has
+   to be done (and reconciled) by hand.
 
 ---
 
@@ -191,7 +203,10 @@ Worth being explicit about, because the copy is more confident than the code:
 | Concern | File |
 |---|---|
 | Schema, RLS, seed, trigger | `supabase/migrations/016_carbon.sql` |
-| Public read + purchase | `lib/market.ts` (§ "Carbon credits") |
+| Public read + checkout client | `lib/market.ts` (§ "Carbon credits") |
+| Payment quote + status | `app/api/carbon/checkout/route.ts`, `supabase/migrations/049_carbon_payments.sql` |
+| Retirement on payment | `app/api/stripe/webhook/route.ts` (`finalizeCarbon`) |
+| Payment step UI | `components/carbon-payment.tsx` |
 | Admin CRUD client | `lib/admin-carbon.ts` |
 | Admin CRUD server | `app/api/admin/carbon-credits/route.ts` |
 | Admin UI | `components/screens/admin-carbon.tsx` |

@@ -1287,7 +1287,7 @@ function HomeSearch({ onNav }: { onNav: any }) {
         supabase.from('profiles').select('id, handle, full_name, avatar_url, verified').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(5),
         supabase.from('posts').select('id, content, created_at, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url)').ilike('content', `%${term}%`).is('community_id', null).order('created_at', { ascending: false }).limit(5),
       ]);
-      const { data: communities } = await supabase.from('communities').select('id, name, cat, member_count, slug').or(`name.ilike.%${term}%,cat.ilike.%${term}%`).limit(5);
+      const { data: communities } = await supabase.from('communities').select('id, name, slug, cover_url, coverUrl:cover_url, cat:category, members:member_count').or(`name.ilike.%${term}%,category.ilike.%${term}%`).limit(5);
       setResults({ users: users ?? [], posts: posts ?? [], communities: communities ?? [] });
     } catch {}
     setLoading(false);
@@ -1638,7 +1638,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
 
   React.useEffect(() => {
     import('@/lib/supabase').then(async ({ supabase }) => {
-      const { data } = await supabase.from('communities').select('id, name, cat, member_count, cover_url, slug').order('member_count', { ascending: false }).limit(3);
+      const { data } = await supabase.from('communities').select('id, name, cat:category, member_count, cover_url, slug').order('member_count', { ascending: false }).limit(3);
       if (data?.length) setRealCommunities(data);
     }).catch(() => {});
   }, []);
@@ -1724,7 +1724,7 @@ export function DesktopExplore({ onNav, params }: { onNav: any; params?: Record<
     const [{ data: users }, { data: posts }, { data: communities }] = await Promise.all([
       supabase.from('profiles').select('id, handle, full_name, avatar_url, verified, bio, impact_score').or(`handle.ilike.%${term}%,full_name.ilike.%${term}%`).limit(6),
       supabase.from('posts').select('*, profile:profiles!posts_user_id_fkey(id, handle, full_name, avatar_url, verified)').ilike('content', `%${term}%`).is('community_id', null).order('created_at', { ascending: false }).limit(8),
-      supabase.from('communities').select('id, name, cat, member_count, slug').or(`name.ilike.%${term}%,cat.ilike.%${term}%`).limit(5),
+      supabase.from('communities').select('id, name, slug, cover_url, coverUrl:cover_url, cat:category, members:member_count').or(`name.ilike.%${term}%,category.ilike.%${term}%`).limit(5),
     ]);
     setSearchResults({ users: users ?? [], posts: posts ?? [], communities: communities ?? [] });
     setSearching(false);

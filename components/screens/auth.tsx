@@ -833,13 +833,62 @@ function CheckEmailScreen({ email, onBackToSignIn }: { email: string; onBackToSi
   );
 }
 
+// Real members to follow during onboarding, most impactful first. Following
+// goes through app.follow, the same path as the feed's "People to follow".
+function OnboardingSuggestions() {
+  const app = useApp();
+  const [people, setPeople] = React.useState<any[] | null>(null);
+
+  React.useEffect(() => {
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase.from('profiles')
+        .select('id, handle, full_name, avatar_url, verified')
+        .order('impact_score', { ascending: false })
+        .limit(12);
+      setPeople((data ?? []).filter((p: any) => p.id !== app.user?.id && p.handle).slice(0, 8));
+    }).catch(() => setPeople([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.user?.id]);
+
+  if (people === null) {
+    return <p style={{ fontSize: 14, color: 'var(--ink-3)' }}>Finding people for you…</p>;
+  }
+  if (people.length === 0) {
+    return <p style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.6 }}>You&apos;re one of the first here. Once more people join, we&apos;ll suggest who to follow — you can skip this step for now.</p>;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {people.map(u => {
+        const following = app.follow?.has(u.handle);
+        return (
+          <div key={u.handle} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+            <Avatar src={u.avatar_url} name={u.full_name} size={44} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.full_name || u.handle}</span>
+                {u.verified && <VerifiedTick size={12} />}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
+            </div>
+            <button
+              onClick={() => app.follow.toggle(u.handle)}
+              style={{ padding: '7px 16px', borderRadius: 999, border: following ? '1.5px solid var(--green)' : '1.5px solid var(--line)', background: following ? 'var(--green)' : 'transparent', color: following ? '#fff' : 'var(--ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              {following ? 'Following' : 'Follow'}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── OAuth Onboarding Flow ─────────────────────────────────────────────────────
 export function OAuthOnboardingFlow() {
   const app = useApp();
   const totalSteps = 6;
   const [step, setStep] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
-  const [suggestedFollows, setSuggestedFollows] = React.useState<string[]>([]);
 
   // Pre-fill from Google user data
   const [name, setName] = React.useState(app.user?.name || '');
@@ -1029,34 +1078,7 @@ export function OAuthOnboardingFlow() {
         )}
 
         {/* Step 5: Suggested follows */}
-        {step === 5 && (() => {
-          const suggestions = Object.entries(MOCK.users).filter(([k]) => k !== 'you').map(([, u]) => u);
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {suggestions.map(u => {
-                const following = suggestedFollows.includes(u.handle);
-                return (
-                  <div key={u.handle} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-                    <Avatar src={u.avatar} name={u.name} size={44} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
-                        {u.verified && <VerifiedTick size={12} />}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{u.handle}</div>
-                    </div>
-                    <button
-                      onClick={() => setSuggestedFollows(prev => following ? prev.filter(h => h !== u.handle) : [...prev, u.handle])}
-                      style={{ padding: '7px 16px', borderRadius: 999, border: following ? '1.5px solid var(--green)' : '1.5px solid var(--line)', background: following ? 'var(--green)' : 'transparent', color: following ? '#fff' : 'var(--ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .15s', flexShrink: 0 }}
-                    >
-                      {following ? 'Following' : 'Follow'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+        {step === 5 && <OnboardingSuggestions />}
 
         {/* Step 6: Bio + Terms */}
         {step === totalSteps && (

@@ -2,7 +2,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS } from "@/lib/impact";
 
@@ -1064,9 +1064,9 @@ export function CommunityFeedPage({ slug, onNav }: { slug: string; onNav: any })
   );
 }
 
-function DiscoverView({ onSelect, onNav, communities: communityList, onToggleJoin }: { onSelect: (c: any) => void; onNav?: any; communities?: any[]; onToggleJoin?: (c: any) => void }) {
+function DiscoverView({ onSelect, onNav, communities: communityList, onToggleJoin, load = 'ready' }: { onSelect: (c: any) => void; onNav?: any; communities?: any[]; onToggleJoin?: (c: any) => void; load?: 'loading' | 'ready' | 'error' }) {
   const app = useApp();
-  const list = communityList ?? MOCK.communities;
+  const list = communityList ?? [];
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }} className="no-scrollbar">
       <h1 className="font-display" style={{ margin: '0 0 6px', fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>Communities</h1>
@@ -1091,13 +1091,20 @@ function DiscoverView({ onSelect, onNav, communities: communityList, onToggleJoi
                   <span style={{ color: 'var(--green)', fontWeight: 500 }}>{c.cat}</span>
                 </div>
                 <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>
-                  {COMMUNITY_META[c.name]?.desc || ''}
+                  {c.description || COMMUNITY_META[c.name]?.desc || ''}
                 </p>
               </div>
             </div>
           );
         })}
       </div>
+      {list.length === 0 && (
+        <div style={{ padding: '28px 0', textAlign: 'center', fontSize: 14, color: 'var(--ink-3)' }}>
+          {load === 'loading' ? 'Loading communities…'
+            : load === 'error' ? 'Communities could not be loaded. Try again in a moment.'
+            : 'No communities yet. Be the first to start one.'}
+        </div>
+      )}
     </div>
   );
 }
@@ -1105,7 +1112,8 @@ function DiscoverView({ onSelect, onNav, communities: communityList, onToggleJoi
 export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [activeCommunity, setActiveCommunity] = React.useState<any>(null);
-  const [communities, setCommunities] = React.useState<any[]>(MOCK.communities);
+  const [communities, setCommunities] = React.useState<any[]>([]);
+  const [load, setLoad] = React.useState<'loading' | 'ready' | 'error'>('loading');
 
   // Auto-open community from ?c= URL param
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -1123,7 +1131,9 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
         supabase.from('communities').select('id, name, slug, description, cover_url, avatar_url, category, member_count, created_by').order('member_count', { ascending: false }),
         supabase.from('community_members').select('community_id').eq('user_id', app.user.id),
       ]);
-      if (!error && comms && comms.length > 0) {
+      if (error) { setLoad('error'); return; }
+      setLoad('ready');
+      if (comms) {
         setCommunities(comms.map((c: any) => ({
           id: c.id, name: c.name, members: c.member_count ?? 0,
           cat: c.category ?? 'Community', coverUrl: c.cover_url ?? '', avatarUrl: c.avatar_url ?? '', createdBy: c.created_by,
@@ -1136,7 +1146,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
           });
         }
       }
-    }).catch(() => {});
+    }).catch(() => setLoad('error'));
   }, [app.user?.id]);
 
   const handleToggleJoin = async (c: any) => {
@@ -1216,7 +1226,7 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
 
         {activeCommunity
           ? <CommunityFeed community={activeCommunity} onNav={onNav} onToggleJoin={handleToggleJoin} />
-          : <DiscoverView onSelect={setActiveCommunity} onNav={onNav} communities={communities} onToggleJoin={handleToggleJoin} />
+          : <DiscoverView onSelect={setActiveCommunity} onNav={onNav} communities={communities} onToggleJoin={handleToggleJoin} load={load} />
         }
       </main>
     </div>

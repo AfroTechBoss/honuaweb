@@ -3,8 +3,8 @@ import { dispatchFor } from "@/lib/payout-methods";
 
 // ---------------------------------------------------------------------------
 // Marketplace / orders / carbon / map data layer.
-// Every getter fails soft (returns [] / null) so screens can fall back to
-// their demo data when a migration hasn't been run yet.
+// Every getter fails soft (returns [] / null) so screens can show an empty or
+// unavailable state when a migration hasn't been run yet.
 // ---------------------------------------------------------------------------
 
 const cents = (c: number) => `$${(c / 100) % 1 === 0 ? (c / 100).toFixed(0) : (c / 100).toFixed(2)}`;
@@ -14,6 +14,8 @@ export type Product = {
   id: string; name: string; brand: string; price: string; price_cents: number;
   tag: string; category: string; imgUrl: string | null; description: string | null;
   rating: number; review_count: number; featured: boolean; compare_at_cents: number | null;
+  // null = not tracked (digital goods); status is 'live' for anything buyable
+  stock: number | null; status: string;
   // real seller identity (null for the seeded demo catalogue)
   sellerId: string | null; sellerHandle: string | null; sellerName: string | null;
   sellerLogo: string | null; sellerShopHandle: string | null; sellerShopName: string | null;
@@ -35,6 +37,8 @@ function mapProduct(row: any): Product {
     review_count: row.review_count ?? 0,
     featured: !!row.featured,
     compare_at_cents: row.compare_at_cents ?? null,
+    stock: row.stock ?? null,
+    status: row.status ?? 'live',
     sellerId: row.seller_id ?? null,
     sellerHandle: row.seller?.handle ?? null,
     sellerName: row.seller?.full_name ?? null,
@@ -88,6 +92,21 @@ export async function getProductById(id: string): Promise<Product | null> {
     const [product] = await attachShopInfo([mapProduct(data)]);
     return product;
   } catch { return null; }
+}
+
+// Live listings among the given ids, in the order asked for. Ids that are not
+// uuids (left in a wishlist by the old demo catalogue) are skipped.
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  const uuids = ids.filter(id => /^[0-9a-f-]{36}$/.test(String(id)));
+  if (!uuids.length) return [];
+  try {
+    const { data, error } = await supabase
+      .from('products').select(PRODUCT_SELECT)
+      .in('id', uuids).eq('status', 'live');
+    if (error || !data) return [];
+    const byId = new Map(data.filter((r: any) => r.name && r.price_cents != null).map((r: any) => [r.id, mapProduct(r)]));
+    return attachShopInfo(uuids.map(id => byId.get(id)).filter(Boolean) as Product[]);
+  } catch { return []; }
 }
 
 // ---- Storefront (public shop page) ----
@@ -185,58 +204,9 @@ export async function deleteSellerProduct(id: string, sellerId: string): Promise
 }
 
 // ---- Orders ----
-const parseCentsStr = (price: any) => Math.round(parseFloat(String(price).replace(/[^0-9.]/g, '')) * 100) || 0;
-const isUuid = (v: any) => /^[0-9a-f-]{36}$/.test(String(v));
-
-export async function createDbOrder(userId: string, order: {
-  id: string; items: any[]; subtotal: number; shipping: number; total: number;
-  email?: string; address?: any; paymentIntentId?: string | null; paymentStatus?: string;
-}): Promise<boolean> {
-  try {
-    const base: any = {
-      id: order.id,
-      user_id: userId,
-      items: order.items,
-      subtotal_cents: Math.round(order.subtotal * 100),
-      shipping_cents: Math.round(order.shipping * 100),
-      total_cents: Math.round(order.total * 100),
-      email: order.email ?? null,
-      address: order.address ?? null,
-      payment_status: order.paymentStatus ?? 'unpaid',
-      payment_intent_id: order.paymentIntentId ?? null,
-    };
-    let { error } = await supabase.from('orders').insert(base);
-    if (error) {
-      // Payment columns may not exist yet (migration 023 not run) — retry bare
-      const { payment_status: _ps, payment_intent_id: _pi, ...noPayment } = base;
-      ({ error } = await supabase.from('orders').insert(noPayment));
-    }
-    if (error) return false;
-
-    // Line items (migration 020) — carry seller_id so sellers can fulfil.
-    // Failure here is non-fatal: the order itself is already recorded.
-    try {
-      const productIds = order.items.map((i: any) => i.id).filter(isUuid);
-      let sellerByProduct: Record<string, { seller_id: string | null; image_url: string | null }> = {};
-      if (productIds.length) {
-        const { data: prods } = await supabase.from('products').select('id, seller_id, image_url').in('id', productIds);
-        for (const p of prods ?? []) sellerByProduct[p.id] = { seller_id: p.seller_id, image_url: p.image_url };
-      }
-      const rows = order.items.map((i: any) => ({
-        order_id: order.id,
-        buyer_id: userId,
-        product_id: isUuid(i.id) ? i.id : null,
-        seller_id: isUuid(i.id) ? sellerByProduct[i.id]?.seller_id ?? null : null,
-        name: i.name,
-        price_cents: parseCentsStr(i.price),
-        quantity: i.quantity || 1,
-        image_url: i.imgUrl ?? (isUuid(i.id) ? sellerByProduct[i.id]?.image_url ?? null : null),
-      }));
-      if (rows.length) await supabase.from('order_items').insert(rows);
-    } catch {}
-    return true;
-  } catch { return false; }
-}
+// There is deliberately no client-side "create order" here. Orders are priced
+// by /api/checkout and written by the Stripe webhook once the payment clears
+// (migration 048); the browser has no insert rights on orders or order_items.
 
 // ---- Seller-side orders (line items sold by this seller) ----
 export async function getSellerOrders(sellerId: string): Promise<any[]> {
@@ -265,6 +235,8 @@ export async function getSellerOrders(sellerId: string): Promise<any[]> {
       qty: r.quantity ?? 1,
       total: ((r.price_cents ?? 0) * (r.quantity ?? 1)) / 100,
       status: r.status ?? 'processing',
+      // Since 048, line items are only ever written by the webhook after a
+      // payment clears, so a seller-visible item is a paid one.
       payment: 'paid',
       date: r.created_at ? rel(r.created_at) : '',
       dateFull: r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
@@ -499,66 +471,82 @@ export type Retirement = {
   paymentState: 'unpaid' | 'paid' | 'refunded';
 };
 
-export type RetireOutcome =
-  | { kind: 'retired'; retirement: Retirement }
+// Retiring tonnes is a paid checkout (migration 049, /api/carbon/checkout).
+// The browser names a credit and a tonnage; the server prices it and opens a
+// PaymentIntent; the Stripe webhook retires the tonnes once that exact amount
+// is captured. Nothing here writes a retirement.
+
+export type CarbonQuote = {
+  clientSecret: string;
+  checkoutId: string;
+  creditName: string;
+  tonnes: number;
+  unitCents: number;
+  totalCents: number;
+};
+
+export type CarbonStart =
+  | { kind: 'ready'; quote: CarbonQuote }
   | { kind: 'signed-out' }
   | { kind: 'unavailable' }
   | { kind: 'rejected'; message: string };
 
-// Retire tonnes against a credit.
-//
-// The caller no longer says what it costs. `total_cents` used to be computed in
-// the browser and inserted as given, alongside a `tonnes` figure nothing checked
-// against remaining stock — so a crafted request could retire any volume for
-// nothing and the inventory trigger would follow it down. Migration 047 moved
-// the write into retire_carbon_credit(), which reads the price from
-// carbon_credits, takes a row lock, refuses to oversell, and stamps a serial.
-//
-// The price argument is gone deliberately rather than kept and ignored: leaving
-// it would imply the caller still has a say.
-export async function retireCredit(creditId: string, tonnes: number): Promise<RetireOutcome> {
+async function authHeader(): Promise<Record<string, string>> {
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function startCarbonCheckout(creditId: string, tonnes: number): Promise<CarbonStart> {
   try {
-    const { data, error } = await supabase.rpc('retire_carbon_credit', {
-      p_credit: creditId,
-      p_tonnes: tonnes,
+    const res = await fetch('/api/carbon/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ creditId, tonnes }),
     });
-
-    if (error) {
-      // Not applied yet — say so rather than reporting a failed retirement.
-      if (error.code === 'PGRST202' || error.code === '42883') return { kind: 'unavailable' };
-      if (error.code === '42501') return { kind: 'signed-out' };
-      // 22023 / P0002 carry sentences written for the person reading them —
-      // "Only 4 t left on this credit" — so they pass through unchanged.
-      return { kind: 'rejected', message: error.message || 'That retirement was refused.' };
-    }
-
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { kind: 'rejected', message: 'That retirement was refused.' };
-
-    return {
-      kind: 'retired',
-      retirement: {
-        id: row.id,
-        serial: row.serial,
-        creditName: row.credit_name,
-        tonnes: Number(row.tonnes ?? 0),
-        unitCents: Number(row.unit_cents ?? 0),
-        totalCents: Number(row.total_cents ?? 0),
-        retiredAt: row.retired_at,
-        paymentState: row.payment_state ?? 'unpaid',
-      },
-    };
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.clientSecret) return { kind: 'ready', quote: data };
+    if (res.status === 401) return { kind: 'signed-out' };
+    // Payments not configured, or 049 not applied — say so rather than
+    // reporting a failed retirement.
+    if (data.error === 'stripe_not_configured' || data.error === 'checkout_unavailable') return { kind: 'unavailable' };
+    return { kind: 'rejected', message: data.message || 'That retirement was refused.' };
   } catch {
     return { kind: 'rejected', message: 'Could not reach the server.' };
   }
 }
 
+export type CarbonSettled =
+  | { kind: 'retired'; retirement: Retirement }
+  | { kind: 'rejected'; message: string }
+  | { kind: 'pending' };
+
+// Waits for the webhook to retire a paid checkout. It usually lands within a
+// couple of seconds; 'pending' means the money went through but the webhook
+// has not caught up yet, and the retirement will appear on its own.
+export async function waitForRetirement(checkoutId: string, timeoutMs = 20_000): Promise<CarbonSettled> {
+  const until = Date.now() + timeoutMs;
+  const headers = await authHeader();
+  while (Date.now() < until) {
+    try {
+      const res = await fetch(`/api/carbon/checkout?id=${encodeURIComponent(checkoutId)}`, { headers, cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (data.status === 'finalized' && data.retirement) return { kind: 'retired', retirement: data.retirement };
+      if (data.status === 'rejected') return { kind: 'rejected', message: data.reason || 'That retirement was refused.' };
+    } catch { /* keep waiting */ }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  return { kind: 'pending' };
+}
+
+// Only paid retirements count. Rows from before 049 were never charged for
+// and stay in the table as 'unpaid', but they are not offsets.
 export async function getMyOffsets(userId: string): Promise<{ tonnes: number; totalCents: number; purchases: any[] }> {
   try {
     const { data, error } = await supabase
       .from('carbon_purchases')
       .select('*')
       .eq('user_id', userId)
+      .eq('payment_state', 'paid')
       .order('created_at', { ascending: false });
     if (error || !data) return { tonnes: 0, totalCents: 0, purchases: [] };
     return {
@@ -718,6 +706,36 @@ export async function getShopForOwner(ownerId: string): Promise<{ name: string; 
     _shopCache[ownerId] = shop;
     return shop;
   } catch { return null; }
+}
+
+// The signed-in seller's own shop record, for their dashboard. Not cached:
+// unlike getShopForOwner this backs a screen the owner is looking at.
+export async function getMyShopDetails(ownerId: string): Promise<{ name: string; handle: string | null; logo: string | null; tagline: string | null; location: string | null; categories: string[]; createdAt: string | null } | null> {
+  try {
+    const { data } = await supabase
+      .from('seller_applications')
+      .select('shop_name, shop_handle, logo_url, tagline, location, categories, created_at')
+      .eq('user_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data?.shop_name) return null;
+    return {
+      name: data.shop_name, handle: data.shop_handle ?? null, logo: data.logo_url ?? null,
+      tagline: data.tagline ?? null, location: data.location ?? null,
+      categories: data.categories ?? [], createdAt: data.created_at ?? null,
+    };
+  } catch { return null; }
+}
+
+// Average star rating across a set of products (a shop's listings).
+export async function getShopRating(productIds: string[]): Promise<{ avg: number; count: number }> {
+  if (productIds.length === 0) return { avg: 0, count: 0 };
+  try {
+    const { data } = await supabase.from('product_reviews').select('stars').in('product_id', productIds);
+    const stars = (data ?? []).map((r: any) => Number(r.stars)).filter(n => n > 0);
+    return { avg: stars.length ? stars.reduce((a, b) => a + b, 0) / stars.length : 0, count: stars.length };
+  } catch { return { avg: 0, count: 0 }; }
 }
 
 // ---- Shop conversations (seller dashboard Messages tab) ----

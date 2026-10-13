@@ -1,0 +1,74 @@
+name: Supabase keep-alive
+
+# Free-tier Supabase projects pause after 7 days without database activity, and
+# GitHub disables scheduled workflows in a repo with no activity for 60 days.
+# This does both jobs: it runs a real query against the database, then commits
+# the time of the ping to keepalive/pings.log so the repo never goes quiet.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the project's anon / publishable key
+#
+# The anon key is enough: the request only has to reach Postgres, not return
+# rows. RLS may answer with an empty list, which still counts as activity.
+#
+# Commits that touch only keepalive/ are skipped by vercel.json's
+# ignoreCommand, so a ping does not trigger a production deploy.
+
+on:
+  schedule:
+    # Every 3 days at 06:17 UTC — two chances inside every 7-day window, and
+    # off the top of the hour, when GitHub's scheduler is busiest and drops runs.
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the database
+        id: ping
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the SUPABASE_URL and SUPABASE_ANON_KEY repository secrets."
+            exit 1
+          fi
+          # A PostgREST select goes all the way to Postgres. Retried, because a
+          # project that has just been woken can take a moment to answer.
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --retry 3 --retry-delay 10 --retry-all-errors --max-time 30 \
+            "${SUPABASE_URL%/}/rest/v1/products?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "HTTP $status"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Supabase answered HTTP $status — the project may already be paused. Restore it from the Supabase dashboard."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Record the ping
+        env:
+          STATUS: ${{ steps.ping.outputs.status }}
+        run: |
+          mkdir -p keepalive
+          stamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          echo "$stamp  HTTP $STATUS  run ${{ github.run_id }}" >> keepalive/pings.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add keepalive/pings.log
+          git commit -m "chore(keepalive): ping Supabase at $stamp"
+          git push
