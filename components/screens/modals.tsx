@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS, ACTION_IMPACTS, computeImpact, VOUCH_THRESHOLD } from "@/lib/impact";
 import { QuoteCard } from "./communities";
@@ -1693,29 +1693,30 @@ export function MVerification({ data, close }) {
   );
 };
 
-// --- Tip a user ---
+// --- Tip a user (planned, not live) ---
+//
+// This used to offer 5/10/25 "Impact Tokens" against a hardcoded "Your balance:
+// 24 IT", fall back to MOCK.users.sarah, and on Send show a celebration saying
+// the recipient would be notified. No token, balance or transfer exists, and
+// nobody was notified. Like auto-offset, it now says what it will be.
 export function MTip({ data, close }) {
-  const app = useApp();
-  const u = data.user || MOCK.users.sarah;
-  const [amt, setAmt] = React.useState(5);
+  const u = data?.user ?? {};
+  const name = u.full_name || u.name || (u.handle ? '@' + u.handle : 'this member');
   return (
     <Modal onClose={close} width={440}>
-      <ModalHead icon="gift" iconColor="var(--sun)" title={`Tip ${u.name}`} sub="Send Impact Tokens to support their work." onClose={close} />
+      <ModalHead icon="gift" iconColor="var(--sun)" title={`Tip ${name}`} sub="Planned — not available yet." onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
-          {[5, 10, 25].map(a => (
-            <button key={a} onClick={() => setAmt(a)} className={'opt-row ' + (amt === a ? 'sel' : '')} style={{ justifyContent: 'center', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 20, fontWeight: 600, fontFamily: 'Lora' }}>{a}</span>
-              <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>IT</span>
-            </button>
-          ))}
+        <div style={{ background: 'var(--bg-2)', borderRadius: 14, padding: 18 }}>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+            Tipping will let you send money straight to people whose work you want to back. It isn&apos;t switched on yet, so nothing is charged or sent from here.
+          </p>
         </div>
-        <input className="fld" type="number" value={amt} onChange={e => setAmt(Math.max(1, +e.target.value || 1))} />
-        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8, fontFamily: 'JetBrains Mono' }}>Your balance: 24 IT</div>
+        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.6, margin: '14px 0 0' }}>
+          For now you can follow them, or support their projects and shop directly.
+        </p>
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={() => { close(); app.openModal('celebrate', { title: `Tipped ${amt} IT`, sub: `${u.name} will be notified of your support. Thank you for backing real impact.` }); }}>Send {amt} IT</button>
+        <button className="btn btn-ghost" onClick={close}>Close</button>
       </ModalFoot>
     </Modal>
   );
@@ -1983,8 +1984,8 @@ export function ModalContent({ type, data, close }) {
     createchallenge: MCreateChallenge, createcommunity: MCreateCommunity, editcommunity: MEditCommunity, newcollection: MNewCollection, editprofile: MEditProfile,
     tip: MTip, autooffset: MAutoOffset, offsetyear: MOffsetYear, verification: MVerification, verifyrequest: MVerifyRequest,
     deleteaccount: MDeleteAccount, deleteaccount2: MDeleteAccount2,
-    project: MProject, article: MArticle, product: MProduct, credit: MCredit,
-    challenge: MChallenge, discussion: MDiscussion, badge: MBadge, celebrate: MCelebrate,
+    project: MProject, credit: MCredit,
+    challenge: MChallenge, celebrate: MCelebrate,
     wallet: MWallet, list: MList, communityabout: MCommunityAbout,
   };
   const C = map[type];

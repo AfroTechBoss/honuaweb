@@ -1,8 +1,9 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
+import { useWalletSummary } from "./misc-modals";
 import { logImpact, TASK_IMPACTS } from "@/lib/impact";
 import { getMyVerificationRequest, type VerificationRequest } from "@/lib/verification";
 import { VERIFICATION_SLA } from "@/lib/verification-copy";
@@ -43,6 +44,23 @@ export function DesktopSettings({ onNav, params }: { onNav: any; params?: Record
     </div>
   );
 };
+
+// Real balances only: Green Points from the user's impact_logs, carbon from
+// their paid carbon_purchases. The old cards were fixed numbers (1,240 GP,
+// 24 IT, 0 HONUA) beside a "Connect Celo wallet" button that only toasted.
+function WalletSettings({ app }) {
+  const w = useWalletSummary();
+  const tonnes = w ? (w.tonnes % 1 === 0 ? w.tonnes : w.tonnes.toFixed(1)) : '–';
+  return <>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 16 }}>
+      <KpiCard label="Green Points" value={w ? w.pts.toLocaleString() : '–'} unit="GP" delta={w ? `+${w.monthPts.toLocaleString()} this month` : 'loading'} color="var(--green)" icon="sparkles" />
+      <KpiCard label="Carbon retired" value={tonnes} unit="t" delta={w ? `$${(w.totalCents / 100).toFixed(2)} spent` : 'loading'} color="var(--sky)" icon="leaf" />
+    </div>
+    <div style={{ display: 'flex', gap: 10 }}>
+      <button className="btn btn-primary" onClick={() => app.openModal('wallet')}>Open wallet</button>
+    </div>
+  </>;
+}
 
 export function SettingsSection({ sec, app, onNav }) {
   const head = {
@@ -124,17 +142,7 @@ export function SettingsSection({ sec, app, onNav }) {
         </Section>
       )}
 
-      {sec === 'Wallet & rewards' && <>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
-          <KpiCard label="Green Points" value="1,240" unit="GP" delta="this month" color="var(--green)" icon="sparkles" />
-          <KpiCard label="Impact Tokens" value="24" unit="IT" delta="lifetime" color="var(--sky)" icon="leaf" />
-          <KpiCard label="Honua Gov" value="0" unit="HONUA" delta="not earned yet" color="var(--ink-3)" icon="award" />
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-primary" onClick={() => app.openModal('wallet')}>Open wallet</button>
-          <button className="btn btn-ghost" onClick={() => app.toast({ msg: 'Connecting wallet…', sub: 'Celo wallet connection (demo).', icon: 'coin' })}>Connect Celo wallet</button>
-        </div>
-      </>}
+      {sec === 'Wallet & rewards' && <WalletSettings app={app} />}
 
       {sec === 'Appearance' && (
         <Section title="Theme">

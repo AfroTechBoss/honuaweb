@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MArticle, MProduct, MCredit, MChallenge, MDiscussion, MBadge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS } from "@/lib/impact";
 import { getBookmarks, getCollectionCounts, deleteCollection } from "@/lib/bookmarks";

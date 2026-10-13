@@ -65,6 +65,11 @@ recorded only after the payment matches the server's quote, and a payment that
 can no longer be honoured (credit sold out, changed or removed) is refunded
 automatically. Apply 049 after 048.
 
+Migration 050 removes the invented numbers from the early seeds: community and
+challenge counts are reset to real row counts, the seven seller-less demo
+products are taken down (status `removed`, order history kept), and every
+product's rating is recomputed from real reviews. It is safe to re-run.
+
 ## Granting yourself admin
 
 `/admin` is gated by Privy, but `profiles.role` controls DB-level admin powers

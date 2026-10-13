@@ -868,7 +868,7 @@ export function CommentNode({ node, depth, like, reply, remove, dense, defaultOp
   // Support both mock shape (node.user key, node.text, node.time) and DB shape (node.profile, node.content, node.created_at)
   const usr = node.profile
     ? { name: node.profile.full_name, handle: node.profile.handle, avatar: node.profile.avatar_url, verified: node.profile.verified }
-    : MOCK.users[node.user] || { name: node.user === 'you' ? (app.user?.name || 'You') : node.user, handle: node.user === 'you' ? (app.user?.handle || 'you') : node.user, avatar: app.user?.avatar };
+    : { name: node.user === 'you' ? (app.user?.name || 'You') : node.user, handle: node.user === 'you' ? (app.user?.handle || 'you') : node.user, avatar: node.user === 'you' ? app.user?.avatar : undefined };
   const displayText = node.content ?? node.text ?? '';
   const displayTime = node.created_at ? timeAgo(node.created_at) : (node.time ?? '');
   const isOwn = node.user_id === app.user?.id || node.user === 'you' || node.user === app.user?.handle;

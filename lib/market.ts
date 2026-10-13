@@ -3,8 +3,8 @@ import { dispatchFor } from "@/lib/payout-methods";
 
 // ---------------------------------------------------------------------------
 // Marketplace / orders / carbon / map data layer.
-// Every getter fails soft (returns [] / null) so screens can fall back to
-// their demo data when a migration hasn't been run yet.
+// Every getter fails soft (returns [] / null) so screens can show an empty or
+// unavailable state when a migration hasn't been run yet.
 // ---------------------------------------------------------------------------
 
 const cents = (c: number) => `$${(c / 100) % 1 === 0 ? (c / 100).toFixed(0) : (c / 100).toFixed(2)}`;
@@ -14,6 +14,8 @@ export type Product = {
   id: string; name: string; brand: string; price: string; price_cents: number;
   tag: string; category: string; imgUrl: string | null; description: string | null;
   rating: number; review_count: number; featured: boolean; compare_at_cents: number | null;
+  // null = not tracked (digital goods); status is 'live' for anything buyable
+  stock: number | null; status: string;
   // real seller identity (null for the seeded demo catalogue)
   sellerId: string | null; sellerHandle: string | null; sellerName: string | null;
   sellerLogo: string | null; sellerShopHandle: string | null; sellerShopName: string | null;
@@ -35,6 +37,8 @@ function mapProduct(row: any): Product {
     review_count: row.review_count ?? 0,
     featured: !!row.featured,
     compare_at_cents: row.compare_at_cents ?? null,
+    stock: row.stock ?? null,
+    status: row.status ?? 'live',
     sellerId: row.seller_id ?? null,
     sellerHandle: row.seller?.handle ?? null,
     sellerName: row.seller?.full_name ?? null,
@@ -88,6 +92,21 @@ export async function getProductById(id: string): Promise<Product | null> {
     const [product] = await attachShopInfo([mapProduct(data)]);
     return product;
   } catch { return null; }
+}
+
+// Live listings among the given ids, in the order asked for. Ids that are not
+// uuids (left in a wishlist by the old demo catalogue) are skipped.
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  const uuids = ids.filter(id => /^[0-9a-f-]{36}$/.test(String(id)));
+  if (!uuids.length) return [];
+  try {
+    const { data, error } = await supabase
+      .from('products').select(PRODUCT_SELECT)
+      .in('id', uuids).eq('status', 'live');
+    if (error || !data) return [];
+    const byId = new Map(data.filter((r: any) => r.name && r.price_cents != null).map((r: any) => [r.id, mapProduct(r)]));
+    return attachShopInfo(uuids.map(id => byId.get(id)).filter(Boolean) as Product[]);
+  } catch { return []; }
 }
 
 // ---- Storefront (public shop page) ----
@@ -687,6 +706,36 @@ export async function getShopForOwner(ownerId: string): Promise<{ name: string; 
     _shopCache[ownerId] = shop;
     return shop;
   } catch { return null; }
+}
+
+// The signed-in seller's own shop record, for their dashboard. Not cached:
+// unlike getShopForOwner this backs a screen the owner is looking at.
+export async function getMyShopDetails(ownerId: string): Promise<{ name: string; handle: string | null; logo: string | null; tagline: string | null; location: string | null; categories: string[]; createdAt: string | null } | null> {
+  try {
+    const { data } = await supabase
+      .from('seller_applications')
+      .select('shop_name, shop_handle, logo_url, tagline, location, categories, created_at')
+      .eq('user_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data?.shop_name) return null;
+    return {
+      name: data.shop_name, handle: data.shop_handle ?? null, logo: data.logo_url ?? null,
+      tagline: data.tagline ?? null, location: data.location ?? null,
+      categories: data.categories ?? [], createdAt: data.created_at ?? null,
+    };
+  } catch { return null; }
+}
+
+// Average star rating across a set of products (a shop's listings).
+export async function getShopRating(productIds: string[]): Promise<{ avg: number; count: number }> {
+  if (productIds.length === 0) return { avg: 0, count: 0 };
+  try {
+    const { data } = await supabase.from('product_reviews').select('stars').in('product_id', productIds);
+    const stars = (data ?? []).map((r: any) => Number(r.stars)).filter(n => n > 0);
+    return { avg: stars.length ? stars.reduce((a, b) => a + b, 0) / stars.length : 0, count: stars.length };
+  } catch { return { avg: 0, count: 0 }; }
 }
 
 // ---- Shop conversations (seller dashboard Messages tab) ----

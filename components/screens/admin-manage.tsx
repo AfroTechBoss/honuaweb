@@ -169,7 +169,7 @@ function IconBtn({ icon, title, onClick, tone = 'var(--ink-3)' }) {
 // =====================================================================
 // USERS — roster, suspend / ban / reinstate, role, detail drawer
 // =====================================================================
-export function AdminUsers({ users, onStatus, onRole, canSuspend = true, canBan = true, rosterAvailable = true }) {
+export function AdminUsers({ users, loaded = true, onStatus, onRole, canSuspend = true, canBan = true, rosterAvailable = true }) {
   const [filter, setFilter] = React.useState('all');
   const [q, setQ] = React.useState('');
   const [drawer, setDrawer] = React.useState(null);
@@ -196,7 +196,7 @@ export function AdminUsers({ users, onStatus, onRole, canSuspend = true, canBan 
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[['all', 'All'], ['active', 'Active'], ['suspended', 'Suspended'], ['banned', 'Banned'], ['flagged', 'Has reports'], ['verified', 'Verified'], ['Seller', 'Sellers'], ['Moderator', 'Mods']].map(([k, l]) => (
+          {[['all', 'All'], ['active', 'Active'], ['suspended', 'Suspended'], ['banned', 'Banned'], ['flagged', 'Has reports'], ['verified', 'Verified'], ['Moderator', 'Mods'], ['Admin', 'Admins']].map(([k, l]) => (
             <button key={k} onClick={() => setFilter(k)} className={'chip' + (filter === k ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>{l}</button>
           ))}
         </div>
@@ -246,7 +246,11 @@ export function AdminUsers({ users, onStatus, onRole, canSuspend = true, canBan 
             </div>
           </div>
         ))}
-        {filtered.length === 0 && <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14 }}>No members match.</div>}
+        {filtered.length === 0 && (
+          <div style={{ padding: 50, textAlign: 'center', color: 'var(--ink-4)', fontSize: 14 }}>
+            {!loaded ? 'Loading members…' : users.length === 0 ? 'No members yet.' : 'No members match.'}
+          </div>
+        )}
       </div>
 
       {/* detail drawer */}
@@ -324,7 +328,7 @@ function UserDrawer({ u, onClose, onStatus, onRole, canSuspend = true, canBan = 
           <div style={{ marginTop: 22 }}>
             <div className="fld-label">Role</div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-              {['Member', 'Seller', 'Moderator', 'Admin'].map(r => (
+              {['Member', 'Moderator', 'Admin'].map(r => (
                 <button key={r} onClick={() => onRole(u.id, r)} className={'chip' + (u.role === r ? ' chip-green' : '')} style={{ cursor: 'pointer' }}>{r}</button>
               ))}
             </div>

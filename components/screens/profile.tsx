@@ -6,7 +6,6 @@ import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAc
 import { getAllLogs } from "@/lib/impact";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
-import { ALL_PRODUCTS } from "@/components/screens/product-detail";
 import { loadOrders } from "@/components/screens/orders";
 import { ImpactVouchBar, useImpactVouches, PostImpactVouch } from "@/components/impact-vouch";
 
@@ -374,24 +373,7 @@ export function DesktopProfile({ onNav, params }) {
                   </div>
                 );
               })()}
-              {tab === 'saved' && isOwn && (() => {
-                const saved = ALL_PRODUCTS.filter(p => app.wishlist?.has(p.id) || app.wishlist?.has(p.title));
-                if (!saved.length) return <EmptyTab icon="" msg="Nothing saved yet. Tap the bookmark on any product to save it." />;
-                return (
-                  <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                    {saved.map(p => (
-                      <div key={p.id} onClick={() => onNav?.('product', { id: p.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer' }}>
-                        <ImagePlaceholder label={p.img} height={140} src={p.imgUrl} />
-                        <div style={{ padding: 12 }}>
-                          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.brand.toUpperCase()}</div>
-                          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{p.title}</div>
-                          <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Lora', marginTop: 6 }}>${p.price}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+              {tab === 'saved' && isOwn && <SavedProducts ids={app.state?.wishlist ?? []} onNav={onNav} />}
             </div>
 
             {/* Sidebar */}
@@ -436,6 +418,38 @@ export function DesktopProfile({ onNav, params }) {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// The wishlist holds product ids; the products themselves come from the live
+// catalogue. (It used to match against the demo catalogue, so only invented
+// products could ever show up here.)
+function SavedProducts({ ids, onNav }: { ids: string[]; onNav?: any }) {
+  const [saved, setSaved] = React.useState<any[] | null>(null);
+  const key = ids.join(',');
+  React.useEffect(() => {
+    let alive = true;
+    import('@/lib/market').then(({ getProductsByIds }) => getProductsByIds(ids))
+      .then(rows => { if (alive) setSaved(rows); })
+      .catch(() => { if (alive) setSaved([]); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (saved === null) return <EmptyTab icon="" msg="Loading saved products…" />;
+  if (!saved.length) return <EmptyTab icon="" msg="Nothing saved yet. Tap the bookmark on any product to save it." />;
+  return (
+    <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+      {saved.map(p => (
+        <div key={p.id} onClick={() => onNav?.('product', { id: p.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', cursor: 'pointer' }}>
+          <ImagePlaceholder label={p.name} height={140} src={p.imgUrl} />
+          <div style={{ padding: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{(p.brand || '').toUpperCase()}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{p.name}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, fontFamily: 'Lora', marginTop: 6 }}>{p.price}</div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

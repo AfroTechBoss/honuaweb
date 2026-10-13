@@ -175,7 +175,11 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   // The report queue used to live here as MOCK_ADMIN.reports. It belongs to
   // AdminModeration now, which reads /api/admin/content-reports — the shell
   // keeps only the count the rail badge draws, reported up by the panel.
-  const [users, setUsers] = React.useState<any[]>(MOCK_ADMIN.users);
+  // Real members only, from /api/admin/users. This used to open with
+  // MOCK_ADMIN.users — invented accounts listed beside real ones, whose
+  // buttons answered "Demo account — nothing was stored".
+  const [users, setUsers] = React.useState<any[]>([]);
+  const [usersLoaded, setUsersLoaded] = React.useState(false);
   const [openReports, setOpenReports] = React.useState<number | null>(null);
   // Starts empty and fills from admin_audit_log. It used to start as eight
   // invented entries about people who don't work here, and every real action an
@@ -267,7 +271,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
 
   React.useEffect(() => { loadAudit(); }, [loadAudit]);
 
-  // Real members, merged ahead of the demo roster.
+  // Real members.
   //
   // Through /api/admin/users rather than a browser query on profiles, because
   // standing is not a public column: suspended_until and banned_at are readable
@@ -281,12 +285,12 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
 
   const loadUsers = React.useCallback(async () => {
     const res = await listMembers(await token());
+    setUsersLoaded(true);
     if (res.error) return;
     setRosterAvailable(res.available);
     setCanSuspend(res.canSuspend);
     setCanBan(res.canBan);
-    if (!res.users.length) return;
-    setUsers(prev => [...res.users, ...prev.filter((u: any) => !u._db)]);
+    setUsers(res.users);
   }, [token]);
 
   React.useEffect(() => { loadUsers(); }, [loadUsers]);
@@ -414,14 +418,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   // stop the account writing anything anywhere.
   const setUserStatus = async (id, status) => {
     const u = users.find(x => x.id === id);
-    // The demo roster is still in this list and has no rows behind it. Moving
-    // its badge is the right behaviour for a mock; sending it to the server
-    // would be a 404 on a uuid that does not exist.
-    if (!u?._db) {
-      setUsers(us => us.map(x => x.id === id ? { ...x, status } : x));
-      app.toast?.({ msg: 'Demo account — nothing was stored', icon: 'lock' });
-      return;
-    }
+    if (!u) return;
 
     const action = status === 'suspended' ? 'suspend' : status === 'banned' ? 'ban' : 'reinstate';
     const { user, error } = await setAccountStatus(await token(), {
@@ -457,13 +454,12 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const setUserRole = async (id, role) => {
     const u = users.find(x => x.id === id);
 
-    // The demo roster has no rows behind it, and roles outside the three the
-    // profiles CHECK accepts ("Seller", say) are labels this screen draws
-    // rather than anything the database stores.
-    if (!u?._db || !['Member', 'Moderator', 'Admin'].includes(role)) {
-      setUsers(us => us.map(x => x.id === id ? { ...x, role } : x));
-      log('changed role to ' + role, '@' + (u?.handle || ''), 'award');
-      app.toast?.({ msg: 'Role updated', sub: 'Nothing was stored — display only', icon: 'lock' });
+    // Only the three roles the profiles CHECK accepts can be stored. Anything
+    // else ("Seller", say) is a label this screen draws, so it is refused
+    // rather than shown as changed.
+    if (!u) return;
+    if (!['Member', 'Moderator', 'Admin'].includes(role)) {
+      app.toast?.({ msg: `"${role}" is not a role that can be assigned`, sub: 'Members can be Member, Moderator or Admin.', kind: 'error', icon: 'lock' });
       return;
     }
 
@@ -675,7 +671,7 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
           {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
           {section === 'products' && <AdminProducts getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'carbon' && <AdminCarbonCredits getToken={adminToken} log={log} />}
-          {section === 'users' && <AdminUsers users={users} onStatus={setUserStatus} onRole={setUserRole} canSuspend={canSuspend} canBan={canBan} rosterAvailable={rosterAvailable} />}
+          {section === 'users' && <AdminUsers users={users} loaded={usersLoaded} onStatus={setUserStatus} onRole={setUserRole} canSuspend={canSuspend} canBan={canBan} rosterAvailable={rosterAvailable} />}
           {section === 'sellers' && <AdminSellers getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'shops' && <AdminShops getToken={adminToken} onSection={setSection} />}
           {section === 'payouts' && <AdminPayouts getToken={adminToken} log={log} adminEmail={adminEmail} onCounts={setPendingPayouts} />}

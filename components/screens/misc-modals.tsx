@@ -95,84 +95,6 @@ export function MProject({ data, close }) {
   );
 };
 
-// --- Article reader (explore) ---
-export function MArticle({ data, close }) {
-  const app = useApp();
-  const liked = app.like?.has('art-' + data.title);
-  const saved = app.save?.has('art-' + data.title);
-  return (
-    <Modal onClose={close} width={640}>
-      <div style={{ position: 'relative' }}>
-        <ImagePlaceholder label={data.img || 'article hero'} height={240} />
-        <button onClick={close} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="close" size={16} /></button>
-      </div>
-      <div style={{ padding: '24px 28px' }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <span className="chip chip-green">{data.tag}</span>
-          <span className="chip">12 min read</span>
-        </div>
-        <h1 className="font-display" style={{ margin: 0, fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{data.title}</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0', paddingBottom: 16, borderBottom: '1px solid var(--line)' }}>
-          <Avatar src={MOCK.users.okafor.avatar} name={data.author} size={36} />
-          <div style={{ fontSize: 13 }}>
-            <div style={{ fontWeight: 600 }}>{data.author}</div>
-            <div style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>May 19 · 4.2k reads</div>
-          </div>
-          <button className="btn btn-ghost" style={{ marginLeft: 'auto', padding: '6px 14px', fontSize: 13 }} onClick={() => app.toast({ msg: `Following ${data.author}`, icon: 'user' })}>Follow</button>
-        </div>
-        {[
-          'The model is deceptively simple: pool community capital, buy at wholesale, install with local labor, and route the savings back to members rather than shareholders.',
-          'In the first 18 months the co-op connected 4,200 homes — beating the incumbent utility on price while keeping every dollar of margin inside the neighborhood. The waitlist now runs three years deep.',
-          'What makes it replicable is the financing template, released open-source last month. Three more cities have already forked it, adapting the repayment schedule to local energy prices.',
-        ].map((p, i) => <p key={i} style={{ margin: '0 0 14px', fontSize: 15.5, lineHeight: 1.7, color: 'var(--ink-2)', textWrap: 'pretty' }}>{p}</p>)}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 22, paddingTop: 14, borderTop: '1px solid var(--line)', color: 'var(--ink-3)' }}>
-          <button className="abtn" onClick={() => app.like.toggle('art-' + data.title)} style={abtn(liked, 'var(--clay)')}><Icon name="heart" size={18} /> {liked ? '341' : '340'}</button>
-          <button className="abtn" onClick={() => app.toast({ msg: 'Comments', sub: 'Discussion thread would open here.', icon: 'comment' })} style={abtn(false)}><Icon name="comment" size={18} /> 28</button>
-          <button className="abtn" onClick={() => { app.save.toggle('art-' + data.title); app.toast(saved ? { msg: 'Removed from bookmarks', icon: 'bookmark' } : { msg: 'Saved to bookmarks', kind: 'success', icon: 'bookmark' }); }} style={{ ...abtn(saved, 'var(--green)'), marginLeft: 'auto' }}><Icon name="bookmark" size={18} /></button>
-          <button className="abtn" onClick={() => app.toast({ msg: 'Link copied', icon: 'share' })} style={abtn(false)}><Icon name="share" size={18} /></button>
-        </div>
-      </div>
-    </Modal>
-  );
-};
-function abtn(active, col = 'var(--green)') {
-  return { background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontFamily: 'JetBrains Mono', fontWeight: 600, color: active ? col : 'var(--ink-3)' };
-}
-
-// --- Product detail (marketplace) ---
-export function MProduct({ data, close }) {
-  const app = useApp();
-  const [qty, setQty] = React.useState(1);
-  const wished = app.wishlist?.has(data.name);
-  return (
-    <Modal onClose={close} width={720}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-        <ImagePlaceholder label={data.img} height={400} src={data.imgUrl} />
-        <div style={{ padding: 24, position: 'relative' }}>
-          <button onClick={close} style={{ position: 'absolute', top: 18, right: 18, background: 'var(--bg-2)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)' }}><Icon name="close" size={16} /></button>
-          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{data.brand.toUpperCase()}</div>
-          <h2 className="font-display" style={{ margin: '6px 0 8px', fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{data.name}</h2>
-          <span className="chip chip-green">{data.tag}</span>
-          <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 12, fontFamily: 'JetBrains Mono' }}>★★★★★ 4.8 · 214 reviews</div>
-          <p style={{ margin: '14px 0', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)' }}>Vouched by 38 people on Honua. Ships plastic-free and carbon-neutral. Repairable and backed by a 5-year warranty.</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '18px 0' }}>
-            <span style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>{data.price}</span>
-            <QtyStepper value={qty} set={setQty} />
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { for (let i = 0; i < qty; i++) app.addToCart({ name: data.name, price: data.price }); app.toast({ msg: 'Added to cart', sub: `${qty} × ${data.name}`, kind: 'success', icon: 'cart' }); close(); }}>
-              <Icon name="cart" size={15} /> Add {qty} to cart
-            </button>
-            <button className="btn btn-ghost" onClick={() => { app.wishlist.toggle(data.name); app.toast(wished ? { msg: 'Removed from wishlist', icon: 'bookmark' } : { msg: 'Saved to wishlist', kind: 'success', icon: 'bookmark' }); }} style={{ color: wished ? 'var(--green)' : undefined }}>
-              <Icon name="bookmark" size={15} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
-};
-
 // --- Carbon credit detail / buy ---
 export function MCredit({ data, close }) {
   const app = useApp();
@@ -285,66 +207,6 @@ export function MChallenge({ data, close }) {
   );
 };
 
-// --- Forum discussion thread ---
-export function MDiscussion({ data, close }) {
-  const app = useApp();
-  const u = MOCK.users[data.user] || MOCK.users.maya;
-  const liked = app.like?.has('disc-' + data.title);
-  return (
-    <Modal onClose={close} width={620}>
-      <ModalHead title={data.title} sub={`by @${u.handle} · ${data.time || '2h'} · ${data.replies || 12} replies`} onClose={close} />
-      <div style={{ padding: '18px 24px 0' }}>
-        <p style={{ fontSize: 15, lineHeight: 1.65, color: 'var(--ink-2)', margin: 0 }}>Sharing what worked for me this season — happy to answer questions in the thread. Photos and the full parts list are attached below. Would love feedback before I scale it up.</p>
-        <div style={{ display: 'flex', gap: 20, margin: '16px 0', paddingBottom: 16, borderBottom: '1px solid var(--line)', color: 'var(--ink-3)' }}>
-          <button onClick={() => app.like.toggle('disc-' + data.title)} style={abtn(liked, 'var(--clay)')}><Icon name="heart" size={17} /> {(data.replies || 12) * 3 + (liked ? 13 : 12)}</button>
-          <button style={abtn(false)}><Icon name="comment" size={17} /> {data.replies || 12}</button>
-          <button onClick={() => app.toast({ msg: 'Saved', icon: 'bookmark' })} style={{ ...abtn(false), marginLeft: 'auto' }}><Icon name="bookmark" size={17} /></button>
-        </div>
-        {[['sarah', 'This is great — the trap-crop trick saved my tomatoes last year.', '1h'], ['marcus', 'Bookmarking. Any idea how it holds up in zone 6?', '40m']].map(([k, c, t], i) => {
-          const cu = MOCK.users[k];
-          return (
-            <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
-              <Avatar src={cu.avatar} name={cu.name} size={34} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><strong>{cu.name}</strong>{cu.verified && <VerifiedTick size={12} />} <span style={{ color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>· {t}</span></div>
-                <p style={{ margin: '3px 0 0', fontSize: 14, lineHeight: 1.5, color: 'var(--ink-2)' }}>{c}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 10, padding: '16px 24px 22px', alignItems: 'center' }}>
-        <input className="fld" placeholder="Add a reply…" id="disc-reply" />
-        <button className="btn btn-primary" onClick={() => { const el = document.getElementById('disc-reply') as HTMLInputElement | null; if (el) el.value = ''; app.toast({ msg: 'Reply posted', kind: 'success', icon: 'comment' }); }}>Reply</button>
-      </div>
-    </Modal>
-  );
-};
-
-// --- Badge detail ---
-export function MBadge({ data, close }) {
-  return (
-    <Modal onClose={close} width={440}>
-      <div style={{ padding: '30px 26px 22px', textAlign: 'center', position: 'relative' }}>
-        <button onClick={close} style={{ position: 'absolute', top: 16, right: 16, background: 'var(--bg-2)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink-3)' }}><Icon name="close" size={16} /></button>
-        <div className="celebrate-pop" style={{ width: 96, height: 96, borderRadius: 26, background: 'var(--green-tint)', display: 'grid', placeItems: 'center', margin: '0 auto 16px', border: '1px solid var(--green-3)' }}><Icon name="award" size={40} color="var(--green)" /></div>
-        <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--green)', letterSpacing: '.08em' }}>BADGE EARNED</div>
-        <h2 className="font-display" style={{ margin: '6px 0 8px', fontSize: 24, fontWeight: 600 }}>{data.name || 'Composter'}</h2>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--ink-3)' }}>{data.desc || 'Awarded for composting food waste for 4 consecutive weeks. You diverted an estimated 18 kg from landfill.'}</p>
-        <div style={{ textAlign: 'left', background: 'var(--bg-2)', borderRadius: 12, padding: 16, margin: '18px 0 0' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>Perks unlocked</div>
-          {(data.perks || ['+200 Green Points', '2× streak multiplier for 7 days', 'Composter flair on your profile']).map((p, i) => (
-            <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '5px 0', fontSize: 13.5, color: 'var(--ink-2)' }}>
-              <span style={{ color: 'var(--green)' }}><Icon name="check" size={15} stroke={2.4} /></span> {p}
-            </div>
-          ))}
-        </div>
-      </div>
-      <ModalFoot><button className="btn btn-green" onClick={close}>Nice!</button></ModalFoot>
-    </Modal>
-  );
-};
-
 // --- Celebration ---
 export function MCelebrate({ data, close }) {
   return (
@@ -361,8 +223,64 @@ export function MCelebrate({ data, close }) {
 };
 
 // --- Wallet ---
+// Everything here is the signed-in user's own rows: Green Points are the sum of
+// their impact_logs points (the same figure MyImpactCard shows), carbon is their
+// paid carbon_purchases. Shared with Settings → Wallet & rewards.
+export type WalletEntry = { at: string; label: string; amount: string; positive: boolean };
+export type WalletSummary = { pts: number; monthPts: number; tonnes: number; totalCents: number; activity: WalletEntry[] };
+
+export function useWalletSummary(): WalletSummary | null {
+  const app = useApp();
+  const [summary, setSummary] = React.useState<WalletSummary | null>(null);
+  const load = React.useCallback(() => {
+    if (!app.user?.id) return;
+    Promise.all([import('@/lib/impact'), import('@/lib/market')]).then(async ([{ getAllLogs }, { getMyOffsets }]) => {
+      const [logs, offsets] = await Promise.all([getAllLogs(app.user.id), getMyOffsets(app.user.id)]);
+      const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+      const monthKey = monthStart.toISOString();
+      const activity: WalletEntry[] = [
+        ...logs.filter(l => Number(l.points ?? 0) > 0).map(l => ({
+          at: l.logged_at ?? '', label: l.action || l.category || 'Logged action',
+          amount: `+${Number(l.points).toLocaleString()} GP`, positive: true,
+        })),
+        ...offsets.purchases.map((p: any) => ({
+          at: p.created_at ?? '', label: `Carbon retired${p.credit_name ? ' · ' + p.credit_name : ''}`,
+          amount: `${Number(p.tonnes ?? 0)} t · $${((p.total_cents ?? 0) / 100).toFixed(2)}`, positive: false,
+        })),
+      ].sort((x, y) => (y.at > x.at ? 1 : y.at < x.at ? -1 : 0));
+      setSummary({
+        pts: logs.reduce((t, l) => t + Number(l.points ?? 0), 0),
+        monthPts: logs.filter(l => (l.logged_at ?? '') >= monthKey).reduce((t, l) => t + Number(l.points ?? 0), 0),
+        tonnes: offsets.tonnes, totalCents: offsets.totalCents, activity,
+      });
+    }).catch(() => setSummary({ pts: 0, monthPts: 0, tonnes: 0, totalCents: 0, activity: [] }));
+  }, [app.user?.id]);
+  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    window.addEventListener('honua:impact-logged', load);
+    window.addEventListener('honua:offset-purchased', load);
+    return () => {
+      window.removeEventListener('honua:impact-logged', load);
+      window.removeEventListener('honua:offset-purchased', load);
+    };
+  }, [load]);
+  return summary;
+}
+
+function exportStatement(rows: WalletEntry[]) {
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const csv = ['date,description,amount', ...rows.map(r => [r.at.slice(0, 10), esc(r.label), esc(r.amount)].join(','))].join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `honua-wallet-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function MWallet({ close }) {
   const app = useApp();
+  const w = useWalletSummary();
+  const tonnes = w ? (w.tonnes % 1 === 0 ? w.tonnes : w.tonnes.toFixed(1)) : '–';
   return (
     <Modal onClose={close} width={500}>
       <ModalHead icon="coin" iconColor="var(--sky)" title="Impact wallet" sub="Your verified-action rewards and carbon balance." onClose={close} />
@@ -370,24 +288,31 @@ export function MWallet({ close }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ background: 'linear-gradient(135deg,#1f6f3f,#2e9a5b)', color: '#fff', borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .85 }}>GREEN POINTS</div>
-            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>1,240</div>
+            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>{w ? w.pts.toLocaleString() : '–'}</div>
           </div>
           <div style={{ background: 'var(--ink-solid)', color: '#fff', borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .7 }}>IMPACT TOKENS</div>
-            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>24 <span style={{ fontSize: 14, opacity: .6 }}>IT</span></div>
+            <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', opacity: .7 }}>CARBON RETIRED</div>
+            <div style={{ fontSize: 30, fontWeight: 600, fontFamily: 'Lora' }}>{tonnes} <span style={{ fontSize: 14, opacity: .6 }}>t</span></div>
           </div>
         </div>
-        <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>RECENT TRANSACTIONS</div>
-        {[['Renewable plan switch', '+200 GP', 'May 18'], ['Offset purchase · Mau Forest', '−4 IT', 'May 16'], ['Bike commute streak', '+24 GP', 'May 15'], ['Compost log', '+18 GP', 'May 14']].map(([t, a, d], i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
-            <div><div style={{ fontSize: 13.5, fontWeight: 500 }}>{t}</div><div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{d}</div></div>
-            <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 13, color: a.startsWith('+') ? 'var(--green)' : 'var(--clay)' }}>{a}</span>
+        <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', margin: '18px 0 6px', letterSpacing: '.05em' }}>RECENT ACTIVITY</div>
+        {w === null && <div style={{ padding: '10px 0', fontSize: 13.5, color: 'var(--ink-3)' }}>Loading…</div>}
+        {w && w.activity.length === 0 && (
+          <div style={{ padding: '10px 0', fontSize: 13.5, color: 'var(--ink-3)', lineHeight: 1.55 }}>Nothing yet. Log a sustainable action or retire carbon and it will show up here.</div>
+        )}
+        {w?.activity.slice(0, 8).map((r, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{r.at ? new Date(r.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}</div>
+            </div>
+            <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', color: r.positive ? 'var(--green)' : 'var(--ink-2)' }}>{r.amount}</span>
           </div>
         ))}
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={() => app.toast({ msg: 'Statement exported', kind: 'success', icon: 'download' })}>Export statement</button>
-        <button className="btn btn-primary" onClick={() => app.toast({ msg: 'Top up', sub: 'Wallet funding would open here.', icon: 'coin' })}>Top up IT</button>
+        <button className="btn btn-ghost" disabled={!w || w.activity.length === 0} onClick={() => w && exportStatement(w.activity)}>Export statement</button>
+        <button className="btn btn-primary" onClick={() => { close(); app.nav?.('carbon'); }}>Retire carbon</button>
       </ModalFoot>
     </Modal>
   );
