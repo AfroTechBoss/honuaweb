@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { STRIPE_API_VERSION } from '@/lib/stripe-version';
 import { enforce } from '@/lib/rate-limit';
 import { isMissingTable } from '@/lib/pg-errors';
 import { logError, requestId } from '@/lib/observability';
@@ -143,7 +144,7 @@ export async function POST(req: Request) {
     }
 
     const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(secretKey, { apiVersion: '2026-06-24.dahlia' });
+    const stripe = new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION });
     const paymentIntent = await stripe.paymentIntents.create({
       amount: total,
       currency: 'usd',

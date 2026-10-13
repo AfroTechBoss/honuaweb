@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { STRIPE_API_VERSION } from "@/lib/stripe-version";
 import { verifyPrivyToken } from "@/lib/privy-verify";
 import { enforce } from "@/lib/rate-limit";
 import { isMissingTable, isMissingColumn, isMissingFunction } from "@/lib/pg-errors";
@@ -407,7 +408,7 @@ export async function POST(req: NextRequest) {
 
       try {
         const Stripe = (await import('stripe')).default;
-        const stripe = new Stripe(secretKey, { apiVersion: '2026-06-24.dahlia' });
+        const stripe = new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION });
         const refund = await stripe.refunds.create(
           {
             payment_intent: order.payment_intent_id,

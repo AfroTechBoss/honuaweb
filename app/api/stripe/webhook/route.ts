@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { STRIPE_API_VERSION } from '@/lib/stripe-version';
 import { logError, logWarn } from '@/lib/observability';
 
 export const runtime = 'nodejs';
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   }
 
   const Stripe = (await import('stripe')).default;
-  const stripe = new Stripe(secretKey, { apiVersion: '2026-06-24.dahlia' });
+  const stripe = new Stripe(secretKey, { apiVersion: STRIPE_API_VERSION });
 
   // Raw body is required for signature verification
   const body = await req.text();

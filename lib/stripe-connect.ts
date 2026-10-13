@@ -24,7 +24,7 @@
 import type Stripe from 'stripe';
 import { connectSupports, connectCountryName } from '@/lib/payout-methods';
 
-const API_VERSION = '2026-06-24.dahlia';
+import { STRIPE_API_VERSION as API_VERSION } from '@/lib/stripe-version';
 
 export { connectSupports, connectCountryName };
 
