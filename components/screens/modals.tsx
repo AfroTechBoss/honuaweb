@@ -7,6 +7,8 @@ import { logImpact, TASK_IMPACTS, ACTION_IMPACTS, computeImpact, VOUCH_THRESHOLD
 import { QuoteCard } from "./communities";
 import { VERIFICATION_MEANS } from "@/lib/verification-copy";
 import { MVerifyRequest } from "./verification-modal";
+import { CarbonPayment } from "../carbon-payment";
+import type { Retirement } from "@/lib/market";
 
 // Hashtag pool - seeded from MOCK trends + common sustainability tags
 const HASHTAG_POOL = [
@@ -1759,7 +1761,7 @@ export function MOffsetYear({ close }) {
   const [credits, setCredits] = React.useState<any[] | null>(null);
   const [pickId, setPickId] = React.useState<string | null>(null);
   const [tonnes, setTonnes] = React.useState(1);
-  const [buying, setBuying] = React.useState(false);
+  const [paying, setPaying] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1784,32 +1786,26 @@ export function MOffsetYear({ close }) {
   const total = unit * qty;
   const signedIn = !!app.user?.id;
 
-  const confirm = async () => {
-    if (!pick || !signedIn) return;
-    setBuying(true);
-    try {
-      const { retireCredit } = await import('@/lib/market');
-      const outcome = await retireCredit(pick.id, qty);
-      if (outcome.kind !== 'retired') {
-        app.toast?.({
-          msg: outcome.kind === 'signed-out' ? 'Sign in to retire a credit'
-            : outcome.kind === 'unavailable' ? 'Retirement is not switched on yet'
-            : outcome.message,
-          sub: outcome.kind === 'unavailable' ? 'Nothing was charged or recorded.' : undefined,
-          kind: 'error', icon: 'leaf',
-        });
-        return;
-      }
-      window.dispatchEvent(new Event('honua:offset-purchased'));
-      close();
-      // Price and tonnage as recorded, not as this modal proposed them.
-      const r = outcome.retirement;
-      app.openModal('celebrate', {
-        title: `Offset ${r.tonnes} t CO₂`,
-        sub: `Retired via ${r.creditName} for $${(r.totalCents / 100).toFixed(2)}. Serial ${r.serial}.`,
-      });
-    } finally { setBuying(false); }
+  const retired = (r: Retirement) => {
+    window.dispatchEvent(new Event('honua:offset-purchased'));
+    close();
+    // Price and tonnage as recorded after payment, not as this modal proposed them.
+    app.openModal('celebrate', {
+      title: `Offset ${r.tonnes} t CO₂`,
+      sub: `Retired via ${r.creditName} for $${(r.totalCents / 100).toFixed(2)}. Serial ${r.serial}.`,
+    });
   };
+
+  if (paying && pick) {
+    return (
+      <Modal onClose={close} width={480}>
+        <ModalHead icon="globe" title={`Offset ${qty} t of your ${year}`} sub={`Retired against ${pick.name} once your card payment is confirmed.`} onClose={close} />
+        <div style={{ padding: '18px 24px 22px' }}>
+          <CarbonPayment creditId={pick.id} tonnes={qty} onRetired={retired} onBack={() => setPaying(false)} />
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal onClose={close} width={480}>
@@ -1899,8 +1895,8 @@ export function MOffsetYear({ close }) {
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>{pick ? 'Cancel' : 'Close'}</button>
         {pick && (
-          <button className="btn btn-green" disabled={buying || !signedIn} onClick={confirm}>
-            {buying ? 'Retiring…' : !signedIn ? 'Sign in to offset' : `Offset ${qty} t · $${total.toFixed(2)}`}
+          <button className="btn btn-green" disabled={!signedIn} onClick={() => setPaying(true)}>
+            {!signedIn ? 'Sign in to offset' : `Offset ${qty} t · $${total.toFixed(2)}`}
           </button>
         )}
       </ModalFoot>

@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data: credits, error }, { data: purchases }] = await Promise.all([
     db.from('carbon_credits').select('*').order('created_at', { ascending: true }),
-    db.from('carbon_purchases').select('credit_id, tonnes, total_cents'),
+    db.from('carbon_purchases').select('credit_id, tonnes, total_cents, payment_state'),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -94,8 +94,11 @@ export async function GET(req: NextRequest) {
   for (const p of purchases ?? []) {
     if (!p.credit_id) continue; // pre-registry purchase — no listing to attribute it to
     const row = retired.get(p.credit_id) ?? { tonnes: 0, cents: 0, orders: 0 };
+    // Tonnes count either way (they left the listing's volume), but only a
+    // paid retirement brought money in: the ones from before migration 049
+    // were recorded as 'unpaid' without a charge.
     row.tonnes += Number(p.tonnes ?? 0);
-    row.cents += Number(p.total_cents ?? 0);
+    if (p.payment_state === 'paid') row.cents += Number(p.total_cents ?? 0);
     row.orders += 1;
     retired.set(p.credit_id, row);
   }

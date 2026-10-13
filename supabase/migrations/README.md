@@ -60,6 +60,11 @@ Since migration 048 the webhook is the only thing that creates orders: an order
 appears only after Stripe reports a captured amount equal to the server's quote.
 Without a working webhook, buyers are charged and no order is recorded.
 
+Since migration 049 the same webhook retires carbon credits: a retirement is
+recorded only after the payment matches the server's quote, and a payment that
+can no longer be honoured (credit sold out, changed or removed) is refunded
+automatically. Apply 049 after 048.
+
 ## Granting yourself admin
 
 `/admin` is gated by Privy, but `profiles.role` controls DB-level admin powers

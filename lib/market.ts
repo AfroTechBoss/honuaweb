@@ -452,66 +452,82 @@ export type Retirement = {
   paymentState: 'unpaid' | 'paid' | 'refunded';
 };
 
-export type RetireOutcome =
-  | { kind: 'retired'; retirement: Retirement }
+// Retiring tonnes is a paid checkout (migration 049, /api/carbon/checkout).
+// The browser names a credit and a tonnage; the server prices it and opens a
+// PaymentIntent; the Stripe webhook retires the tonnes once that exact amount
+// is captured. Nothing here writes a retirement.
+
+export type CarbonQuote = {
+  clientSecret: string;
+  checkoutId: string;
+  creditName: string;
+  tonnes: number;
+  unitCents: number;
+  totalCents: number;
+};
+
+export type CarbonStart =
+  | { kind: 'ready'; quote: CarbonQuote }
   | { kind: 'signed-out' }
   | { kind: 'unavailable' }
   | { kind: 'rejected'; message: string };
 
-// Retire tonnes against a credit.
-//
-// The caller no longer says what it costs. `total_cents` used to be computed in
-// the browser and inserted as given, alongside a `tonnes` figure nothing checked
-// against remaining stock — so a crafted request could retire any volume for
-// nothing and the inventory trigger would follow it down. Migration 047 moved
-// the write into retire_carbon_credit(), which reads the price from
-// carbon_credits, takes a row lock, refuses to oversell, and stamps a serial.
-//
-// The price argument is gone deliberately rather than kept and ignored: leaving
-// it would imply the caller still has a say.
-export async function retireCredit(creditId: string, tonnes: number): Promise<RetireOutcome> {
+async function authHeader(): Promise<Record<string, string>> {
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function startCarbonCheckout(creditId: string, tonnes: number): Promise<CarbonStart> {
   try {
-    const { data, error } = await supabase.rpc('retire_carbon_credit', {
-      p_credit: creditId,
-      p_tonnes: tonnes,
+    const res = await fetch('/api/carbon/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ creditId, tonnes }),
     });
-
-    if (error) {
-      // Not applied yet — say so rather than reporting a failed retirement.
-      if (error.code === 'PGRST202' || error.code === '42883') return { kind: 'unavailable' };
-      if (error.code === '42501') return { kind: 'signed-out' };
-      // 22023 / P0002 carry sentences written for the person reading them —
-      // "Only 4 t left on this credit" — so they pass through unchanged.
-      return { kind: 'rejected', message: error.message || 'That retirement was refused.' };
-    }
-
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { kind: 'rejected', message: 'That retirement was refused.' };
-
-    return {
-      kind: 'retired',
-      retirement: {
-        id: row.id,
-        serial: row.serial,
-        creditName: row.credit_name,
-        tonnes: Number(row.tonnes ?? 0),
-        unitCents: Number(row.unit_cents ?? 0),
-        totalCents: Number(row.total_cents ?? 0),
-        retiredAt: row.retired_at,
-        paymentState: row.payment_state ?? 'unpaid',
-      },
-    };
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.clientSecret) return { kind: 'ready', quote: data };
+    if (res.status === 401) return { kind: 'signed-out' };
+    // Payments not configured, or 049 not applied — say so rather than
+    // reporting a failed retirement.
+    if (data.error === 'stripe_not_configured' || data.error === 'checkout_unavailable') return { kind: 'unavailable' };
+    return { kind: 'rejected', message: data.message || 'That retirement was refused.' };
   } catch {
     return { kind: 'rejected', message: 'Could not reach the server.' };
   }
 }
 
+export type CarbonSettled =
+  | { kind: 'retired'; retirement: Retirement }
+  | { kind: 'rejected'; message: string }
+  | { kind: 'pending' };
+
+// Waits for the webhook to retire a paid checkout. It usually lands within a
+// couple of seconds; 'pending' means the money went through but the webhook
+// has not caught up yet, and the retirement will appear on its own.
+export async function waitForRetirement(checkoutId: string, timeoutMs = 20_000): Promise<CarbonSettled> {
+  const until = Date.now() + timeoutMs;
+  const headers = await authHeader();
+  while (Date.now() < until) {
+    try {
+      const res = await fetch(`/api/carbon/checkout?id=${encodeURIComponent(checkoutId)}`, { headers, cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (data.status === 'finalized' && data.retirement) return { kind: 'retired', retirement: data.retirement };
+      if (data.status === 'rejected') return { kind: 'rejected', message: data.reason || 'That retirement was refused.' };
+    } catch { /* keep waiting */ }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  return { kind: 'pending' };
+}
+
+// Only paid retirements count. Rows from before 049 were never charged for
+// and stay in the table as 'unpaid', but they are not offsets.
 export async function getMyOffsets(userId: string): Promise<{ tonnes: number; totalCents: number; purchases: any[] }> {
   try {
     const { data, error } = await supabase
       .from('carbon_purchases')
       .select('*')
       .eq('user_id', userId)
+      .eq('payment_state', 'paid')
       .order('created_at', { ascending: false });
     if (error || !data) return { tonnes: 0, totalCents: 0, purchases: [] };
     return {

@@ -2,6 +2,8 @@
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
+import { CarbonPayment } from "@/components/carbon-payment";
+import type { Retirement } from "@/lib/market";
 
 export function Toggle({ on }) {
   return (
@@ -175,51 +177,47 @@ export function MProduct({ data, close }) {
 export function MCredit({ data, close }) {
   const app = useApp();
   const [qty, setQty] = React.useState(1);
-  const [buying, setBuying] = React.useState(false);
+  const [paying, setPaying] = React.useState(false);
+  // Display only — the server prices the retirement and that is what is charged.
   const unit = parseFloat(String(data.price).replace(/[^0-9.]/g, '')) || 20;
 
-  const handleBuy = async () => {
-    setBuying(true);
-    try {
-      // A retirement is only recordable against a credit that exists in the registry.
-      // Without an id there is nothing to retire, so don't write a record or claim one.
-      if (!data.id) {
-        app.toast?.({ msg: 'This credit is no longer listed', kind: 'error', icon: 'leaf' });
-        close();
-        return;
-      }
-      if (!app.user?.id) {
-        app.toast?.({ msg: 'Sign in to retire a credit', kind: 'error', icon: 'leaf' });
-        close();
-        return;
-      }
-
-      const { retireCredit } = await import('@/lib/market');
-      const outcome = await retireCredit(data.id, qty);
-
-      if (outcome.kind !== 'retired') {
-        app.toast?.({
-          msg: outcome.kind === 'signed-out' ? 'Sign in to retire a credit'
-            : outcome.kind === 'unavailable' ? 'Retirement is not switched on yet'
-            : outcome.message,
-          sub: outcome.kind === 'unavailable' ? 'Nothing was charged or recorded.' : undefined,
-          kind: 'error', icon: 'leaf',
-        });
-        return;
-      }
-
-      window.dispatchEvent(new Event('honua:offset-purchased'));
+  const handleBuy = () => {
+    // A retirement is only recordable against a credit that exists in the registry.
+    // Without an id there is nothing to retire, so don't write a record or claim one.
+    if (!data.id) {
+      app.toast?.({ msg: 'This credit is no longer listed', kind: 'error', icon: 'leaf' });
       close();
-      // Everything shown here is what the database recorded, including the
-      // tonnage — it can differ from `qty` only if the request was refused,
-      // and a refusal never reaches this line.
-      const r = outcome.retirement;
-      app.openModal('celebrate', {
-        title: `Offset ${r.tonnes} t CO₂`,
-        sub: `Retired via ${r.creditName} for $${(r.totalCents / 100).toFixed(2)}. Serial ${r.serial}.`,
-      });
-    } finally { setBuying(false); }
+      return;
+    }
+    if (!app.user?.id) {
+      app.toast?.({ msg: 'Sign in to retire a credit', kind: 'error', icon: 'leaf' });
+      close();
+      return;
+    }
+    setPaying(true);
   };
+
+  const retired = (r: Retirement) => {
+    window.dispatchEvent(new Event('honua:offset-purchased'));
+    close();
+    // Everything shown here is what the database recorded after the payment.
+    app.openModal('celebrate', {
+      title: `Offset ${r.tonnes} t CO₂`,
+      sub: `Retired via ${r.creditName} for $${(r.totalCents / 100).toFixed(2)}. Serial ${r.serial}.`,
+    });
+  };
+
+  if (paying) {
+    return (
+      <Modal onClose={close} width={560}>
+        <ModalHead icon="leaf" title={`Retire ${qty} t · ${data.name}`} sub="Paid by card. The tonnes are retired once the payment is confirmed." onClose={close} />
+        <div style={{ padding: '18px 24px 22px' }}>
+          <CarbonPayment creditId={data.id} tonnes={qty} onRetired={retired} onBack={() => setPaying(false)} />
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal onClose={close} width={560}>
       <ModalHead icon="leaf" title={data.name} sub={`${data.type} · ${data.region} · vintage ${data.vintage}`} onClose={close} />
@@ -251,8 +249,8 @@ export function MCredit({ data, close }) {
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={handleBuy} disabled={buying}>
-          {buying ? 'Processing…' : `Buy ${qty} t · $${(unit * qty).toFixed(2)}`}
+        <button className="btn btn-green" onClick={handleBuy}>
+          {`Buy ${qty} t · $${(unit * qty).toFixed(2)}`}
         </button>
       </ModalFoot>
     </Modal>
