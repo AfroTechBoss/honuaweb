@@ -40,17 +40,28 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+          # Pasted secrets often carry a trailing newline, spaces or quotes,
+          # which curl rejects as a malformed URL. Strip them, and accept the
+          # URL with or without https:// or a trailing /rest/v1.
+          clean() { printf '%s' "$1" | tr -d " \t\r\n\"'"; }
+          url=$(clean "$SUPABASE_URL"); key=$(clean "$SUPABASE_ANON_KEY")
+          url=${url%/}; url=${url%/rest/v1}; url=${url%/}
+          case "$url" in http://*|https://*) ;; *) url="https://$url" ;; esac
+          if [ -z "$url" ] || [ -z "$key" ] || [ "$url" = "https://" ]; then
             echo "::error::Set the SUPABASE_URL and SUPABASE_ANON_KEY repository secrets."
+            exit 1
+          fi
+          if ! printf '%s' "$url" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]+)?$'; then
+            echo "::error::SUPABASE_URL should look like https://<project-ref>.supabase.co (Supabase → Project Settings → API → Project URL)."
             exit 1
           fi
           # A PostgREST select goes all the way to Postgres. Retried, because a
           # project that has just been woken can take a moment to answer.
           status=$(curl -sS -o /dev/null -w '%{http_code}' \
             --retry 3 --retry-delay 10 --retry-all-errors --max-time 30 \
-            "${SUPABASE_URL%/}/rest/v1/products?select=id&limit=1" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+            "$url/rest/v1/products?select=id&limit=1" \
+            -H "apikey: $key" \
+            -H "Authorization: Bearer $key")
           echo "HTTP $status"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
