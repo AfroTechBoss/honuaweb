@@ -5,7 +5,9 @@ import {
   RISK_WINDOW_START_HOUR, ENDED_WINDOW_END_HOUR,
 } from "@/lib/streak";
 
-// Hourly job that sends the two streak notifications (migration 028).
+// Hourly job that sends the two streak notifications (migration 028). It is
+// scheduled by .github/workflows/streak-notices.yml, not Vercel Cron: the Hobby
+// plan only allows daily crons.
 //
 // Hourly rather than daily because the send windows are in each user's local
 // time — across all zones there is some user in their evening every hour of the
@@ -14,7 +16,7 @@ import {
 // no-op.
 //
 // Service role, so it can insert notifications for users it isn't acting as.
-// Guarded by CRON_SECRET: Vercel Cron sends it as `Authorization: Bearer …`.
+// Guarded by CRON_SECRET, sent as `Authorization: Bearer …` by the workflow.
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

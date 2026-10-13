@@ -1,0 +1,53 @@
+name: Streak notices
+
+# Calls /api/cron/streak every hour. This used to be a Vercel cron, but the
+# Hobby plan only allows crons that run once a day, and an hourly schedule in
+# vercel.json makes Vercel refuse every deployment. The job has to be hourly:
+# the reminder windows are in each user's local evening, and some time zone is
+# in its evening every hour of the UTC day.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   APP_URL       the production site, e.g. https://honua.example.com
+#   CRON_SECRET   the same value as CRON_SECRET in Vercel's env vars
+#
+# A repeat run in the same window is a no-op on the server, so a retried or
+# duplicated run never sends a second notification.
+
+on:
+  schedule:
+    # Seven past the hour — off the top of the hour, when GitHub's scheduler is
+    # busiest and drops runs. The send windows are whole hours, so the offset
+    # doesn't move anyone out of one.
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: streak-notices
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the streak job
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::Set the APP_URL and CRON_SECRET repository secrets."
+            exit 1
+          fi
+          status=$(curl -sS -o body.json -w '%{http_code}' \
+            --retry 2 --retry-delay 15 --retry-all-errors --max-time 120 \
+            "${APP_URL%/}/api/cron/streak" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat body.json; echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::/api/cron/streak answered HTTP $status."
+            exit 1
+          fi
