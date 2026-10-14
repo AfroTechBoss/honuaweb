@@ -151,6 +151,20 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   }, []);
   React.useEffect(() => { loadDbProjects(); }, [loadDbProjects]);
 
+  // /map?project=<id> is the link the project modal's Share copies. Open that
+  // project once the list has loaded, then drop the param so closing the
+  // modal doesn't reopen it on the next render.
+  const linkedProject = params?.project as string | undefined;
+  const openedLinkRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!linkedProject || !dbProjects || openedLinkRef.current) return;
+    openedLinkRef.current = true;
+    const p = dbProjects.find(x => x.id === linkedProject);
+    if (p) app.openModal?.('project', p);
+    else app.toast?.({ msg: 'Project not found', sub: 'It may have ended or been removed.', icon: 'pin' });
+    window.history.replaceState(null, '', '/map');
+  }, [linkedProject, dbProjects]);
+
   // Refresh the list when a project is created from the modal
   React.useEffect(() => {
     const handler = () => loadDbProjects();

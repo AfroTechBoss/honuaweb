@@ -710,7 +710,7 @@ function SellRejected({ onNav, onReapply }) {
             because the stored application is still rejected until a new one
             is filed. */}
         <button className="btn btn-green" onClick={onReapply} style={{ justifyContent: 'center', padding: '13px' }}>Revise & re-apply</button>
-        <button className="btn btn-ghost" onClick={() => app.toast?.({ msg: 'Opening…', sub: 'Support docs would open here.', icon: 'comment' })} style={{ justifyContent: 'center', padding: '13px' }}>Contact the review team</button>
+        <button className="btn btn-ghost" onClick={() => app.nav?.('support')} style={{ justifyContent: 'center', padding: '13px' }}>Contact the review team</button>
       </div>
     </StatusShell>
   );

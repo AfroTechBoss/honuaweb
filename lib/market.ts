@@ -579,6 +579,8 @@ export async function getMapProjects(): Promise<any[]> {
       lng: p.lng,
       locationName: p.location_name,
       description: p.description,
+      userId: p.user_id ?? null,
+      coverUrl: p.cover_url ?? null,
       _db: true,
     }));
   } catch { return []; }

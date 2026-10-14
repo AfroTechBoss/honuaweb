@@ -2,7 +2,7 @@
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { PostDetailSkeleton } from "@/components/primitives";
-import { getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
+import { updateProfile, getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
 import { getAllLogs } from "@/lib/impact";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
@@ -63,7 +63,7 @@ function useProfileData(handleOrId: string | undefined, currentUserId: string | 
     }).catch(() => setLoading(false));
   }, [handleOrId, currentUserId]);
 
-  return { profile, posts, followerCount, followingCount, achievements, projects, impact, following, setFollowing, loading };
+  return { profile, setProfile, posts, followerCount, followingCount, achievements, projects, impact, following, setFollowing, loading };
 }
 
 // kg up to a tonne, then tonnes. Keeps one decimal under 10 kg so a first small
@@ -84,7 +84,8 @@ export function DesktopProfile({ onNav, params }) {
   const lookupKey = (!handle || handle === 'you') ? app.user?.handle : handle;
   const isOwn = !handle || handle === 'you' || handle === app.user?.handle;
 
-  const { profile, posts, followerCount, followingCount, achievements, projects, impact, following, setFollowing, loading } =
+  const [coverUploading, setCoverUploading] = React.useState(false);
+  const { profile, setProfile, posts, followerCount, followingCount, achievements, projects, impact, following, setFollowing, loading } =
     useProfileData(lookupKey, app.user?.id);
 
   // Check if this profile has blocked the current viewer
@@ -167,6 +168,25 @@ export function DesktopProfile({ onNav, params }) {
     );
   }
 
+  // Cover photos go to the covers bucket, same as community covers.
+  const uploadCover = async (file: File) => {
+    if (!app.user?.id) return;
+    if (!file.type.startsWith('image/')) { app.toast?.({ msg: 'Pick an image file', icon: 'close' }); return; }
+    if (file.size > 8 * 1024 * 1024) { app.toast?.({ msg: 'That image is too large', sub: 'Covers can be up to 8 MB.', icon: 'close' }); return; }
+    setCoverUploading(true);
+    try {
+      const { uploadFile } = await import('@/lib/storage');
+      const url = await uploadFile('covers', app.user.id, file);
+      await updateProfile(app.user.id, { cover_url: url });
+      setProfile((p: any) => ({ ...p, cover_url: url }));
+      app.toast?.({ msg: 'Cover updated', kind: 'success', icon: 'check' });
+    } catch {
+      app.toast?.({ msg: "Couldn't update your cover", sub: 'Please try again.', icon: 'close' });
+    } finally {
+      setCoverUploading(false);
+    }
+  };
+
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="profile" onNav={onNav} />
@@ -186,9 +206,10 @@ export function DesktopProfile({ onNav, params }) {
             </svg>
           )}
           {isOwn && (
-            <button onClick={() => app.toast?.({ msg: 'Coming soon', sub: 'Cover photo upload coming soon.', icon: 'sparkles' })} style={{ position: 'absolute', bottom: 12, right: 16, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: 8, color: '#fff', padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="edit" size={13} /> Edit cover
-            </button>
+            <label style={{ position: 'absolute', bottom: 12, right: 16, background: 'rgba(0,0,0,.45)', border: 'none', borderRadius: 8, color: '#fff', padding: '6px 12px', fontSize: 12, cursor: coverUploading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="edit" size={13} /> {coverUploading ? 'Uploading…' : 'Edit cover'}
+              <input type="file" accept="image/*" hidden disabled={coverUploading} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCover(f); }} />
+            </label>
           )}
         </div>
 
@@ -1026,7 +1047,11 @@ export function DesktopPostDetail({ onNav, params }) {
               <ActionBtn icon="repost" count={(post.reposts_count ?? 0) + (app.realtimeDeltas?.[post.id]?.reposts ?? 0)} active={app.repost?.has(post.id)} activeColor="var(--green)" onClick={() => { app.repost?.toggle(post.id); app.toast?.({ msg: app.repost?.has(post.id) ? 'Repost removed' : 'Reposted to your followers', icon: 'repost' }); }} />
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
                 <ActionBtn icon="bookmark" active={saved} onClick={() => setShowBookmark(true)} />
-                <ActionBtn icon="share" onClick={() => app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' })} />
+                <ActionBtn icon="share" onClick={async () => {
+                  const url = `${window.location.origin}/post/${post.id}`;
+                  try { await navigator.clipboard.writeText(url); app.toast?.({ msg: 'Link copied', sub: 'Post link copied to clipboard.', icon: 'share' }); }
+                  catch { app.toast?.({ msg: "Couldn't copy the link", sub: url, icon: 'share' }); }
+                }} />
               </span>
             </footer>
             {showBookmark && (

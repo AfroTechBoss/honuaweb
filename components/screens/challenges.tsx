@@ -53,9 +53,14 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
       if (joined) {
         setJoinedAt(Object.fromEntries(joined.map((j: any) => [j.challenge_id, j.joined_at])));
         const joinedSet = new Set(joined.map((j: any) => j.challenge_id));
+        // Authoritative both ways — also drops the demo ids (1, 2) older
+        // builds saved to this browser.
+        const realIds = new Set((challs ?? []).map((c: any) => c.id));
         (challs ?? []).forEach((c: any) => {
-          if (joinedSet.has(c.id) && !app.challenge.has(c.id)) app.challenge.add(c.id);
+          if (joinedSet.has(c.id)) app.challenge.add(c.id);
+          else app.challenge.remove(c.id);
         });
+        [1, 2].forEach(id => { if (!realIds.has(id)) app.challenge.remove(id); });
       }
     }).catch(() => setLoad('error'));
   }, [app.user?.id]);

@@ -35,6 +35,7 @@ export function pathFor(key: string, params: any = {}): string {
     case "admin": return "/admin";
     case "search": return params?.q ? `/search?q=${encodeURIComponent(params.q)}` : "/search";
     case "orders": return "/orders";
+    case "support": return "/support";
     case "order": return `/orders/${params?.id ?? ''}`;
     case "product": return `/marketplace/${params?.id ?? ''}`;
     case "shop": return `/shop/${encodeURIComponent(params?.handle ?? '')}`;
@@ -49,9 +50,11 @@ const STATE_DEFAULTS: any = {
   mutedUsers: [],
   blockedUsers: [],
   blockedByUsers: [],
-  following: ["sarahgreen", "greentech"],
-  joinedCommunities: ["Urban gardeners", "Solar DIY", "Ocean cleanup crew"],
-  joinedChallenges: [1, 2],
+  // Start empty: these used to be seeded with demo follows and memberships,
+  // which showed every new account as already in "Solar DIY" and friends.
+  following: [],
+  joinedCommunities: [],
+  joinedChallenges: [],
   cart: [],
   cartOpen: false,
   wishlist: [],

@@ -78,22 +78,70 @@ export function Confetti() {
 };
 
 // --- Project detail (action map) ---
+// Everything here comes from the project row and its RSVPs. It used to say
+// "Marcus, Maya & N others are going" for every project, show a striped
+// "project photo" placeholder, fill an empty description with invented
+// copy, and its Share button toasted "Link copied" without copying anything.
 export function MProject({ data, close }) {
   const app = useApp();
   const going = app.community?.has('proj-' + data.id);
   const isDbProject = /^[0-9a-f-]{36}$/.test(String(data.id));
+  const [count, setCount] = React.useState<number>(data.going ?? 0);
+  const [attendees, setAttendees] = React.useState<any[]>([]);
+  const [hostHandle, setHostHandle] = React.useState<string | null>(null);
+  const isHost = !!app.user?.id && data.userId === app.user.id;
+
+  React.useEffect(() => {
+    if (!isDbProject) return;
+    let live = true;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const [{ data: rsvps }, host] = await Promise.all([
+        supabase.from('project_rsvps').select('user_id').eq('project_id', data.id).limit(50),
+        data.userId
+          ? supabase.from('profiles').select('handle').eq('id', data.userId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (!live) return;
+      setHostHandle((host as any)?.data?.handle ?? null);
+      const ids = (rsvps ?? []).map((r: any) => r.user_id);
+      setCount(ids.length);
+      if (!ids.length) { setAttendees([]); return; }
+      const { data: profiles } = await supabase.from('profiles')
+        .select('id, handle, full_name, avatar_url').in('id', ids.slice(0, 4));
+      if (live) setAttendees(profiles ?? []);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [data.id, data.userId, going]);
+
   const handleRsvp = () => {
     app.community.toggle('proj-' + data.id);
+    setCount(c => Math.max(0, c + (going ? -1 : 1)));
     // Real RSVP for DB projects — keeps going_count accurate for everyone
     if (isDbProject && app.user?.id) {
       import('@/lib/market').then(({ toggleRsvp }) => toggleRsvp(app.user.id, data.id, going)).catch(() => {});
     }
     app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: `${data.t} · ${data.when}`, kind: 'success', icon: 'check' });
   };
+  const share = async () => {
+    const url = `${window.location.origin}/map?project=${encodeURIComponent(data.id)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      app.toast({ msg: 'Link copied', sub: 'Anyone with the link can open this project.', icon: 'share' });
+    } catch {
+      app.toast({ msg: "Couldn't copy the link", sub: url, icon: 'share' });
+    }
+  };
+  const names = attendees.map(a => (a.full_name || a.handle || '').split(' ')[0]).filter(Boolean);
+  const goingLine = count === 0
+    ? 'No one has RSVPed yet — be the first.'
+    : names.length === 0
+      ? `${count} going`
+      : count <= names.length
+        ? `${names.join(names.length === 2 ? ' & ' : ', ')} ${count === 1 ? 'is' : 'are'} going`
+        : `${names.slice(0, 2).join(', ')} & ${count - Math.min(2, names.length)} ${count - Math.min(2, names.length) === 1 ? 'other' : 'others'} are going`;
   return (
     <Modal onClose={close} width={560}>
-      <div style={{ height: 180, position: 'relative', background: (data.color || 'var(--green)') }}>
-        <ImagePlaceholder label={`${data.cat} project photo`} height={180} />
+      <div style={{ height: 180, position: 'relative', background: data.coverUrl ? `url(${data.coverUrl}) center/cover` : (data.color || 'var(--green)') }}>
         <button onClick={close} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="close" size={16} /></button>
         <span className="chip chip-green" style={{ position: 'absolute', bottom: 14, left: 16 }}>{data.cat}</span>
       </div>
@@ -101,22 +149,30 @@ export function MProject({ data, close }) {
         <h2 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{data.t}</h2>
         <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--ink-3)' }}>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="calendar" size={14} /> {data.when}</span>
-          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="users" size={14} /> {data.going} going</span>
-          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="pin" size={14} /> {data.locationName || 'Near you'}</span>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="users" size={14} /> {count} going</span>
+          {data.locationName && <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="pin" size={14} /> {data.locationName}</span>}
         </div>
-        <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)' }}>
-          Hosted by <strong>{data.host}</strong>. {data.description || 'Bring gloves and a refillable bottle — tools and refreshments provided. All skill levels welcome; this is a great first action if you\'re new to the neighborhood crew.'}
+        <p style={{ margin: '14px 0 0', fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>
+          Hosted by <strong>{data.host}</strong>.{data.description ? ' ' + data.description : ''}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16, padding: 14, background: 'var(--bg-2)', borderRadius: 12 }}>
-          <div style={{ display: 'flex' }}>
-            {[0, 1, 2, 3].map(i => <span key={i} style={{ width: 28, height: 28, borderRadius: '50%', marginLeft: i ? -8 : 0, background: ['var(--green)', 'var(--sky)', 'var(--sun)', 'var(--clay)'][i], border: '2px solid var(--surface)' }} />)}
-          </div>
-          <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>Marcus, Maya & {data.going - 2} others are going</span>
+          {attendees.length > 0 && (
+            <div style={{ display: 'flex' }}>
+              {attendees.map((a, i) => (
+                <span key={a.id} style={{ marginLeft: i ? -8 : 0, borderRadius: '50%', border: '2px solid var(--surface)', display: 'inline-flex' }}>
+                  <Avatar src={a.avatar_url} name={a.full_name || a.handle} size={28} noBorder />
+                </span>
+              ))}
+            </div>
+          )}
+          <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{goingLine}</span>
         </div>
       </div>
       <ModalFoot>
-        <button className="btn btn-ghost" onClick={() => { app.toast({ msg: 'Link copied', sub: 'Project link copied to clipboard.', icon: 'share' }); }}><Icon name="share" size={14} /> Share</button>
-        <button className="btn btn-ghost" onClick={() => { close(); app.nav('messages'); }}><Icon name="msg" size={14} /> Message host</button>
+        <button className="btn btn-ghost" onClick={share}><Icon name="share" size={14} /> Share</button>
+        {hostHandle && !isHost && (
+          <button className="btn btn-ghost" onClick={() => { close(); app.nav('messages', { handle: hostHandle }); }}><Icon name="msg" size={14} /> Message host</button>
+        )}
         <button className={going ? 'btn btn-ghost' : 'btn btn-green'} onClick={handleRsvp}>
           {going ? 'Going ✓ — cancel' : "I'm going"}
         </button>

@@ -8,87 +8,6 @@ import { logImpact, TASK_IMPACTS } from "@/lib/impact";
 
 
 // =============== Desktop Forum / Communities ===============
-const COMMUNITY_POSTS: Record<string, any[]> = {
-  'Urban gardeners': [
-    { title: 'Sharing my balcony irrigation schematic — feedback welcome', user: 'maya', time: '2h', replies: 24, votes: 42, kind: 'discussion' },
-    { title: 'PSA: Aphids love nasturtiums — use them as a trap crop', user: 'sarah', time: '5h', replies: 41, votes: 68, kind: 'tip' },
-    { title: 'Anyone in Brooklyn want to swap seedlings this weekend?', user: 'marcus', time: '8h', replies: 12, votes: 29, kind: 'meetup' },
-    { title: 'Soil test results came back — silty loam, what should I plant?', user: 'tara', time: '1d', replies: 18, votes: 35, kind: 'question' },
-    { title: 'Cherry tomato yield: 4.2 kg from 2 sq meters this season', user: 'okafor', time: '2d', replies: 78, votes: 91, kind: 'win' },
-  ],
-  'Solar DIY': [
-    { title: 'My 400W off-grid van build — full wiring diagram', user: 'marcus', time: '3h', replies: 52, votes: 118, kind: 'discussion' },
-    { title: 'Which MPPT controller for a 2-panel + LiFePO4 setup?', user: 'tara', time: '6h', replies: 33, votes: 47, kind: 'question' },
-    { title: 'Battery degradation after 2 years — real data, not marketing', user: 'greentech', time: '1d', replies: 28, votes: 84, kind: 'tip' },
-    { title: 'Weekend workshop in Portland — learn to wire your own panels', user: 'sarah', time: '2d', replies: 14, votes: 31, kind: 'meetup' },
-    { title: 'Finally grid-independent — cost breakdown and lessons', user: 'can', time: '3d', replies: 97, votes: 203, kind: 'win' },
-  ],
-  'Ocean cleanup crew': [
-    { title: 'Last weekend: 340 kg removed from Coogee beach', user: 'can', time: '1h', replies: 86, votes: 142, kind: 'win' },
-    { title: 'How do we handle microplastics — current tech vs gaps', user: 'okafor', time: '4h', replies: 39, votes: 67, kind: 'discussion' },
-    { title: 'Joining a cleanup — what to bring, what to expect', user: 'sarah', time: '9h', replies: 22, votes: 55, kind: 'tip' },
-    { title: 'Data: which beach zones collect the most debris per hour?', user: 'marcus', time: '2d', replies: 18, votes: 43, kind: 'question' },
-    { title: 'Monthly volunteer meet — Cape Town, August 3rd', user: 'maya', time: '3d', replies: 11, votes: 28, kind: 'meetup' },
-  ],
-  'Climate policy nerds': [
-    { title: 'Analysis: the new EU carbon border tax — who wins?', user: 'okafor', time: '2h', replies: 44, votes: 89, kind: 'discussion' },
-    { title: 'Submitting a public comment to EPA — step by step', user: 'can', time: '5h', replies: 31, votes: 76, kind: 'tip' },
-    { title: 'What did COP30 actually deliver?', user: 'greentech', time: '1d', replies: 67, votes: 134, kind: 'discussion' },
-    { title: 'Best primer on Article 6 carbon markets?', user: 'tara', time: '2d', replies: 19, votes: 38, kind: 'question' },
-    { title: 'My city adopted a climate action plan — here\'s what I pushed for', user: 'sarah', time: '4d', replies: 28, votes: 62, kind: 'win' },
-  ],
-  'Zero-waste households': [
-    { title: 'Grocery zero-waste: what I could and couldn\'t swap', user: 'sarah', time: '1h', replies: 33, votes: 78, kind: 'tip' },
-    { title: 'Worm bin started smelling — what am I doing wrong?', user: 'marcus', time: '6h', replies: 41, votes: 29, kind: 'question' },
-    { title: 'Monthly waste audit: down to a single sandwich bag', user: 'maya', time: '2d', replies: 54, votes: 116, kind: 'win' },
-    { title: 'Bulk store map — crowd-sourcing stores by city', user: 'can', time: '3d', replies: 22, votes: 88, kind: 'discussion' },
-    { title: 'Plastic-free bathroom: a 6-month review', user: 'tara', time: '5d', replies: 37, votes: 95, kind: 'tip' },
-  ],
-  'EV owners': [
-    { title: 'Home charging setup cost in 2026 — real numbers', user: 'marcus', time: '2h', replies: 28, votes: 74, kind: 'discussion' },
-    { title: 'Road trip: London → Edinburgh on one charge?', user: 'greentech', time: '5h', replies: 49, votes: 61, kind: 'question' },
-    { title: 'Software update bricked my range — manufacturer response', user: 'tara', time: '1d', replies: 88, votes: 113, kind: 'discussion' },
-    { title: 'Battery swap at 3 years — here\'s what I learned', user: 'sarah', time: '2d', replies: 33, votes: 86, kind: 'tip' },
-    { title: 'My annual emissions vs ICE equivalent: 2.1t saved', user: 'okafor', time: '4d', replies: 14, votes: 59, kind: 'win' },
-  ],
-};
-
-const COMMUNITY_META: Record<string, { desc: string; tags: string[]; resources: string[]; event?: { title: string; sub: string } }> = {
-  'Urban gardeners': {
-    desc: 'For anyone growing food, herbs, or pollinator habitat in cities. Beginners welcome. Be kind.',
-    tags: ['#balcony', '#vertical-farm', '#pollinators', '#compost', '#tools'],
-    resources: ['Starter guide for balcony growing', 'Tool library — borrow & lend', 'Soil testing — DIY', 'Pollinator-friendly plant list'],
-    event: { title: 'Seedling swap · Saturday', sub: '14 members already going. Bring 5+ to share.' },
-  },
-  'Solar DIY': {
-    desc: 'Practical solar for homes, vans, and off-grid builds. Share schematics, ask questions, celebrate wins.',
-    tags: ['#offgrid', '#van-life', '#lifepo4', '#mppt', '#wiring'],
-    resources: ['Beginner wiring guide', 'Panel sizing calculator', 'Battery chemistry explained', 'Inverter comparison 2026'],
-    event: { title: 'Panel sizing workshop · Sunday', sub: 'Bring your consumption data and get sized right.' },
-  },
-  'Ocean cleanup crew': {
-    desc: 'Volunteers, researchers, and policy advocates working to reduce ocean plastic. Data-driven. Action-first.',
-    tags: ['#microplastics', '#beach-cleanup', '#marine-debris', '#citizen-science'],
-    resources: ['Cleanup protocol guide', 'Debris tracking app', 'Grant finder for crews', 'Partner organisations'],
-    event: { title: 'Global Beach Day · August 10', sub: '3,200 beaches, 60 countries. Register your site.' },
-  },
-  'Climate policy nerds': {
-    desc: 'Deep dives into legislation, carbon markets, and advocacy. We read the fine print so you don\'t have to.',
-    tags: ['#carbon-markets', '#legislation', '#cop', '#advocacy', '#un'],
-    resources: ['Article 6 explainer', 'Public comment templates', 'Policy tracker dashboard', 'Reading list — 2026'],
-  },
-  'Zero-waste households': {
-    desc: 'Practical tips for reducing household waste — from swaps to systems. No purity culture here.',
-    tags: ['#bulk', '#compost', '#reusable', '#packaging', '#worm-bin'],
-    resources: ['Zero-waste starter pack', 'Bulk store directory', 'Waste audit template', 'What actually gets recycled'],
-    event: { title: 'Swap meetup · Aug 9', sub: 'Bring unwanted items, take what you need. Zero money changes hands.' },
-  },
-  'EV owners': {
-    desc: 'Real talk about EV ownership: range, charging, costs, and the software that runs your car.',
-    tags: ['#charging', '#range', '#battery', '#v2g', '#insurance'],
-    resources: ['Home charger buying guide', 'Charging network map', 'Battery care tips', 'Software update tracker'],
-  },
-};
 
 // ── @mention + #hashtag renderer ─────────────────────────────────────────────
 const profileHoverCache: Record<string, any> = {};
@@ -400,8 +319,6 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
   const [feedTab, setFeedTab] = React.useState('Recent');
   const [realPosts, setRealPosts] = React.useState<any[]>([]);
   const joined = app.community?.has(community.name);
-  const meta = COMMUNITY_META[community.name] || { desc: '', tags: [], resources: [] };
-  const going = app.community?.has(community.name + '-event');
 
   const [migrationPending, setMigrationPending] = React.useState(false);
   // null | true (report the community) | { type, targetId } (report a specific post)
@@ -447,7 +364,7 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
   const kindColor = (k: string) => ({ discussion: 'var(--sky)', tip: 'var(--green)', meetup: 'var(--sun)', question: 'var(--ink-2)', win: 'var(--green)' }[k] || 'var(--ink-3)');
 
   const sorted = feedTab === 'Top' ? [...realPosts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0)) : realPosts;
-  const filtered = feedTab === 'Resources' ? [] : sorted;
+  const filtered = feedTab === 'Q&A' ? sorted.filter(p => p.post_kind === 'question') : sorted;
 
   return (
     <div style={{ flex: 1, overflow: 'auto', height: '100%' }} className="no-scrollbar">
@@ -480,15 +397,13 @@ function CommunityFeed({ community: communityProp, onNav, onToggleJoin }: { comm
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, margin: '18px 0', flexWrap: 'wrap' }}>
-          {meta.tags.map(t => <span key={t} style={{ color: 'var(--sky)', fontSize: 13, fontWeight: 500 }}>{t}</span>)}
-        </div>
+        <div style={{ height: 18 }} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18, paddingBottom: 40 }} className="two-col-grid">
           <div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 14, alignItems: 'center', justifyContent: 'space-between' }}>
               <div className="pill-nav">
-                {['Recent', 'Top', 'Q&A', 'Resources', ...(isOwner ? ['Reports'] : [])].map(t => (
+                {['Recent', 'Top', 'Q&A', ...(isOwner ? ['Reports'] : [])].map(t => (
                   <button key={t} className={feedTab === t ? 'active' : ''} onClick={() => setFeedTab(t)}>{t}</button>
                 ))}
               </div>
@@ -512,7 +427,7 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
                 <div style={{ marginTop: 10, color: '#78350f' }}>After running both, refresh this page and your posts will appear.</div>
               </div>
             ) : filtered.length === 0 ? (
-              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>No posts yet. Be the first to post!</div>
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 14 }}>{feedTab === 'Q&A' ? 'No questions yet. Ask the first one!' : 'No posts yet. Be the first to post!'}</div>
             ) : (
               filtered.map((p) => (
                 <CommunityPostCard key={p.id} p={p} community={community} onNav={onNav} onReport={(post) => setReportOpen({ type: 'comment', targetId: post.id })} />
@@ -523,7 +438,7 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
           <div className="right-panel">
             <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
               <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>About</h3>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55 }}>{meta.desc}</p>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.55 }}>{community.description || `A ${community.cat || 'Honua'} community.`}</p>
               <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
                 <Stat n={community.members} l="Members" />
                 <Stat n={String(realPosts.reduce((s, p) => s + (p.comments_count ?? 0), 0))} l="Replies" />
@@ -541,21 +456,6 @@ alter table posts add column if not exists post_kind text check (post_kind in ('
                 communityId={community.id}
                 onClose={() => setReportOpen(null)}
               />
-            )}
-            {meta.resources.length > 0 && (
-              <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, marginBottom: 12 }}>
-                <h3 className="font-display" style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 600 }}>Pinned resources</h3>
-                {meta.resources.slice(0, 3).map((r, i) => (
-                  <a key={i} onClick={() => app.toast?.({ msg: r, sub: 'Resource would open here.', icon: 'bookmark' })} style={{ display: 'block', padding: '8px 0', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer', borderTop: i === 0 ? 'none' : '1px solid var(--line)' }}>{r}</a>
-                ))}
-              </div>
-            )}
-            {meta.event && (
-              <div style={{ background: 'var(--green)', color: '#fff', borderRadius: 14, padding: 16 }}>
-                <h3 className="font-display" style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 600 }}>{meta.event.title}</h3>
-                <p style={{ margin: '0 0 12px', fontSize: 13, opacity: .9 }}>{meta.event.sub}</p>
-                <button className="btn" style={{ background: '#fff', color: 'var(--green)', padding: '6px 12px', fontSize: 12 }} onClick={() => { app.community.toggle(community.name + '-event'); app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: meta.event!.title, kind: 'success', icon: 'check' }); }}>{going ? 'Going ✓' : "I'm going →"}</button>
-              </div>
             )}
           </div>
         </div>
@@ -1091,7 +991,7 @@ function DiscoverView({ onSelect, onNav, communities: communityList, onToggleJoi
                   <span style={{ color: 'var(--green)', fontWeight: 500 }}>{c.cat}</span>
                 </div>
                 <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>
-                  {c.description || COMMUNITY_META[c.name]?.desc || ''}
+                  {c.description || ''}
                 </p>
               </div>
             </div>
@@ -1141,8 +1041,11 @@ export function DesktopForum({ onNav, params }: { onNav: any; params?: Record<st
         })));
         if (joined) {
           const joinedSet = new Set(joined.map((j: any) => j.community_id));
+          // The table is authoritative both ways, which also clears the demo
+          // memberships older builds saved to this browser.
           comms.forEach((c: any) => {
-            if (joinedSet.has(c.id) && !app.community.has(c.name)) app.community.add(c.name);
+            if (joinedSet.has(c.id)) app.community.add(c.name);
+            else app.community.remove(c.name);
           });
         }
       }

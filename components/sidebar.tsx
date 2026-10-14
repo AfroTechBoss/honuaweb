@@ -150,7 +150,7 @@ export function DesktopSidebar({ active, onNav }: any) {
                 ["Admin · approvals", "check", () => onNav?.("admin")],
                 ["Settings", "settings", () => onNav?.("settings")],
                 ["Switch appearance", "sparkles", () => app.toggleDark?.()],
-                ["Help & support", "comment", () => app.toast?.({ msg: "Help center", sub: "Support docs would open here.", icon: "comment" })],
+                ["Help & support", "comment", () => app.nav?.("support")],
                 ["Log out", "logout", () => { setMenuOpen(false); setConfirmLogout(true); }],
               ] as any[]).map(([l, ic, fn]) => (
                 <button key={l} onClick={() => { setMenuOpen(false); fn(); }} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 10px", border: "none", background: "transparent", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, color: l === "Log out" ? "var(--clay)" : "var(--ink-2)", fontFamily: "Satoshi" }} className="row-hover">

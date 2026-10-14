@@ -13,8 +13,8 @@ export function DesktopSettings({ onNav, params }: { onNav: any; params?: Record
   const [sec, setSec] = React.useState('Account');
   const nav = [
     ['Account', 'user'], ['Profile', 'user'], ['Privacy', 'lock'], ['Muted & Blocked', 'lock'],
-    ['Notifications', 'bell'], ['Impact tracking', 'leaf'], ['Wallet & rewards', 'sparkles'],
-    ['Appearance', 'sparkles'], ['Connected apps', 'bolt'], ['Help & support', 'comment'],
+    ['Notifications', 'bell'], ['Wallet & rewards', 'sparkles'],
+    ['Appearance', 'sparkles'], ['Help & support', 'comment'],
   ];
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -69,10 +69,8 @@ export function SettingsSection({ sec, app, onNav }) {
     'Privacy': 'Decide who can see and reach you.',
     'Muted & Blocked': 'Manage users you have muted or blocked.',
     'Notifications': 'Choose what reaches you, and how.',
-    'Impact tracking': 'Connect data sources so your actions get verified automatically.',
-    'Wallet & rewards': 'Your Green Points, Impact Tokens and on-chain rewards.',
+    'Wallet & rewards': 'Your Green Points and the carbon you have retired.',
     'Appearance': 'Make Honua yours.',
-    'Connected apps': 'Apps and services linked to your account.',
     'Help & support': 'Guides, contact, and account tools.',
   }[sec];
   return (
@@ -87,11 +85,6 @@ export function SettingsSection({ sec, app, onNav }) {
           <Field label="Email" v={app.user?.email || '—'} />
         </Section>
         <VerificationSection app={app} />
-        <Section title="Security">
-          <ToggleC2 label="Two-factor authentication" sub="Recommended for active organizers." def />
-          <ToggleC2 label="Login alerts" sub="Get notified when a new device signs in." def />
-          <ToggleC2 label="Hide my email from search" />
-        </Section>
         <Section title="Danger zone">
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-ghost" onClick={() => app.logout?.()}>
@@ -131,17 +124,6 @@ export function SettingsSection({ sec, app, onNav }) {
         </Section>
       )}
 
-      {sec === 'Impact tracking' && (
-        <Section title="Connected sources" sub="The more you connect, the more actions verify automatically.">
-          {([['Utility provider', 'Pull energy use to verify savings', false], ['Transit / maps', 'Auto-detect low-carbon trips', true], ['Banking (Plaid)', 'Spot sustainable purchases', false]] as Array<[string, string, boolean]>).map(([t, s, on]) => (
-            <div key={String(t)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '1px solid var(--line)' }}>
-              <div><div style={{ fontSize: 14, fontWeight: 500 }}>{t}</div><div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{s}</div></div>
-              <button className={on ? 'btn btn-ghost' : 'btn btn-primary'} style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => app.toast({ msg: on ? 'Disconnected' : 'Connected', sub: t, kind: on ? undefined : 'success', icon: 'bolt' })}>{on ? 'Connected ✓' : 'Connect'}</button>
-            </div>
-          ))}
-        </Section>
-      )}
-
       {sec === 'Wallet & rewards' && <WalletSettings app={app} />}
 
       {sec === 'Appearance' && (
@@ -157,33 +139,20 @@ export function SettingsSection({ sec, app, onNav }) {
         </Section>
       )}
 
-      {sec === 'Connected apps' && (
-        <Section title="Linked services">
-          {([['Strava', 'Bike & run trips', true], ['Google Calendar', 'Sync project events', true], ['Slack', 'Community alerts', false]] as Array<[string, string, boolean]>).map(([t, s, on]) => (
-            <div key={String(t)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '1px solid var(--line)' }}>
-              <div><div style={{ fontSize: 14, fontWeight: 500 }}>{t}</div><div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{s}</div></div>
-              <button className={on ? 'btn btn-ghost' : 'btn btn-primary'} style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => app.toast({ msg: on ? 'Disconnected ' + t : 'Connected ' + t, kind: on ? undefined : 'success', icon: 'bolt' })}>{on ? 'Disconnect' : 'Connect'}</button>
-            </div>
-          ))}
-        </Section>
-      )}
-
       {sec === 'Help & support' && <HelpSupport app={app} onNav={onNav} />}
     </>
   );
 };
 
 const FAQ_ITEMS = [
-  { q: 'How do I verify my impact actions?', a: 'Go to Settings → Impact tracking and connect your data sources (utility provider, transit app, or bank). Once connected, Honua pulls your activity automatically and awards Green Points after verification.' },
-  { q: 'What are Green Points and Impact Tokens?', a: 'Green Points (GP) are earned for verified sustainable actions — commuting by bike, reducing energy use, etc. Impact Tokens (IT) are milestone rewards. Both appear in your Wallet & rewards and on your public profile.' },
+  { q: 'How do I verify my impact actions?', a: 'Log the action from the Impact page, ideally with a photo as proof. Other members can vouch for it, and once 3 people have vouched it counts as verified.' },
+  { q: 'What are Green Points?', a: 'Green Points (GP) are earned for the sustainable actions you log — commuting by bike, reducing energy use, and so on. Your total appears under Wallet & rewards and on your public profile.' },
   { q: 'How do I join or create a community?', a: 'Open the Communities tab in the sidebar. Browse featured communities or search by topic. To create one, tap "+ New community" and fill in the name, description, and focus area.' },
-  { q: 'Can I make my account private?', a: 'Yes. Go to Settings → Privacy and toggle "Private account" on. Only approved followers will see your posts and profile details.' },
   { q: 'How do I edit my profile?', a: 'Go to Settings → Profile and tap "Edit profile", or tap your avatar anywhere it appears and select Edit. You can update your display name, handle, bio, avatar, and cover photo.' },
-  { q: 'How does the tipping system work?', a: 'Tap the coin icon on any post to send a tip. Tips are sent in Impact Tokens and go directly to the creator. You can disable incoming tips under Settings → Privacy.' },
   { q: 'How do I report a post or user?', a: 'Tap the "…" menu on a post or visit a user\'s profile and tap "Report." Select a reason and submit. Our moderation team reviews reports within 24 hours.' },
   { q: 'Why was my post removed?', a: 'Posts may be removed for violating our Community Guidelines — misinformation about climate science, hate speech, spam, or prohibited commercial promotion. You\'ll receive a notification with the reason.' },
-  { q: 'How do I delete my account?', a: 'Go to Settings → Account → Danger zone and tap "Delete account." You\'ll be asked to confirm. Deletion is permanent and removes all your data within 30 days.' },
-  { q: 'Is my data shared with third parties?', a: 'Honua never sells your personal data. Impact data from connected apps is processed only to calculate your verified actions. Read our full Privacy Policy under Terms & privacy.' },
+  { q: 'How do I delete my account?', a: 'Go to Settings → Account → Danger zone and tap "Delete account." You\'ll be asked to confirm. Deletion is immediate and permanent: your profile, posts and activity are removed.' },
+  { q: 'Is my data shared with third parties?', a: 'Honua never sells your personal data. The impact you log is used only to show your progress and rank on the leaderboards. Read our full Privacy Policy under Terms & privacy.' },
 ];
 
 export function HelpSupport({ app, onNav }: { app: any; onNav?: any }) {

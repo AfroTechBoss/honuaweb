@@ -743,12 +743,20 @@ function CommentMoreMenu({ usr, node, isOwn, onDelete, onNav }: { usr: any; node
 
   const close = () => setOpen(false);
 
+  // These used to toast without muting or blocking anyone. Seeded demo
+  // comments have no user_id, so there is nobody to mute.
   const handleMute = () => {
     close();
+    if (!node?.user_id) return;
+    if (!app.user?.id) { app.toast?.({ msg: 'Sign in to mute people', icon: 'bell' }); return; }
+    app.muteUser?.(node.user_id);
     app.toast?.({ msg: `Muted @${usr.handle}`, sub: "You won't see their content anymore.", icon: 'bell' });
   };
   const handleBlock = () => {
     close();
+    if (!node?.user_id) return;
+    if (!app.user?.id) { app.toast?.({ msg: 'Sign in to block people', icon: 'lock' }); return; }
+    app.blockUser?.(node.user_id);
     app.toast?.({ msg: `Blocked @${usr.handle}`, sub: 'They can no longer interact with you.', icon: 'lock' });
   };
   const submitReport = async () => {
@@ -855,7 +863,18 @@ export function CommentThread({ tree, setTree, dense = false, onNav, onDbReply }
     // persist to DB if callback provided (realtime will refresh the full tree)
     onDbReply?.(parentId, text);
   };
-  const remove = (id) => setTree(t => __removeNode(t, id));
+  // Deleting used to drop the comment from this screen only; it came back on
+  // reload. Real comments have uuid ids — delete the row (RLS lets only the
+  // author do it; replies cascade and the post's count trigger runs).
+  const remove = async (id) => {
+    const isDbComment = /^[0-9a-f-]{36}$/.test(String(id));
+    if (isDbComment) {
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase.from('comments').delete().eq('id', id);
+      if (error) return;
+    }
+    setTree(t => __removeNode(t, id));
+  };
   return (
     <div>
       {tree.map(n => <CommentNode key={n.id} node={n} depth={0} like={like} reply={reply} remove={remove} dense={dense} defaultOpen onNav={onNav} />)}
