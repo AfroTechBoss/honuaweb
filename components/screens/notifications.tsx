@@ -5,10 +5,10 @@ import { getNotifications, markAllRead } from "@/lib/notifications";
 
 // `verified` is an impact action clearing its vouch threshold; `account_verified`
 // is the identity badge. Different things, so they don't share a row style.
-const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin', streak_risk: 'flame', streak_ended: 'flame', account_verified: 'check', verification_declined: 'bolt', admin_broadcast: 'bell' };
+const NOTIF_ICON: Record<string, string> = { like: 'heart', follow: 'user', follow_request: 'user', message: 'msg', comment: 'comment', reply: 'comment', mention: 'at', community_invite: 'users', badge: 'award', level_up: 'award', verified: 'leaf', milestone: 'flame', project: 'pin', streak_risk: 'flame', streak_ended: 'flame', account_verified: 'check', verification_declined: 'bolt', admin_broadcast: 'bell' };
 // streak_risk is a warning (still saveable), streak_ended is a loss — different
 // colours so the two read apart at a glance in a list of flame icons.
-const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)', streak_risk: 'var(--sun)', streak_ended: 'var(--clay)', account_verified: 'var(--sky)', verification_declined: 'var(--ink-3)', admin_broadcast: 'var(--ink-2)' };
+const NOTIF_COLOR: Record<string, string> = { like: 'var(--clay)', follow: 'var(--sky)', follow_request: 'var(--sky)', message: 'var(--sky)', comment: 'var(--ink-2)', reply: 'var(--ink-2)', mention: 'var(--sky)', community_invite: 'var(--sky)', badge: 'var(--green)', level_up: 'var(--green)', verified: 'var(--green)', milestone: 'var(--sun)', project: 'var(--green-2)', streak_risk: 'var(--sun)', streak_ended: 'var(--clay)', account_verified: 'var(--sky)', verification_declined: 'var(--ink-3)', admin_broadcast: 'var(--ink-2)' };
 
 function timeAgo(ts: string) {
   const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
@@ -53,6 +53,9 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     switch (n.type) {
       case 'like': case 'comment': case 'reply': case 'mention': return n.post_id && onNav?.('post', { id: n.post_id });
       case 'follow': return n.actor?.handle && onNav?.('profile', { handle: n.actor.handle });
+      // Approve or decline from the requests list in Privacy settings.
+      case 'follow_request': return onNav?.('settings', { sec: 'Privacy' });
+      case 'message': return onNav?.('messages');
       case 'community_invite': return onNav?.('forum');
       case 'badge': case 'level_up': return onNav?.('profile');
       // Straight to the profile, where the badge either is or isn't.
@@ -70,7 +73,7 @@ export function DesktopNotifications({ onNav, params }: { onNav: any; params?: R
     'Likes': ['like'],
     'Comments': ['comment', 'reply'],
     'Mentions': ['mention'],
-    'Follows': ['follow'],
+    'Follows': ['follow', 'follow_request'],
     'Community': ['community_invite'],
     'Badges': ['badge', 'level_up'],
     'Streaks': ['streak_risk', 'streak_ended'],

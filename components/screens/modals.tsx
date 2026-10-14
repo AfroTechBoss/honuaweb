@@ -1316,11 +1316,18 @@ export function MEditProfile({ close }) {
   React.useEffect(() => {
     if (!userId) return;
     import('@/lib/profile').then(({ getProfile }) => {
-      getProfile(userId).then(p => {
+      getProfile(userId).then(async p => {
         if (!p) return;
         setFullName(p.full_name || '');
         setBio(p.bio || '');
         setLocation(p.location || '');
+        // With "Show location" off the public column is empty and the real
+        // value sits in profile_hidden_fields, readable only by the owner.
+        if (p.show_location === false) {
+          const { supabase } = await import('@/lib/supabase');
+          const { data: hidden } = await supabase.from('profile_hidden_fields').select('location').eq('user_id', userId).maybeSingle();
+          setLocation(hidden?.location || '');
+        }
         setWebsite(p.website || '');
         setHandle(p.handle || '');
         setOriginalHandle(p.handle || '');
@@ -1702,6 +1709,19 @@ export function MVerification({ data, close }) {
 export function MTip({ data, close }) {
   const u = data?.user ?? {};
   const name = u.full_name || u.name || (u.handle ? '@' + u.handle : 'this member');
+  if (u.allow_tips === false) return (
+    <Modal onClose={close} width={440}>
+      <ModalHead icon="gift" iconColor="var(--sun)" title={`Tip ${name}`} sub="Tips are turned off." onClose={close} />
+      <div style={{ padding: '18px 24px 0' }}>
+        <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+          {name} isn&apos;t accepting tips. You can still follow them or support their projects and shop.
+        </p>
+      </div>
+      <ModalFoot>
+        <button className="btn btn-ghost" onClick={close}>Close</button>
+      </ModalFoot>
+    </Modal>
+  );
   return (
     <Modal onClose={close} width={440}>
       <ModalHead icon="gift" iconColor="var(--sun)" title={`Tip ${name}`} sub="Planned — not available yet." onClose={close} />

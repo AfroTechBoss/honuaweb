@@ -11,6 +11,11 @@ import { VERIFICATION_SLA } from "@/lib/verification-copy";
 export function DesktopSettings({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
   const [sec, setSec] = React.useState('Account');
+  // /settings?sec=Privacy opens a section directly (follow-request notifications link here).
+  React.useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get('sec') || (typeof params?.sec === 'string' ? params.sec : null);
+    if (want) setSec(want);
+  }, [params?.sec]);
   const nav = [
     ['Account', 'user'], ['Profile', 'user'], ['Privacy', 'lock'], ['Muted & Blocked', 'lock'],
     ['Notifications', 'bell'], ['Wallet & rewards', 'sparkles'],
@@ -106,20 +111,12 @@ export function SettingsSection({ sec, app, onNav }) {
         <button className="btn btn-green" onClick={() => app.openModal('editprofile')}><Icon name="edit" size={14} /> Edit profile</button>
       </>}
 
-      {sec === 'Privacy' && (
-        <Section title="Visibility">
-          <ToggleC2 label="Private account" sub="Only approved followers see your posts." />
-          <ToggleC2 label="Show my location on posts" def />
-          <ToggleC2 label="Show activity status" sub="Let others see when you're active." def />
-          <ToggleC2 label="Allow tips from anyone" def />
-          <ToggleC2 label="Who can message me — everyone" sub="Off limits it to people you follow." def />
-        </Section>
-      )}
+      {sec === 'Privacy' && <PrivacySection app={app} onNav={onNav} />}
 
       {sec === 'Muted & Blocked' && <MutedBlockedSection app={app} />}
 
       {sec === 'Notifications' && (
-        <Section title="Push & email">
+        <Section title="In-app notifications">
           <NotifPrefs />
         </Section>
       )}
@@ -353,15 +350,126 @@ function UserRow({ user, actionLabel, onAction, actionColor }: { user: any; acti
   );
 }
 
-export function ToggleC2({ label, sub, def }: { label: string; sub?: string; def?: boolean }) {
-  const [on, setOn] = React.useState(!!def);
+export function ToggleC2({ label, sub, on, onChange }: { label: string; sub?: string; on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', gap: 16 }}>
       <div><div style={{ fontSize: 14, fontWeight: 500 }}>{label}</div>{sub && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div>}</div>
-      <ToggleC on={on} onChange={setOn} />
+      <ToggleC on={on} onChange={onChange} />
     </div>
   );
 };
+
+// Each of these is enforced in the database (migration 051), not just here:
+//   is_private         — posts, comments and stories are hidden by RLS from
+//                        anyone who doesn't follow you; following needs a request
+//   show_location      — while off, location is moved out of the public profile
+//   show_activity      — gates who can read your user_presence row
+//   allow_tips         — the Tip button and tip sheet honour it
+//   message_permission — checked when someone opens a conversation with you
+type PrivacyFlags = { is_private: boolean; show_location: boolean; show_activity: boolean; allow_tips: boolean; message_permission: 'everyone' | 'following' | 'nobody' };
+
+function PrivacySection({ app, onNav }) {
+  const userId = app.user?.id;
+  const [flags, setFlags] = React.useState<PrivacyFlags | null>(null);
+  const [requests, setRequests] = React.useState<any[]>([]);
+  const [busy, setBusy] = React.useState<string | null>(null);
+
+  const loadRequests = React.useCallback(async () => {
+    if (!userId) return;
+    const { supabase } = await import('@/lib/supabase');
+    const { data } = await supabase.from('follow_requests')
+      .select('requester_id, created_at, requester:profiles!follow_requests_requester_id_fkey(id, handle, full_name, avatar_url)')
+      .eq('target_id', userId).order('created_at', { ascending: false });
+    setRequests(data ?? []);
+  }, [userId]);
+
+  React.useEffect(() => {
+    if (!userId) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase.from('profiles')
+        .select('is_private, show_location, show_activity, allow_tips, message_permission')
+        .eq('id', userId).maybeSingle();
+      setFlags({
+        is_private: !!data?.is_private,
+        show_location: data?.show_location !== false,
+        show_activity: data?.show_activity !== false,
+        allow_tips: data?.allow_tips !== false,
+        message_permission: data?.message_permission ?? 'everyone',
+      });
+    });
+    loadRequests();
+  }, [userId, loadRequests]);
+
+  const save = async (patch: Partial<PrivacyFlags>) => {
+    if (!flags || !userId) return;
+    const prev = flags;
+    setFlags({ ...flags, ...patch });
+    try {
+      const { updateProfile } = await import('@/lib/profile');
+      await updateProfile(userId, patch);
+      // Going public lets everyone who was waiting in (a trigger does it).
+      if (patch.is_private === false) loadRequests();
+    } catch (e: any) {
+      setFlags(prev);
+      app.toast?.({ kind: 'error', msg: "Couldn't save that setting", sub: e?.message, icon: 'lock' });
+    }
+  };
+
+  const approve = async (requesterId: string) => {
+    setBusy(requesterId);
+    const { supabase } = await import('@/lib/supabase');
+    const { error } = await supabase.rpc('approve_follow_request', { p_requester: requesterId });
+    setBusy(null);
+    if (error) { app.toast?.({ kind: 'error', msg: "Couldn't approve", sub: error.message, icon: 'user' }); return; }
+    setRequests(r => r.filter(x => x.requester_id !== requesterId));
+  };
+  const decline = async (requesterId: string) => {
+    setBusy(requesterId);
+    const { supabase } = await import('@/lib/supabase');
+    const { error } = await supabase.from('follow_requests').delete().match({ requester_id: requesterId, target_id: userId });
+    setBusy(null);
+    if (error) { app.toast?.({ kind: 'error', msg: "Couldn't decline", sub: error.message, icon: 'user' }); return; }
+    setRequests(r => r.filter(x => x.requester_id !== requesterId));
+  };
+
+  if (!userId) return <Section title="Visibility" sub="Sign in to manage your privacy." />;
+  if (!flags) return <Section title="Visibility" sub="Loading…" />;
+
+  const MSG_OPTIONS: [PrivacyFlags['message_permission'], string][] = [['everyone', 'Everyone'], ['following', 'People I follow'], ['nobody', 'No one']];
+  return <>
+    <Section title="Visibility">
+      <ToggleC2 label="Private account" sub="Only approved followers see your posts, comments and stories. New followers have to send a request." on={flags.is_private} onChange={v => save({ is_private: v })} />
+      <ToggleC2 label="Show my location" sub="While off, your location is removed from your public profile. Turn it back on to restore it." on={flags.show_location} onChange={v => save({ show_location: v })} />
+      <ToggleC2 label="Show activity status" sub="Let others see when you were last active." on={flags.show_activity} onChange={v => save({ show_activity: v })} />
+      <ToggleC2 label="Allow tips" sub="Shows the Tip button on your profile once tipping launches." on={flags.allow_tips} onChange={v => save({ allow_tips: v })} />
+      <div style={{ padding: '10px 0' }}>
+        <div style={{ fontSize: 14, fontWeight: 500 }}>Who can message me</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>Applies to new conversations. Chats you&apos;ve already accepted carry on, and buyers can still reach your shop.</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          {MSG_OPTIONS.map(([v, l]) => (
+            <button key={v} className={flags.message_permission === v ? 'btn btn-green' : 'btn btn-ghost'} style={{ padding: '6px 14px', fontSize: 13 }}
+              onClick={() => flags.message_permission !== v && save({ message_permission: v })}>{l}</button>
+          ))}
+        </div>
+      </div>
+    </Section>
+    {(flags.is_private || requests.length > 0) && (
+      <Section title="Follow requests" sub={requests.length ? `${requests.length} waiting` : 'No one is waiting right now.'}>
+        {requests.map(r => (
+          <div key={r.requester_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+            <span style={{ cursor: 'pointer' }} onClick={() => r.requester?.handle && onNav?.('profile', { handle: r.requester.handle })}><Avatar src={r.requester?.avatar_url} name={r.requester?.full_name || r.requester?.handle || '?'} size={36} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{r.requester?.full_name || r.requester?.handle}</div>
+              {r.requester?.handle && <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>@{r.requester.handle}</div>}
+            </div>
+            <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12.5 }} disabled={busy === r.requester_id} onClick={() => approve(r.requester_id)}>Approve</button>
+            <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 12.5 }} disabled={busy === r.requester_id} onClick={() => decline(r.requester_id)}>Decline</button>
+          </div>
+        ))}
+      </Section>
+    )}
+  </>;
+}
 
 export function Section({ title, sub, children }: { title: string; sub?: string; children?: React.ReactNode }) {
   return (

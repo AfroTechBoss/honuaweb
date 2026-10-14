@@ -856,7 +856,23 @@ function CommentMoreMenu({ usr, node, isOwn, onDelete, onNav }: { usr: any; node
 }
 
 export function CommentThread({ tree, setTree, dense = false, onNav, onDbReply }: { tree: any[]; setTree: any; dense?: boolean; onNav?: (screen: string, params?: any) => void; onDbReply?: (parentId: string, text: string) => void }) {
-  const like = (id) => setTree(t => __mapNode(t, id, n => ({ ...n, _liked: !n._liked, likes: n.likes + (n._liked ? -1 : 1) })));
+  const app = useApp();
+  // Optimistic flip, then the comment_likes row. A trigger keeps
+  // comments.likes_count in step, and on failure the flip is undone.
+  const flipLike = (id) => setTree(t => __mapNode(t, id, n => ({ ...n, _liked: !n._liked, likes: Math.max(0, (n.likes || 0) + (n._liked ? -1 : 1)) })));
+  const like = async (id) => {
+    if (!/^[0-9a-f-]{36}$/.test(String(id))) return;
+    if (!app.user?.id) { app.toast?.({ msg: 'Sign in to like comments', icon: 'heart' }); return; }
+    let wasLiked = false;
+    const find = (list) => list.some(n => n.id === id ? ((wasLiked = !!n._liked), true) : find(n.replies || []));
+    find(tree);
+    flipLike(id);
+    const { supabase } = await import('@/lib/supabase');
+    const { error } = wasLiked
+      ? await supabase.from('comment_likes').delete().match({ user_id: app.user.id, comment_id: id })
+      : await supabase.from('comment_likes').insert({ user_id: app.user.id, comment_id: id });
+    if (error) { flipLike(id); app.toast?.({ kind: 'error', msg: "Couldn't save that like", icon: 'heart' }); }
+  };
   const reply = (parentId, text) => {
     // local optimistic update always
     setTree(t => __addReply(t, parentId, { id: ++__cid, user: 'you', text, time: 'now', likes: 0, replies: [] }));

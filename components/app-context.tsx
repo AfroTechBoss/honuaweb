@@ -27,7 +27,7 @@ export function pathFor(key: string, params: any = {}): string {
     case "followers": return params?.handle ? `/followers/${params.handle}` : "/followers";
     case "following": return params?.handle ? `/following/${params.handle}` : "/following";
     case "post": return params?.slug ? `/communities/post/${encodeURIComponent(params.slug)}/${params.id}` : `/post/${params?.id ?? 1}`;
-    case "settings": return "/settings";
+    case "settings": return params?.sec ? `/settings?sec=${encodeURIComponent(params.sec)}` : "/settings";
     case "terms": return "/terms";
     case "auth": return "/login";
     case "sell": return "/sell";
@@ -312,6 +312,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     },
   };
+
+  // ---- Activity status: mark this user as seen while the tab is open ----
+  // Others can read it only if the user leaves "Show activity status" on (RLS).
+  useEffect(() => {
+    if (!st.user?.id) return;
+    const ping = () => {
+      if (document.visibilityState !== 'visible') return;
+      import('@/lib/privacy').then(m => m.touchPresence()).catch(() => {});
+    };
+    ping();
+    const t = setInterval(ping, 2 * 60 * 1000);
+    document.addEventListener('visibilitychange', ping);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', ping); };
+  }, [st.user?.id]);
 
   // ---- Sync likes, reposts, bookmarks + unread notifs from DB when user logs in ----
   useEffect(() => {
@@ -602,14 +616,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Optimistic update
         setSt((s: any) => ({ ...s, following: isFollowing ? s.following.filter((x: any) => x !== handle) : [...s.following, handle] }));
         try {
-          const { data: profile } = await supabase.from('profiles').select('id').eq('handle', handle).single();
+          const { data: profile } = await supabase.from('profiles').select('id, is_private').eq('handle', handle).single();
           if (!profile?.id) return;
+          const { followOrRequest, unfollowOrCancel } = await import('@/lib/privacy');
           if (isFollowing) {
-            await supabase.from('follows').delete().match({ follower_id: st.user.id, following_id: profile.id });
-          } else {
-            await supabase.from('follows').insert({ follower_id: st.user.id, following_id: profile.id });
+            await unfollowOrCancel(st.user.id, profile.id, 'following');
+          } else if (await followOrRequest(st.user.id, profile.id, !!profile.is_private) === 'requested') {
+            // Private account: a request went out instead, so undo the optimistic follow.
+            setSt((s: any) => ({ ...s, following: s.following.filter((x: any) => x !== handle) }));
+            toast({ msg: 'Follow request sent', sub: `@${handle} will see it and can approve it.`, icon: 'user' });
           }
-        } catch {}
+        } catch {
+          setSt((s: any) => ({ ...s, following: isFollowing ? [...s.following, handle] : s.following.filter((x: any) => x !== handle) }));
+        }
       },
       add: (handle: any) => setSt((s: any) => ({ ...s, following: s.following.includes(handle) ? s.following : [...s.following, handle] })),
       remove: (handle: any) => setSt((s: any) => ({ ...s, following: s.following.filter((x: any) => x !== handle) })),

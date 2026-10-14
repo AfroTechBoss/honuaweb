@@ -108,7 +108,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
     if (!handle || !userId) return;
     (async () => {
       const { supabase } = await import('@/lib/supabase');
-      const { data: target } = await supabase.from('profiles').select('id').eq('handle', handle).single();
+      const { data: target } = await supabase.from('profiles').select('id, handle, full_name, message_permission').eq('handle', handle).single();
       if (!target) return;
 
       // Shop context: fetch the seller's shop identity to brand the conversation
@@ -135,10 +135,17 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
         await loadConvos(); setActiveConvoId(existing.id); return;
       }
 
-      // Check mutual follow — ignore errors (follows table 400 just means not following)
+      // Respect their "who can message me" setting (shop conversations are exempt).
+      if (!shopFields.shop_owner_id) {
+        const { messageBlockReason } = await import('@/lib/privacy');
+        const why = await messageBlockReason(userId, target);
+        if (why) { app.toast?.({ msg: why, icon: 'msg' }); return; }
+      }
+
+      // Check mutual follow
       const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
-        supabase.from('follows').select('id').eq('follower_id', userId).eq('following_id', target.id).maybeSingle(),
-        supabase.from('follows').select('id').eq('follower_id', target.id).eq('following_id', userId).maybeSingle(),
+        supabase.from('follows').select('follower_id').eq('follower_id', userId).eq('following_id', target.id).maybeSingle(),
+        supabase.from('follows').select('follower_id').eq('follower_id', target.id).eq('following_id', userId).maybeSingle(),
       ]);
       const mutual = !!iFollow && !!theyFollow;
 
@@ -156,6 +163,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
           if (found) { await loadConvos(); setActiveConvoId(found.id); }
         } else {
           console.error('Failed to create conversation:', insertErr);
+          app.toast?.({ kind: 'error', msg: "Couldn't start this conversation", sub: insertErr.code === '42501' ? "They aren't accepting messages from you." : insertErr.message, icon: 'msg' });
         }
         return;
       }
@@ -351,7 +359,7 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
       const recipientId = activeConvo?.user1_id === userId ? activeConvo?.user2_id : activeConvo?.user1_id;
       if (recipientId && recipientId !== userId) {
         const { createNotification } = await import('@/lib/notifications');
-        await createNotification({ userId: recipientId, actorId: userId, type: 'message' as any, body: 'sent you a message' });
+        await createNotification({ userId: recipientId, actorId: userId, type: 'message', body: 'sent you a message' });
       }
     } finally {
       setSending(false);
@@ -382,22 +390,26 @@ export function DesktopMessages({ onNav, params }: { onNav: any; params?: Record
   const startNewDM = async () => {
     if (!newMsgHandle.trim() || !userId) return;
     const { supabase } = await import('@/lib/supabase');
-    const { data: target } = await supabase.from('profiles').select('id, handle, full_name, avatar_url').eq('handle', newMsgHandle.trim().replace('@', '')).single();
+    const { data: target } = await supabase.from('profiles').select('id, handle, full_name, avatar_url, message_permission').eq('handle', newMsgHandle.trim().replace('@', '')).single();
     if (!target) { app.toast?.({ msg: 'User not found', icon: 'close' }); return; }
     // Check for existing convo
     const { data: existing } = await supabase.from('conversations').select('id')
       .or(`and(user1_id.eq.${userId},user2_id.eq.${target.id}),and(user1_id.eq.${target.id},user2_id.eq.${userId})`)
       .maybeSingle();
     if (existing) { setActiveConvoId(existing.id); setShowNewMsg(false); setNewMsgHandle(''); return; }
+    const { messageBlockReason } = await import('@/lib/privacy');
+    const why = await messageBlockReason(userId, target);
+    if (why) { app.toast?.({ msg: why, icon: 'msg' }); return; }
     // Check mutual follow
     const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
-      supabase.from('follows').select('id').eq('follower_id', userId).eq('following_id', target.id).maybeSingle(),
-      supabase.from('follows').select('id').eq('follower_id', target.id).eq('following_id', userId).maybeSingle(),
+      supabase.from('follows').select('follower_id').eq('follower_id', userId).eq('following_id', target.id).maybeSingle(),
+      supabase.from('follows').select('follower_id').eq('follower_id', target.id).eq('following_id', userId).maybeSingle(),
     ]);
     const mutual = !!iFollow && !!theyFollow;
-    const { data: newConvo } = await supabase.from('conversations').insert({
+    const { data: newConvo, error: insertErr } = await supabase.from('conversations').insert({
       user1_id: userId, user2_id: target.id, status: mutual ? 'accepted' : 'pending',
     }).select().single();
+    if (insertErr) { app.toast?.({ kind: 'error', msg: "Couldn't start this conversation", sub: insertErr.message, icon: 'msg' }); return; }
     if (newConvo) { setActiveConvoId(newConvo.id); loadConvos(); }
     setShowNewMsg(false); setNewMsgHandle('');
   };

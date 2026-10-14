@@ -2,7 +2,8 @@
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, NotifPrefs, useApp, PostCard, PostCardSkeleton, ProfileSkeleton, ActionBtn, BookmarkSheet, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { PostDetailSkeleton } from "@/components/primitives";
-import { updateProfile, getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing, toggleFollow } from "@/lib/profile";
+import { updateProfile, getProfile, getProfilePosts, getFollowerCount, getFollowingCount, getAchievements, getProjects, isFollowing } from "@/lib/profile";
+import { followOrRequest, unfollowOrCancel, getFollowState, getLastSeen, lastSeenLabel, messageBlockReason } from "@/lib/privacy";
 import { getAllLogs } from "@/lib/impact";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
@@ -101,16 +102,47 @@ export function DesktopProfile({ onNav, params }) {
       .then(({ data }) => setViewerIsBlocked(!!data));
   }, [profile?.id, app.user?.id, isOwn]);
 
+  // Private accounts take a follow request instead of a follow (migration 051).
+  const [requested, setRequested] = React.useState(false);
+  React.useEffect(() => {
+    setRequested(false);
+    if (!profile?.id || !app.user?.id || isOwn || !profile.is_private) return;
+    getFollowState(app.user.id, profile.id).then(st => setRequested(st === 'requested'));
+  }, [profile?.id, profile?.is_private, app.user?.id, isOwn]);
+
+  // Activity status — RLS returns nothing when they've switched it off.
+  const [lastSeen, setLastSeen] = React.useState<Date | null>(null);
+  React.useEffect(() => {
+    setLastSeen(null);
+    if (!profile?.id || isOwn) return;
+    getLastSeen(profile.id).then(setLastSeen);
+  }, [profile?.id, isOwn]);
+
   const handleFollowToggle = async () => {
-    if (!app.user?.id || !profile?.id) return;
-    const nowFollowing = !following;
-    await toggleFollow(app.user.id, profile.id, following);
-    setFollowing(nowFollowing);
-    if (nowFollowing) {
-      const { createNotification } = await import('@/lib/notifications');
-      await createNotification({ userId: profile.id, actorId: app.user.id, type: 'follow', body: 'started following you' });
+    if (!app.user?.id || !profile?.id) { app.toast?.({ msg: 'Sign in to follow people', icon: 'user' }); return; }
+    try {
+      if (following || requested) {
+        await unfollowOrCancel(app.user.id, profile.id, requested ? 'requested' : 'following');
+        setFollowing(false); setRequested(false);
+      } else {
+        const st = await followOrRequest(app.user.id, profile.id, !!profile.is_private);
+        setFollowing(st === 'following'); setRequested(st === 'requested');
+        if (st === 'requested') app.toast?.({ msg: 'Follow request sent', sub: 'You\'ll see their posts once they approve it.', icon: 'user' });
+      }
+    } catch (e: any) {
+      app.toast?.({ kind: 'error', msg: 'Couldn\'t update follow', sub: e?.message, icon: 'user' });
     }
   };
+
+  const handleMessage = async () => {
+    if (app.user?.id && profile?.id) {
+      const why = await messageBlockReason(app.user.id, profile);
+      if (why) { app.toast?.({ msg: why, icon: 'msg' }); return; }
+    }
+    onNav?.('messages', { handle: profile?.handle });
+  };
+
+  const locked = !!profile?.is_private && !isOwn && !following;
 
   // Posts split: own posts vs reposts
   const ownPosts = posts.filter(p => !p.is_repost);
@@ -227,9 +259,9 @@ export function DesktopProfile({ onNav, params }) {
                 </>
               ) : (
                 <>
-                  <button className="btn btn-ghost" onClick={() => onNav?.('messages', { handle: profile?.handle })}><Icon name="msg" size={14} /> Message</button>
-                  <button className="btn btn-ghost" onClick={() => app.openModal?.('tip', { user: profile })}><Icon name="gift" size={14} /> Tip</button>
-                  <button className={following ? 'btn btn-ghost' : 'btn btn-primary'} onClick={handleFollowToggle}>{following ? 'Following' : 'Follow'}</button>
+                  {profile.message_permission !== 'nobody' && <button className="btn btn-ghost" onClick={handleMessage}><Icon name="msg" size={14} /> Message</button>}
+                  {profile.allow_tips !== false && <button className="btn btn-ghost" onClick={() => app.openModal?.('tip', { user: profile })}><Icon name="gift" size={14} /> Tip</button>}
+                  <button className={following || requested ? 'btn btn-ghost' : 'btn btn-primary'} onClick={handleFollowToggle}>{following ? 'Following' : requested ? 'Requested' : profile.is_private ? 'Request to follow' : 'Follow'}</button>
                 </>
               )}
             </div>
@@ -256,6 +288,15 @@ export function DesktopProfile({ onNav, params }) {
               {profile.location && ` · ${profile.location}`}
               {joinedDate && ` · Joined ${joinedDate}`}
             </div>
+            {(lastSeen || profile.is_private) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 12.5, color: 'var(--ink-3)' }}>
+                {lastSeen && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: lastSeenLabel(lastSeen) === 'Active now' ? 'var(--green)' : 'var(--ink-4)' }} />
+                  {lastSeenLabel(lastSeen)}
+                </span>}
+                {profile.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Icon name="lock" size={12} /> Private account</span>}
+              </div>
+            )}
           </div>
           <div style={{ display: 'none' }}>{/* legacy identity row spacer */}</div>
           <div className="profile-identity-row-actions" style={{ display: 'none' }}>
@@ -326,12 +367,15 @@ export function DesktopProfile({ onNav, params }) {
           {/* Tab content */}
           <div className="profile-tab-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18, paddingBottom: 40 }}>
             <div>
-              {tab === 'posts' && (
+              {locked && ['posts', 'reposts', 'media'].includes(tab) && (
+                <EmptyTab icon="" msg={requested ? 'Your follow request is waiting for approval.' : 'This account is private. Follow them to see their posts.'} />
+              )}
+              {tab === 'posts' && !locked && (
                 ownPosts.length === 0
                   ? <EmptyTab icon="" msg={isOwn ? "You haven't posted yet. Share your first action!" : "No posts yet."} />
                   : ownPosts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} impact={impactVouches} />)
               )}
-              {tab === 'reposts' && (
+              {tab === 'reposts' && !locked && (
                 reposts.length === 0
                   ? <EmptyTab icon="" msg="No reposts yet." />
                   : reposts.map(p => <RealPostCard key={p.id} post={p} onNav={onNav} isRepost impact={impactVouches} />)
@@ -367,7 +411,7 @@ export function DesktopProfile({ onNav, params }) {
                     ))}
                   </div>
               )}
-              {tab === 'media' && (
+              {tab === 'media' && !locked && (
                 mediaPosts.length === 0
                   ? <EmptyTab icon="" msg="No media posts yet." />
                   : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
@@ -907,10 +951,17 @@ export function DesktopPostDetail({ onNav, params }) {
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
     if (data) {
-      setTree(buildTree(data));
+      // Which of these the viewer has liked, so the heart starts filled.
+      let likedIds = new Set<string>();
+      if (app.user?.id && data.length) {
+        const { data: mine } = await supabase.from('comment_likes').select('comment_id')
+          .eq('user_id', app.user.id).in('comment_id', data.map((c: any) => c.id));
+        likedIds = new Set((mine ?? []).map((l: any) => l.comment_id));
+      }
+      setTree(buildTree(data.map((c: any) => ({ ...c, likes: c.likes_count ?? 0, _liked: likedIds.has(c.id) }))));
       setLiveCommentCount(data.length);
     }
-  }, [buildTree]);
+  }, [buildTree, app.user?.id]);
 
   React.useEffect(() => {
     if (!dbPost?.id) return;

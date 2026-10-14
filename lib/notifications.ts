@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
 export type NotifType =
-  | "like" | "follow" | "comment" | "reply" | "mention"
+  | "like" | "follow" | "follow_request" | "comment" | "reply" | "mention" | "message"
   | "community_invite" | "badge" | "level_up" | "vouch"
   // Sent by /api/cron/streak, not by another user — these carry no actor.
   | "streak_risk" | "streak_ended"

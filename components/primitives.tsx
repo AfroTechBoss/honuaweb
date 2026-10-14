@@ -241,16 +241,63 @@ export function Stat({ n, l, green, light }: any) {
   );
 }
 
+// Stored in notification_prefs (migration 051). A trigger on notifications
+// drops anything switched off here, whoever is sending it — so these hold for
+// other people's likes, the streak cron and everything in between. Account,
+// verification and Honua announcements are always delivered.
+const NOTIF_PREF_ROWS: { key: string; label: string }[] = [
+  { key: 'likes', label: 'Likes & reposts' },
+  { key: 'comments', label: 'Comments & replies' },
+  { key: 'mentions', label: 'Mentions' },
+  { key: 'follows', label: 'New followers & requests' },
+  { key: 'messages', label: 'Messages' },
+  { key: 'vouches', label: 'Vouches on your impact' },
+  { key: 'streaks', label: 'Streak reminders' },
+];
+
 export function NotifPrefs() {
-  const [prefs, setPrefs] = React.useState<any>({ "Verified impact": true, "Mentions & replies": true, "New followers": true, "Project invites": false, "Daily digest": true });
+  const app = useApp() as any;
+  const userId = app.user?.id;
+  const [prefs, setPrefs] = React.useState<Record<string, boolean> | null>(null);
+
+  React.useEffect(() => {
+    if (!userId) return;
+    let live = true;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data } = await supabase.from('notification_prefs').select('*').eq('user_id', userId).maybeSingle();
+      const all: Record<string, boolean> = {};
+      NOTIF_PREF_ROWS.forEach(r => { all[r.key] = data ? data[r.key] !== false : true; });
+      if (live) setPrefs(all);
+    });
+    return () => { live = false; };
+  }, [userId]);
+
+  const set = async (key: string, v: boolean) => {
+    if (!userId || !prefs) return;
+    const next = { ...prefs, [key]: v };
+    setPrefs(next);
+    const { supabase } = await import('@/lib/supabase');
+    const { error } = await supabase.from('notification_prefs')
+      .upsert({ user_id: userId, ...next, updated_at: new Date().toISOString() });
+    if (error) {
+      setPrefs(prefs);
+      app.toast?.({ kind: 'error', msg: "Couldn't save that preference", sub: error.message, icon: 'bell' });
+    }
+  };
+
+  if (!userId) return <p style={{ fontSize: 12.5, color: 'var(--ink-3)', margin: 0 }}>Sign in to choose which notifications you get.</p>;
+  if (!prefs) return <p style={{ fontSize: 12.5, color: 'var(--ink-3)', margin: 0 }}>Loading…</p>;
   return (
     <>
-      {Object.keys(prefs).map((l) => (
-        <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
-          <span style={{ fontSize: 13 }}>{l}</span>
-          <ToggleC on={prefs[l]} onChange={(v: any) => setPrefs((p: any) => ({ ...p, [l]: v }))} />
+      {NOTIF_PREF_ROWS.map(({ key, label }) => (
+        <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+          <span style={{ fontSize: 13 }}>{label}</span>
+          <ToggleC on={prefs[key]} onChange={(v: any) => set(key, v)} />
         </div>
       ))}
+      <p style={{ fontSize: 11.5, color: 'var(--ink-4)', margin: '8px 0 0', lineHeight: 1.5 }}>
+        Account, verification and Honua announcements are always on.
+      </p>
     </>
   );
 }
