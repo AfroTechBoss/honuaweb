@@ -60,29 +60,30 @@ const fmtDistance = (km: number) =>
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 
-function makeCatIcon(cat: string) {
+const escAttr = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Photo pin: a white rounded frame holding the project's square cover photo,
+// with a pointer at the bottom on the exact spot. Projects without a photo
+// get their category colour and emoji in the frame instead.
+// 56px frame + 9px pointer = 65px; the anchor is the pointer's tip.
+function makeCatIcon(cat: string, photo?: string | null) {
   if (typeof window === "undefined") return null;
   const color = CAT_COLORS[cat] || '#16a34a';
   const emoji = CAT_EMOJI[cat] || '📍';
   const L = require("leaflet");
-  // Teardrop pin: circle on top, sharp point at bottom
-  // Total height: 44px circle + 10px tail = 54px. iconAnchor at bottom tip.
+  const inner = photo
+    ? `<img src="${escAttr(photo)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:9px;" />`
+    : `<div style="width:100%;height:100%;border-radius:9px;background:${color};display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;">${emoji}</div>`;
   return L.divIcon({
     className: "",
     html: `
-      <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 4px 8px rgba(0,0,0,.28));">
-        <div style="
-          width:44px;height:44px;border-radius:50% 50% 50% 0;
-          transform:rotate(-45deg);
-          background:${color};
-          display:flex;align-items:center;justify-content:center;
-        ">
-          <span style="transform:rotate(45deg);font-size:20px;line-height:1;">${emoji}</span>
-        </div>
+      <div style="position:relative;width:56px;height:65px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28));">
+        <div style="width:56px;height:56px;box-sizing:border-box;padding:4px;background:#fff;border-radius:13px;">${inner}</div>
+        <div style="position:absolute;left:50%;bottom:0;margin-left:-9px;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:10px solid #fff;"></div>
       </div>`,
-    iconSize: [44, 54],
-    iconAnchor: [22, 54],
-    popupAnchor: [0, -54],
+    iconSize: [56, 65],
+    iconAnchor: [28, 65],
+    popupAnchor: [0, -65],
   });
 }
 
@@ -517,7 +518,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                 <Marker
                   key={p.id}
                   position={[p.lat, p.lng]}
-                  icon={makeCatIcon(p.cat)}
+                  icon={makeCatIcon(p.cat, p.imageUrls?.[0] ?? p.coverUrl)}
                   eventHandlers={{ click: () => app.openModal?.('project', p) }}
                 >
                   <Popup>

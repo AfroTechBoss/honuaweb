@@ -581,6 +581,7 @@ export async function getMapProjects(): Promise<any[]> {
       description: p.description,
       userId: p.user_id ?? null,
       coverUrl: p.cover_url ?? null,
+      imageUrls: Array.isArray(p.image_urls) && p.image_urls.length ? p.image_urls : (p.cover_url ? [p.cover_url] : []),
       _db: true,
     }));
   } catch { return []; }
@@ -589,9 +590,11 @@ export async function getMapProjects(): Promise<any[]> {
 export async function createMapProject(userId: string, fields: {
   title: string; category: string; startsAt?: string; locationName?: string;
   description?: string; hostName?: string; lat?: number | null; lng?: number | null;
+  imageUrls?: string[];
 }): Promise<boolean> {
   try {
-    const { error } = await supabase.from('projects').insert({
+    const images = (fields.imageUrls ?? []).slice(0, 6);
+    const row: Record<string, any> = {
       user_id: userId,
       title: fields.title,
       category: fields.category,
@@ -601,7 +604,13 @@ export async function createMapProject(userId: string, fields: {
       host_name: fields.hostName || null,
       lat: fields.lat ?? null,
       lng: fields.lng ?? null,
-    });
+      cover_url: images[0] ?? null,
+    };
+    let { error } = await supabase.from('projects').insert(images.length ? { ...row, image_urls: images } : row);
+    // Before migration 053 there is no image_urls column; keep the cover.
+    if (error && images.length && /image_urls/.test(error.message ?? '')) {
+      ({ error } = await supabase.from('projects').insert(row));
+    }
     return !error;
   } catch { return false; }
 }

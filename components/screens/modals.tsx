@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS, ACTION_IMPACTS, computeImpact, VOUCH_THRESHOLD } from "@/lib/impact";
@@ -9,6 +9,7 @@ import { VERIFICATION_MEANS } from "@/lib/verification-copy";
 import { MVerifyRequest } from "./verification-modal";
 import { CarbonPayment } from "../carbon-payment";
 import type { Retirement } from "@/lib/market";
+import { usePlaceSuggestions, reversePlace, type Place } from "@/lib/geocode";
 
 // Hashtag pool - seeded from MOCK trends + common sustainability tags
 const HASHTAG_POOL = [
@@ -882,8 +883,65 @@ export function MStartProject({ close }) {
   const [cat, setCat] = React.useState('Cleanup');
   const [date, setDate] = React.useState('');
   const [location, setLocation] = React.useState('');
+  // The place picked from the suggestions. Its coordinates are what goes on
+  // the map; typing again clears it so a stale pin can't be saved.
+  const [place, setPlace] = React.useState<Place | null>(null);
+  const [placeOpen, setPlaceOpen] = React.useState(false);
+  const [locating, setLocating] = React.useState(false);
+  const { places, loading: searching } = usePlaceSuggestions(location, !place);
   const [desc, setDesc] = React.useState('');
+  const [photos, setPhotos] = React.useState<{ file: File; url: string }[]>([]);
   const [saving, setSaving] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const MAX_PHOTOS = 6;
+
+  React.useEffect(() => () => photos.forEach(p => URL.revokeObjectURL(p.url)), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickPlace = (p: Place) => { setPlace(p); setLocation(p.label); setPlaceOpen(false); };
+
+  const useMyLocation = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      app.toast({ msg: "Your browser can't share its location", sub: 'Search for the place instead.', icon: 'pin' });
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      const found = await reversePlace(lat, lng);
+      pickPlace(found ?? { label: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, detail: '', lat, lng });
+      setLocating(false);
+    }, () => {
+      setLocating(false);
+      app.toast({ msg: "Couldn't get your location", sub: 'Allow location access, or search for the place.', icon: 'pin' });
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  };
+
+  const addPhotos = async (list: FileList | null) => {
+    if (!list) return;
+    const { squareImage } = await import('@/lib/storage');
+    const next: { file: File; url: string }[] = [];
+    let skipped = 0;
+    for (const original of Array.from(list)) {
+      if (!original.type.startsWith('image/') || original.size > 20 * 1024 * 1024) { skipped++; continue; }
+      try {
+        // Cropped to 1:1 here, so the preview is exactly what gets uploaded.
+        const file = await squareImage(original);
+        next.push({ file, url: URL.createObjectURL(file) });
+      } catch { skipped++; }
+    }
+    const room = MAX_PHOTOS - photos.length;
+    next.slice(room).forEach(p => URL.revokeObjectURL(p.url));
+    setPhotos(prev => [...prev, ...next.slice(0, room)]);
+    if (skipped) app.toast({ msg: `${skipped} file${skipped === 1 ? '' : 's'} skipped`, sub: 'Photos must be images under 20 MB.', icon: 'image' });
+    else if (next.length > room) app.toast({ msg: `Up to ${MAX_PHOTOS} photos`, sub: 'The extra ones were left out.', icon: 'image' });
+  };
+  const removePhoto = (i: number) => setPhotos(prev => {
+    URL.revokeObjectURL(prev[i].url);
+    return prev.filter((_, j) => j !== i);
+  });
+
+  // Text typed but no suggestion chosen: there are no coordinates to pin.
+  const needsPick = !!location.trim() && !place;
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -892,37 +950,34 @@ export function MStartProject({ close }) {
       app.toast({ msg: 'Sign in to start a project', icon: 'user' });
       return;
     }
+    if (needsPick) {
+      setPlaceOpen(true);
+      app.toast({ msg: 'Pick the exact place', sub: 'Choose one of the suggestions so the project lands in the right spot on the map.', icon: 'pin' });
+      return;
+    }
     setSaving(true);
     try {
-      // Geocode the free-text location so the project lands on the map
-      let lat: number | null = null, lng: number | null = null;
-      if (location.trim()) {
+      let imageUrls: string[] = [];
+      if (photos.length) {
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`, { headers: { 'Accept-Language': 'en' } });
-          const results = await res.json();
-          if (results?.[0]) { lat = parseFloat(results[0].lat); lng = parseFloat(results[0].lon); }
-        } catch {}
-      }
-      // Fall back to the browser's location so it still shows on the map
-      if (lat === null && typeof navigator !== 'undefined' && navigator.geolocation) {
-        await new Promise<void>(resolve => {
-          navigator.geolocation.getCurrentPosition(
-            pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve(); },
-            () => resolve(),
-            { timeout: 4000 }
-          );
-        });
+          const { uploadFile } = await import('@/lib/storage');
+          imageUrls = await Promise.all(photos.map(p => uploadFile('projects', app.user.id, p.file)));
+        } catch (e: any) {
+          app.toast({ kind: 'error', msg: "Couldn't upload your photos", sub: e?.message || 'Try again, or create the project without them.', icon: 'image' });
+          return;
+        }
       }
       const { createMapProject } = await import('@/lib/market');
       const ok = await createMapProject(app.user.id, {
         title: name.trim(), category: cat, startsAt: date || undefined,
-        locationName: location.trim() || undefined, description: desc.trim() || undefined,
-        hostName: app.user?.name, lat, lng,
+        locationName: place?.label, description: desc.trim() || undefined,
+        hostName: app.user?.name, lat: place?.lat ?? null, lng: place?.lng ?? null,
+        imageUrls,
       });
-      close();
       if (ok) {
+        close();
         window.dispatchEvent(new Event('honua:project-created'));
-        app.toast({ kind: 'success', msg: 'Project created', sub: lat !== null ? 'It\'s live on the map now.' : 'Saved — add a location to place it on the map.', icon: 'pin' });
+        app.toast({ kind: 'success', msg: 'Project created', sub: place ? "It's live on the map now." : 'Saved. Add a location to place it on the map.', icon: 'pin' });
       } else {
         app.toast({ msg: 'Could not create project', sub: 'Check that migration 015 has been run.', kind: 'error', icon: 'close' });
       }
@@ -939,20 +994,76 @@ export function MStartProject({ close }) {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
           {['Cleanup', 'Garden', 'Energy', 'Repair', 'Policy', 'Waste'].map(c => <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>)}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div>
-            <span className="fld-label">Date &amp; time</span>
-            <input
-              className="fld"
-              type="datetime-local"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              style={{ colorScheme: 'light dark' }}
-            />
-          </div>
-          <div><span className="fld-label">Location</span><input className="fld" type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Brooklyn, NY" /></div>
+        <span className="fld-label">Date &amp; time</span>
+        <input
+          className="fld"
+          type="datetime-local"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          style={{ colorScheme: 'light dark', marginBottom: 14 }}
+        />
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <span className="fld-label">Location</span>
+          <button type="button" onClick={useMyLocation} disabled={locating} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12.5, color: 'var(--green)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="pin" size={12} /> {locating ? 'Locating…' : 'Use my current location'}
+          </button>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <input
+            className="fld" type="text" value={location} autoComplete="off"
+            onChange={e => { setLocation(e.target.value); setPlace(null); setPlaceOpen(true); }}
+            onFocus={() => setPlaceOpen(true)}
+            onBlur={() => setTimeout(() => setPlaceOpen(false), 150)}
+            onKeyDown={e => { if (e.key === 'Enter' && places[0] && !place) { e.preventDefault(); pickPlace(places[0]); } if (e.key === 'Escape') setPlaceOpen(false); }}
+            placeholder="Search a park, street or address"
+            style={{ borderColor: needsPick && !placeOpen ? 'var(--warn, #c77700)' : undefined }}
+          />
+          {placeOpen && !place && location.trim().length >= 3 && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60, marginTop: 4, background: 'var(--surface, var(--bg))', border: '1px solid var(--line)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden', maxHeight: 260, overflowY: 'auto' }}>
+              {places.length === 0 ? (
+                <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--ink-4)' }}>{searching ? 'Searching the map…' : 'No matching places. Try adding the city.'}</div>
+              ) : places.map((p, i) => (
+                <button key={`${p.lat},${p.lng},${i}`} type="button" onMouseDown={e => e.preventDefault()} onClick={() => pickPlace(p)}
+                  style={{ display: 'flex', gap: 10, alignItems: 'flex-start', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', borderTop: i ? '1px solid var(--line)' : 'none', cursor: 'pointer', color: 'var(--ink-2)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-2)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                  <span style={{ marginTop: 2, color: 'var(--ink-4)' }}><Icon name="pin" size={14} /></span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.label}</span>
+                    {p.detail && <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.detail}</span>}
+                  </span>
+                </button>
+              ))}
+              <div style={{ padding: '6px 14px', fontSize: 10.5, color: 'var(--ink-4)', borderTop: '1px solid var(--line)' }}>Places © OpenStreetMap contributors</div>
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: 12, marginTop: 6, color: place ? 'var(--green)' : needsPick ? 'var(--warn, #c77700)' : 'var(--ink-4)' }}>
+          {place
+            ? <>Pinned at {place.lat.toFixed(5)}, {place.lng.toFixed(5)}{place.detail ? ` · ${place.detail}` : ''}</>
+            : needsPick ? 'Pick a suggestion to pin the exact spot.' : 'Optional. Without a location the project won\u2019t show on the map.'}
         </div>
         <div style={{ marginTop: 14 }}><span className="fld-label">Description</span><textarea className="fld" value={desc} onChange={e => setDesc(e.target.value)} placeholder="What will you do, what to bring…" /></div>
+        <div style={{ marginTop: 14 }}>
+          <span className="fld-label">Photos <span style={{ fontWeight: 400, color: 'var(--ink-4)' }}>(optional, up to {MAX_PHOTOS}, cropped square; the first shows on the map pin)</span></span>
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { addPhotos(e.target.files); e.target.value = ''; }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {photos.map((p, i) => (
+              <div key={p.url} style={{ position: 'relative', width: 72, height: 72, borderRadius: 10, overflow: 'hidden', border: i === 0 ? '2px solid var(--green)' : '1px solid var(--line)' }}>
+                <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <button type="button" onClick={() => removePhoto(i)} aria-label="Remove photo" style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,.6)', color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0 }}>
+                  <Icon name="close" size={11} />
+                </button>
+              </div>
+            ))}
+            {photos.length < MAX_PHOTOS && (
+              <button type="button" onClick={() => fileRef.current?.click()} style={{ width: 72, height: 72, borderRadius: 10, border: '1.5px dashed var(--line)', background: 'var(--bg-2)', color: 'var(--ink-3)', cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 11.5, gap: 2, padding: 6 }}>
+                <Icon name="image" size={16} />
+                Add photo
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>

@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, PostCard, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, makeCommentSeed, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, MOCK, MOCK_SELLER, MOCK_APPLICATIONS, MOCK_ADMIN, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
 import { CarbonPayment } from "@/components/carbon-payment";
 import type { Retirement } from "@/lib/market";
@@ -90,6 +90,8 @@ export function MProject({ data, close }) {
   const [attendees, setAttendees] = React.useState<any[]>([]);
   const [hostHandle, setHostHandle] = React.useState<string | null>(null);
   const isHost = !!app.user?.id && data.userId === app.user.id;
+  const photos: string[] = data.imageUrls?.length ? data.imageUrls : (data.coverUrl ? [data.coverUrl] : []);
+  const [photo, setPhoto] = React.useState(0);
 
   React.useEffect(() => {
     if (!isDbProject) return;
@@ -141,10 +143,21 @@ export function MProject({ data, close }) {
         : `${names.slice(0, 2).join(', ')} & ${count - Math.min(2, names.length)} ${count - Math.min(2, names.length) === 1 ? 'other' : 'others'} are going`;
   return (
     <Modal onClose={close} width={560}>
-      <div style={{ height: 180, position: 'relative', background: data.coverUrl ? `url(${data.coverUrl}) center/cover` : (data.color || 'var(--green)') }}>
+      <div style={{ height: photos.length ? 240 : 180, position: 'relative', background: photos.length ? `url(${photos[photo] ?? photos[0]}) center/cover` : (data.color || 'var(--green)') }}>
         <button onClick={close} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="close" size={16} /></button>
         <span className="chip chip-green" style={{ position: 'absolute', bottom: 14, left: 16 }}>{data.cat}</span>
       </div>
+      {photos.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, padding: '12px 22px 0', overflowX: 'auto' }}>
+          {photos.map((src, i) => (
+            <button key={src} onClick={() => setPhoto(i)} aria-label={`Photo ${i + 1}`} style={{
+              flexShrink: 0, width: 56, height: 56, borderRadius: 8, padding: 0, cursor: 'pointer',
+              border: i === photo ? '2px solid var(--green)' : '1px solid var(--line)',
+              background: `url(${src}) center/cover`,
+            }} />
+          ))}
+        </div>
+      )}
       <div style={{ padding: 22 }}>
         <h2 className="font-display" style={{ margin: 0, fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>{data.t}</h2>
         <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--ink-3)' }}>

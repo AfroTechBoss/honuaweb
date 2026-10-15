@@ -70,6 +70,10 @@ challenge counts are reset to real row counts, the seven seller-less demo
 products are taken down (status `removed`, order history kept), and every
 product's rating is recomputed from real reviews. It is safe to re-run.
 
+Migration 053 adds `projects.image_urls` for the photos hosts attach when they
+start a project. Until it runs, projects are still created with their first
+photo as the cover. Safe to re-run.
+
 ## Granting yourself admin
 
 `/admin` is gated by Privy, but `profiles.role` controls DB-level admin powers

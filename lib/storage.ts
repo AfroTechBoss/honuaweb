@@ -46,3 +46,22 @@ export async function deleteFile(bucket: string, url: string) {
   if (!path) return;
   await supabase.storage.from(bucket).remove([path]);
 }
+
+// Centre-crops an image to a square and scales it to at most `size` px, as a
+// JPEG. Project photos are square so they fit the map's photo pins and the
+// project page the same way whatever shape the original was.
+export async function squareImage(file: File, size = 1200): Promise<File> {
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height);
+  const out = Math.min(side, size);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = out;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) { bmp.close?.(); return file; }
+  ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, out, out);
+  bmp.close?.();
+  const blob: Blob | null = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.88));
+  if (!blob) return file;
+  const base = file.name.replace(/\.[^.]*$/, "") || "photo";
+  return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+}
