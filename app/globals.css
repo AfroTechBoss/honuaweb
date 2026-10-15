@@ -366,6 +366,12 @@ button { font-family: inherit; }
 input, textarea, select { font-family: inherit; }
 @keyframes slideIn { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Native date/time pickers follow Honua's theme, not the OS one, so their
+   calendar icon stays visible against the field in both modes. */
+input[type="date"], input[type="time"], input[type="datetime-local"] { color-scheme: light; }
+body.dark input[type="date"], body.dark input[type="time"], body.dark input[type="datetime-local"] { color-scheme: dark; }
+input::-webkit-calendar-picker-indicator { opacity: .75; cursor: pointer; }
+input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 /* Green light from a map pin while its project is live: a glow that follows
    the pin's outline (frame and pointer), and rings rippling out from its tip. */
@@ -514,6 +520,15 @@ input, textarea, select { font-family: inherit; }
 }
 .more-sheet-action-btn.logout { color: var(--clay); }
 
+/* Action map list/map switch: phone widths only (rendered only there) */
+.map-view-toggle {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+  z-index: 1001; display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 20px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--ink-solid); color: #fff; font-weight: 600; font-size: 14px;
+  box-shadow: 0 10px 30px -8px rgba(0,0,0,.35);
+}
+
 /* Back button: only shown on mobile */
 .msg-back-btn { display: none; }
 
@@ -587,6 +602,24 @@ input, textarea, select { font-family: inherit; }
   .msg-in-thread .msg-detail-col { display: flex !important; }
   /* Back button only visible on mobile */
   .msg-back-btn { display: flex !important; }
+
+  /* Action map: one column at a time, switched by the floating toggle */
+  .page-wrap > main > div.map-list-col:not(.right-panel) {
+    width: 100% !important; border-right: none !important;
+    padding-left: 0 !important; padding-right: 0 !important;
+  }
+  .page-wrap > main > div.map-map-col:not(.right-panel) {
+    display: none; padding-left: 0 !important; padding-right: 0 !important;
+  }
+  .page-wrap > main > div.map-map-col:not(.right-panel) > div:first-child { padding-left: 0 !important; padding-right: 0 !important; }
+  .map-show-map > div.map-list-col { display: none !important; }
+  .page-wrap > main.map-show-map > div.map-map-col:not(.right-panel) { display: block; }
+  .map-collapse-btn { display: none !important; }
+  /* Room for the toggle below the summary and create button */
+  .map-bottom-bar { bottom: 72px !important; }
+  /* The compose button would sit on top of the map's own create button */
+  .map-page .mobile-compose-fab { display: none !important; }
+  .map-page .map-list-col { padding-bottom: 72px; }
 
   /* Grids: collapse on mobile */
   .product-grid { grid-template-columns: repeat(2, 1fr) !important; }

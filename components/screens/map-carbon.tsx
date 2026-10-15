@@ -199,11 +199,22 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     try { localStorage.setItem('honua:map-list-collapsed', c ? '0' : '1'); } catch {}
     return !c;
   });
+  // Phones have no room for both columns, so they show one at a time.
+  const [isPhone, setIsPhone] = React.useState(false);
+  const [phoneView, setPhoneView] = React.useState<'list' | 'map'>('list');
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const sync = () => setIsPhone(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  const listCollapsed = collapsed && !isPhone;
   // Leaflet measures its box once; tell it the box changed after the slide.
   React.useEffect(() => {
     const t = setTimeout(() => mapRef.current?.invalidateSize(), 240);
     return () => clearTimeout(t);
-  }, [collapsed]);
+  }, [listCollapsed, isPhone, phoneView]);
   // A project to centre on once the map exists (e.g. from a shared link).
   const pendingFocus = React.useRef<[number, number] | null>(null);
   const onMap = React.useCallback((map: any) => {
@@ -212,6 +223,8 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   }, []);
   // Bring a project's pin into view, flying there if it's far away, and open it.
   const focusProject = React.useCallback((p: any, fly = true) => {
+    // On a phone the list hides the map, so switch over to show the pin.
+    if (fly) setPhoneView('map');
     if (fly && typeof p.lat === 'number' && typeof p.lng === 'number') {
       const map = mapRef.current;
       if (map) map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: 1.2 });
@@ -387,16 +400,16 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   const totalGoing = current.reduce((s, p) => s + (p.going ?? 0), 0);
 
   return (
-    <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
+    <div className="page-wrap map-page" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <DesktopSidebar active="map" onNav={onNav} />
-      <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
+      <main className={phoneView === 'map' ? 'map-show-map' : undefined} style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden', position: 'relative' }}>
         {/* List column */}
-        <div style={{
-          width: collapsed ? 84 : 380, flexShrink: 0, borderRight: '1px solid var(--line)',
+        <div className="map-list-col no-scrollbar" style={{
+          width: listCollapsed ? 84 : 380, flexShrink: 0, borderRight: '1px solid var(--line)',
           background: 'var(--surface)', height: '100%', overflow: 'auto', overflowX: 'hidden',
           transition: 'width .22s ease',
-        }} className="no-scrollbar">
-          {collapsed ? (
+        }}>
+          {listCollapsed ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '20px 0' }}>
               <button onClick={toggleCollapsed} title="Show project list" aria-label="Show project list" style={collapseBtn}>
                 <Icon name="chevron" size={16} />
@@ -425,7 +438,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
               <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>
                 ACTION MAP
               </div>
-              <button onClick={toggleCollapsed} title="Collapse list" aria-label="Collapse project list" style={collapseBtn}>
+              <button onClick={toggleCollapsed} className="map-collapse-btn" title="Collapse list" aria-label="Collapse project list" style={collapseBtn}>
                 <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><Icon name="chevron" size={16} /></span>
               </button>
             </div>
@@ -618,7 +631,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
         </div>
 
         {/* Map column */}
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <div className="map-map-col" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           {mapReady && center ? (
             <MapContainer
               key={mapKey}
@@ -687,40 +700,60 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
             )}
           </div>
 
-          {/* Floating create */}
-          <button onClick={() => app.openModal?.('startproject')} style={{
-            position: 'absolute', bottom: 24, right: 24, zIndex: 1000,
-            padding: '12px 18px', borderRadius: 999, background: 'var(--ink-solid)', color: '#fff',
-            border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
-            fontWeight: 500, boxShadow: '0 10px 30px -10px rgba(0,0,0,.3)',
+          {/* Bottom bar: area summary on the left, create on the right. When the
+              map is too narrow for both, the button wraps under the summary
+              instead of being covered by it. */}
+          <div className="map-bottom-bar" style={{
+            position: 'absolute', left: 16, right: 16, bottom: 16, zIndex: 1000,
+            display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 10,
+            pointerEvents: 'none',
           }}>
-            <Icon name="plus" size={16} stroke={2.2} /> Start a project
-          </button>
+            {/* Nothing to summarise until something is on the map */}
+            {current.length > 0 && (
+              <div style={{
+                pointerEvents: 'auto', minWidth: 0, maxWidth: '100%',
+                background: 'var(--surface)', borderRadius: 14,
+                border: '1px solid var(--line)', padding: '12px 16px',
+                display: 'flex', alignItems: 'center', gap: 14,
+                boxShadow: '0 10px 30px -10px rgba(0,0,0,.15)',
+              }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                  <Icon name="globe" size={20} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>
+                    {located && locationName ? `NEAREST TO ${locationName.toUpperCase()}` : 'ON THE MAP'}
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>
+                    {plural(current.length, 'project')}
+                    {totalGoing > 0 && ` · ${totalGoing} ${totalGoing === 1 ? 'person' : 'people'} taking part`}
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Floating area summary — nothing to summarise until something is on the map */}
-          {current.length > 0 && (
-            <div style={{
-              position: 'absolute', bottom: 24, left: 24, zIndex: 1000,
-              background: 'var(--surface)', borderRadius: 14,
-              border: '1px solid var(--line)', padding: '12px 16px',
-              display: 'flex', alignItems: 'center', gap: 16,
-              boxShadow: '0 10px 30px -10px rgba(0,0,0,.15)',
+            <button onClick={() => app.openModal?.('startproject')} style={{
+              pointerEvents: 'auto', marginLeft: 'auto', flexShrink: 0,
+              padding: '12px 18px', borderRadius: 999, background: 'var(--ink-solid)', color: '#fff',
+              border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
+              fontWeight: 500, whiteSpace: 'nowrap', boxShadow: '0 10px 30px -10px rgba(0,0,0,.3)',
             }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--green-tint)', color: 'var(--green)', display: 'grid', placeItems: 'center' }}>
-                <Icon name="globe" size={20} />
-              </div>
-              <div>
-                <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>
-                  {located && locationName ? `NEAREST TO ${locationName.toUpperCase()}` : 'ON THE MAP'}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  {plural(current.length, 'project')}
-                  {totalGoing > 0 && ` · ${totalGoing} ${totalGoing === 1 ? 'person' : 'people'} taking part`}
-                </div>
-              </div>
-            </div>
-          )}
+              <Icon name="plus" size={16} stroke={2.2} /> Start a project
+            </button>
+          </div>
         </div>
+
+        {/* Phone-only switch between the list and the map */}
+        {isPhone && (
+          <button
+            onClick={() => setPhoneView(v => v === 'list' ? 'map' : 'list')}
+            className="map-view-toggle"
+            aria-label={phoneView === 'list' ? 'Show map' : 'Show list'}
+          >
+            <Icon name={phoneView === 'list' ? 'map' : 'bars'} size={16} stroke={2.2} />
+            {phoneView === 'list' ? 'Map' : 'List'}
+          </button>
+        )}
       </main>
     </div>
   );

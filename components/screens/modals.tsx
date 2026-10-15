@@ -1059,11 +1059,11 @@ export function MStartProject({ close }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10, marginBottom: 14 }}>
           <label style={{ display: 'block' }}>
             <span className="fld-label">Starts</span>
-            <input className="fld" type="datetime-local" value={date} onChange={e => changeStart(e.target.value)} style={{ colorScheme: 'light dark' }} />
+            <input className="fld" type="datetime-local" value={date} onChange={e => changeStart(e.target.value)} />
           </label>
           <label style={{ display: 'block' }}>
             <span className="fld-label">Ends</span>
-            <input className="fld" type="datetime-local" value={endDate} min={date || undefined} onChange={e => setEndDate(e.target.value)} style={{ colorScheme: 'light dark' }} />
+            <input className="fld" type="datetime-local" value={endDate} min={date || undefined} onChange={e => setEndDate(e.target.value)} />
           </label>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
