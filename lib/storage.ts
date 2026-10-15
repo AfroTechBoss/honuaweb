@@ -65,3 +65,14 @@ export async function squareImage(file: File, size = 1200): Promise<File> {
   const base = file.name.replace(/\.[^.]*$/, "") || "photo";
   return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
 }
+
+// Pixel size of an image file, after the browser applies its orientation.
+export function imageSize(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve({ width: img.naturalWidth, height: img.naturalHeight }); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("unreadable image")); };
+    img.src = url;
+  });
+}

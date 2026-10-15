@@ -11,6 +11,16 @@ const MapContainer = dynamic(() => import("react-leaflet").then(m => m.MapContai
 const TileLayer = dynamic(() => import("react-leaflet").then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then(m => m.Popup), { ssr: false });
+// next/dynamic doesn't forward refs (a ref on MapContainer gets the loader's
+// handle, not the map), so this child hands the Leaflet map up instead.
+const MapBridge = dynamic(() => import("react-leaflet").then(m => {
+  function Bridge({ onMap }: { onMap: (map: any) => void }) {
+    const map = m.useMap();
+    React.useEffect(() => { onMap(map); }, [map]);
+    return null;
+  }
+  return Bridge;
+}), { ssr: false });
 
 // Leaflet icon fix for Next.js (icon images get bundled weirdly without this)
 function fixLeafletIcons() {
@@ -66,18 +76,22 @@ const escAttr = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').
 // with a pointer at the bottom on the exact spot. Projects without a photo
 // get their category colour and emoji in the frame instead.
 // 56px frame + 9px pointer = 65px; the anchor is the pointer's tip.
+const catIconCache = new Map<string, any>();
 function makeCatIcon(cat: string, photo?: string | null) {
   if (typeof window === "undefined") return null;
+  const key = `${cat}|${photo ?? ''}`;
+  const cached = catIconCache.get(key);
+  if (cached) return cached;
   const color = CAT_COLORS[cat] || '#16a34a';
   const emoji = CAT_EMOJI[cat] || '📍';
   const L = require("leaflet");
   const inner = photo
-    ? `<img src="${escAttr(photo)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:9px;" />`
-    : `<div style="width:100%;height:100%;border-radius:9px;background:${color};display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;">${emoji}</div>`;
-  return L.divIcon({
+    ? `<img src="${escAttr(photo)}" alt="" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:9px;pointer-events:none;" />`
+    : `<div style="width:100%;height:100%;border-radius:9px;pointer-events:none;background:${color};display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;">${emoji}</div>`;
+  const icon = L.divIcon({
     className: "",
     html: `
-      <div style="position:relative;width:56px;height:65px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28));">
+      <div style="position:relative;width:56px;height:65px;cursor:pointer;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28));">
         <div style="width:56px;height:56px;box-sizing:border-box;padding:4px;background:#fff;border-radius:13px;">${inner}</div>
         <div style="position:absolute;left:50%;bottom:0;margin-left:-9px;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:10px solid #fff;"></div>
       </div>`,
@@ -85,6 +99,8 @@ function makeCatIcon(cat: string, photo?: string | null) {
     iconAnchor: [28, 65],
     popupAnchor: [0, -65],
   });
+  catIconCache.set(key, icon);
+  return icon;
 }
 
 function makeUserIcon() {
@@ -130,6 +146,21 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   const [mapReady, setMapReady] = React.useState(false);
   const [mapKey, setMapKey] = React.useState(0);
   const mapRef = React.useRef<any>(null);
+  // A project to centre on once the map exists (e.g. from a shared link).
+  const pendingFocus = React.useRef<[number, number] | null>(null);
+  const onMap = React.useCallback((map: any) => {
+    mapRef.current = map;
+    if (pendingFocus.current) { map.setView(pendingFocus.current, Math.max(map.getZoom(), 15)); pendingFocus.current = null; }
+  }, []);
+  // Bring a project's pin into view, flying there if it's far away, and open it.
+  const focusProject = React.useCallback((p: any, fly = true) => {
+    if (fly && typeof p.lat === 'number' && typeof p.lng === 'number') {
+      const map = mapRef.current;
+      if (map) map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: 1.2 });
+      else pendingFocus.current = [p.lat, p.lng];
+    }
+    app.openModal?.('project', p);
+  }, [app]);
 
   // Custom location search state
   const [locInput, setLocInput] = React.useState('');
@@ -161,7 +192,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     if (!linkedProject || !dbProjects || openedLinkRef.current) return;
     openedLinkRef.current = true;
     const p = dbProjects.find(x => x.id === linkedProject);
-    if (p) app.openModal?.('project', p);
+    if (p) focusProject(p);
     else app.toast?.({ msg: 'Project not found', sub: 'It may have ended or been removed.', icon: 'pin' });
     window.history.replaceState(null, '', '/map');
   }, [linkedProject, dbProjects]);
@@ -420,7 +451,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
             {projectsLoading ? (
               [1, 2, 3].map(i => (
                 <div key={i} style={{ padding: '14px 24px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 12 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--line)', flexShrink: 0 }} />
+                  <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--line)', flexShrink: 0 }} />
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ height: 10, borderRadius: 4, background: 'var(--line)', width: '40%' }} />
                     <div style={{ height: 14, borderRadius: 4, background: 'var(--line)', width: '75%' }} />
@@ -444,17 +475,21 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                 No projects match this filter.
               </div>
             ) : (
-              filtered.map(p => (
-                <div key={p.id} className="row-hover" onClick={() => app.openModal?.('project', p)} style={{
+              filtered.map(p => {
+                const thumb = p.imageUrls?.[0] ?? p.coverUrl;
+                return (
+                <div key={p.id} className="row-hover" onClick={() => focusProject(p)} style={{
                   padding: '14px 24px', borderBottom: '1px solid var(--line)',
                   display: 'flex', gap: 12, cursor: 'pointer',
                 }}>
                   <div style={{
-                    width: 40, height: 40, borderRadius: 12,
+                    width: 48, height: 48, borderRadius: 12, overflow: 'hidden',
                     background: p.color, color: '#fff',
                     display: 'grid', placeItems: 'center', flexShrink: 0,
                   }}>
-                    <Icon name="pin" size={20} stroke={2.2} />
+                    {thumb
+                      ? <img src={thumb} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      : <Icon name="pin" size={20} stroke={2.2} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{(p.cat ?? '').toUpperCase()} · {p.when}</div>
@@ -483,7 +518,8 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -493,7 +529,6 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
           {mapReady && center ? (
             <MapContainer
               key={mapKey}
-              ref={mapRef}
               center={center}
               zoom={located ? 14 : 11}
               style={{ width: '100%', height: '100%' }}
@@ -503,6 +538,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                 attribution={'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}
                 url={'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'}
               />
+              <MapBridge onMap={onMap} />
               {/* User location marker */}
               {userLat !== null && userLng !== null && (
                 <Marker position={[userLat, userLng]} icon={makeUserIcon()}>
@@ -519,37 +555,9 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                   key={p.id}
                   position={[p.lat, p.lng]}
                   icon={makeCatIcon(p.cat, p.imageUrls?.[0] ?? p.coverUrl)}
-                  eventHandlers={{ click: () => app.openModal?.('project', p) }}
-                >
-                  <Popup>
-                    <div style={{ padding: '14px 16px 12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        <span style={{
-                          background: CAT_COLORS[p.cat] || '#16a34a',
-                          color: '#fff', borderRadius: 6, padding: '2px 8px',
-                          fontSize: 10, fontWeight: 700, letterSpacing: '.04em',
-                          textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace',
-                        }}>{p.cat}</span>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: '#111', lineHeight: 1.3, marginBottom: 4 }}>{p.t}</div>
-                      <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{p.when}</div>
-                      <div style={{ fontSize: 12, color: '#888' }}>by {p.host}</div>
-                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12, color: '#666', fontFamily: 'JetBrains Mono, monospace' }}>
-                          {p.going > 0 ? `${p.going} going` : 'Be the first to join'}
-                        </span>
-                        <button
-                          onClick={() => app.openModal?.('project', p)}
-                          style={{
-                            background: CAT_COLORS[p.cat] || '#16a34a', color: '#fff',
-                            border: 'none', borderRadius: 8, padding: '5px 12px',
-                            fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                          }}
-                        >View →</button>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
+                  eventHandlers={{ click: () => focusProject(p, false) }}
+                  title={p.t}
+                />
               ))}
             </MapContainer>
           ) : (

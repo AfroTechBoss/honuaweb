@@ -3,6 +3,7 @@ import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
 import { getNotifications, markAllRead } from "@/lib/notifications";
 import { CarbonPayment } from "@/components/carbon-payment";
+import { PhotoViewer } from "@/components/photo-viewer";
 import type { Retirement } from "@/lib/market";
 
 export function Toggle({ on }) {
@@ -92,6 +93,7 @@ export function MProject({ data, close }) {
   const isHost = !!app.user?.id && data.userId === app.user.id;
   const photos: string[] = data.imageUrls?.length ? data.imageUrls : (data.coverUrl ? [data.coverUrl] : []);
   const [photo, setPhoto] = React.useState(0);
+  const [viewing, setViewing] = React.useState(false);
 
   React.useEffect(() => {
     if (!isDbProject) return;
@@ -143,10 +145,14 @@ export function MProject({ data, close }) {
         : `${names.slice(0, 2).join(', ')} & ${count - Math.min(2, names.length)} ${count - Math.min(2, names.length) === 1 ? 'other' : 'others'} are going`;
   return (
     <Modal onClose={close} width={560}>
-      <div style={{ height: photos.length ? 240 : 180, position: 'relative', background: photos.length ? `url(${photos[photo] ?? photos[0]}) center/cover` : (data.color || 'var(--green)') }}>
-        <button onClick={close} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="close" size={16} /></button>
+      <div onClick={photos.length ? () => setViewing(true) : undefined} title={photos.length ? 'View full photo' : undefined}
+        style={{ height: photos.length ? 240 : 180, position: 'relative', cursor: photos.length ? 'zoom-in' : 'default', background: photos.length ? `url(${photos[photo] ?? photos[0]}) center/cover` : (data.color || 'var(--green)') }}>
+        <button onClick={e => { e.stopPropagation(); close(); }} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="close" size={16} /></button>
         <span className="chip chip-green" style={{ position: 'absolute', bottom: 14, left: 16 }}>{data.cat}</span>
       </div>
+      {viewing && (
+        <PhotoViewer photos={photos} index={Math.min(photo, photos.length - 1)} onIndex={setPhoto} onClose={() => setViewing(false)} alt={data.t} />
+      )}
       {photos.length > 1 && (
         <div style={{ display: 'flex', gap: 8, padding: '12px 22px 0', overflowX: 'auto' }}>
           {photos.map((src, i) => (

@@ -10,6 +10,7 @@ import { MVerifyRequest } from "./verification-modal";
 import { CarbonPayment } from "../carbon-payment";
 import type { Retirement } from "@/lib/market";
 import { usePlaceSuggestions, reversePlace, type Place } from "@/lib/geocode";
+import { SquareCropper } from "@/components/square-cropper";
 
 // Hashtag pool - seeded from MOCK trends + common sustainability tags
 const HASHTAG_POOL = [
@@ -891,7 +892,12 @@ export function MStartProject({ close }) {
   const { places, loading: searching } = usePlaceSuggestions(location, !place);
   const [desc, setDesc] = React.useState('');
   const [photos, setPhotos] = React.useState<{ file: File; url: string }[]>([]);
+  // Non-square photos wait here for the user to pick their crop, one at a time.
+  const [cropQueue, setCropQueue] = React.useState<File[]>([]);
+  const [cropTotal, setCropTotal] = React.useState(0);
+  const [preparing, setPreparing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [stage, setStage] = React.useState<'' | 'uploading' | 'saving'>('');
   const fileRef = React.useRef<HTMLInputElement>(null);
   const MAX_PHOTOS = 6;
 
@@ -916,25 +922,41 @@ export function MStartProject({ close }) {
     }, { enableHighAccuracy: true, timeout: 10000 });
   };
 
-  const addPhotos = async (list: FileList | null) => {
-    if (!list) return;
-    const { squareImage } = await import('@/lib/storage');
-    const next: { file: File; url: string }[] = [];
-    let skipped = 0;
-    for (const original of Array.from(list)) {
-      if (!original.type.startsWith('image/') || original.size > 20 * 1024 * 1024) { skipped++; continue; }
-      try {
-        // Cropped to 1:1 here, so the preview is exactly what gets uploaded.
-        const file = await squareImage(original);
-        next.push({ file, url: URL.createObjectURL(file) });
-      } catch { skipped++; }
-    }
-    const room = MAX_PHOTOS - photos.length;
-    next.slice(room).forEach(p => URL.revokeObjectURL(p.url));
-    setPhotos(prev => [...prev, ...next.slice(0, room)]);
-    if (skipped) app.toast({ msg: `${skipped} file${skipped === 1 ? '' : 's'} skipped`, sub: 'Photos must be images under 20 MB.', icon: 'image' });
-    else if (next.length > room) app.toast({ msg: `Up to ${MAX_PHOTOS} photos`, sub: 'The extra ones were left out.', icon: 'image' });
+  const pushPhoto = (file: File) => setPhotos(prev => [...prev, { file, url: URL.createObjectURL(file) }]);
+
+  // Takes a plain array: the caller clears the file input straight after,
+  // and a FileList read after that (e.g. past an await) comes back empty.
+  const addPhotos = async (files: File[]) => {
+    if (!files.length) return;
+    const room = MAX_PHOTOS - photos.length - cropQueue.length;
+    const usable = files.filter(f => f.type.startsWith('image/') && f.size <= 20 * 1024 * 1024);
+    let skipped = files.length - usable.length;
+    const extra = Math.max(0, usable.length - room);
+    setPreparing(true);
+    try {
+      const { squareImage, imageSize } = await import('@/lib/storage');
+      const toCrop: File[] = [];
+      for (const file of usable.slice(0, Math.max(0, room))) {
+        try {
+          const { width, height } = await imageSize(file);
+          // Already square (within a pixel or two): just resize, no crop step.
+          if (Math.abs(width - height) <= 2) pushPhoto(await squareImage(file));
+          else toCrop.push(file);
+        } catch { skipped++; }
+      }
+      if (toCrop.length) {
+        setCropQueue(q => [...q, ...toCrop]);
+        setCropTotal(t => (cropQueue.length ? t : 0) + toCrop.length);
+      }
+    } finally { setPreparing(false); }
+    if (skipped) app.toast({ msg: `${skipped} file${skipped === 1 ? '' : 's'} skipped`, sub: "Use JPG, PNG or WebP images under 20 MB.", icon: 'image' });
+    else if (extra) app.toast({ msg: `Up to ${MAX_PHOTOS} photos`, sub: 'The extra ones were left out.', icon: 'image' });
   };
+  const nextCrop = () => setCropQueue(q => {
+    const rest = q.slice(1);
+    if (!rest.length) setCropTotal(0);
+    return rest;
+  });
   const removePhoto = (i: number) => setPhotos(prev => {
     URL.revokeObjectURL(prev[i].url);
     return prev.filter((_, j) => j !== i);
@@ -959,6 +981,7 @@ export function MStartProject({ close }) {
     try {
       let imageUrls: string[] = [];
       if (photos.length) {
+        setStage('uploading');
         try {
           const { uploadFile } = await import('@/lib/storage');
           imageUrls = await Promise.all(photos.map(p => uploadFile('projects', app.user.id, p.file)));
@@ -967,6 +990,7 @@ export function MStartProject({ close }) {
           return;
         }
       }
+      setStage('saving');
       const { createMapProject } = await import('@/lib/market');
       const ok = await createMapProject(app.user.id, {
         title: name.trim(), category: cat, startsAt: date || undefined,
@@ -981,8 +1005,9 @@ export function MStartProject({ close }) {
       } else {
         app.toast({ msg: 'Could not create project', sub: 'Check that migration 015 has been run.', kind: 'error', icon: 'close' });
       }
-    } finally { setSaving(false); }
+    } finally { setSaving(false); setStage(''); }
   };
+  const photosBusy = preparing || cropQueue.length > 0;
 
   return (
     <Modal onClose={close} width={540}>
@@ -1046,7 +1071,7 @@ export function MStartProject({ close }) {
         <div style={{ marginTop: 14 }}><span className="fld-label">Description</span><textarea className="fld" value={desc} onChange={e => setDesc(e.target.value)} placeholder="What will you do, what to bring…" /></div>
         <div style={{ marginTop: 14 }}>
           <span className="fld-label">Photos <span style={{ fontWeight: 400, color: 'var(--ink-4)' }}>(optional, up to {MAX_PHOTOS}, cropped square; the first shows on the map pin)</span></span>
-          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { addPhotos(e.target.files); e.target.value = ''; }} />
+          <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ''; addPhotos(files); }} />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {photos.map((p, i) => (
               <div key={p.url} style={{ position: 'relative', width: 72, height: 72, borderRadius: 10, overflow: 'hidden', border: i === 0 ? '2px solid var(--green)' : '1px solid var(--line)' }}>
@@ -1056,8 +1081,14 @@ export function MStartProject({ close }) {
                 </button>
               </div>
             ))}
-            {photos.length < MAX_PHOTOS && (
-              <button type="button" onClick={() => fileRef.current?.click()} style={{ width: 72, height: 72, borderRadius: 10, border: '1.5px dashed var(--line)', background: 'var(--bg-2)', color: 'var(--ink-3)', cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 11.5, gap: 2, padding: 6 }}>
+            {preparing && (
+              <div aria-live="polite" style={{ width: 72, height: 72, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--bg-2)', display: 'grid', placeItems: 'center', alignContent: 'center', gap: 6, fontSize: 11, color: 'var(--ink-3)' }}>
+                <span style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid var(--line)', borderTopColor: 'var(--green)', animation: 'spin .8s linear infinite' }} />
+                Preparing…
+              </div>
+            )}
+            {!preparing && photos.length + cropQueue.length < MAX_PHOTOS && (
+              <button type="button" disabled={saving} onClick={() => fileRef.current?.click()} style={{ width: 72, height: 72, borderRadius: 10, border: '1.5px dashed var(--line)', background: 'var(--bg-2)', color: 'var(--ink-3)', cursor: 'pointer', display: 'grid', placeItems: 'center', fontSize: 11.5, gap: 2, padding: 6 }}>
                 <Icon name="image" size={16} />
                 Add photo
               </button>
@@ -1067,8 +1098,18 @@ export function MStartProject({ close }) {
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Cancel</button>
-        <button className="btn btn-green" onClick={handleCreate} disabled={!name.trim() || saving} style={{ opacity: name.trim() && !saving ? 1 : .5 }}>{saving ? 'Creating…' : 'Create project'}</button>
+        <button className="btn btn-green" onClick={handleCreate} disabled={!name.trim() || saving || photosBusy} style={{ opacity: name.trim() && !saving && !photosBusy ? 1 : .5 }}>{stage === 'uploading' ? `Uploading ${photos.length} photo${photos.length === 1 ? '' : 's'}…` : saving ? 'Creating…' : photosBusy ? 'Preparing photos…' : 'Create project'}</button>
       </ModalFoot>
+      {cropQueue[0] && (
+        <SquareCropper
+          key={`${cropQueue[0].name}-${cropQueue[0].size}-${cropQueue[0].lastModified}-${cropQueue.length}`}
+          file={cropQueue[0]}
+          index={cropTotal - cropQueue.length}
+          total={cropTotal}
+          onDone={f => { pushPhoto(f); nextCrop(); }}
+          onCancel={nextCrop}
+        />
+      )}
     </Modal>
   );
 };
