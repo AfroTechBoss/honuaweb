@@ -78,6 +78,10 @@ Migration 054 adds `projects.original_urls`: the uncropped version of each
 project photo, shown in the full-screen viewer. Until it runs, projects are
 still created and the viewer shows the square photos. Safe to re-run.
 
+Migration 055 adds `projects.ends_at`, so projects show as Live while running
+and Past after. Until it runs, projects save without an end and count as
+running for three hours from their start. Safe to re-run.
+
 ## Granting yourself admin
 
 `/admin` is gated by Privy, but `profiles.role` controls DB-level admin powers

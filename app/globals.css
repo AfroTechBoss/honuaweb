@@ -366,6 +366,24 @@ button { font-family: inherit; }
 input, textarea, select { font-family: inherit; }
 @keyframes slideIn { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+/* Green light from a map pin while its project is live: a glow that follows
+   the pin's outline (frame and pointer), and rings rippling out from its tip. */
+.pin-live { animation: pinGlow 2s ease-in-out infinite; }
+@keyframes pinGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(22, 163, 74, .9)) drop-shadow(0 4px 8px rgba(0, 0, 0, .2)); }
+  50%      { filter: drop-shadow(0 0 12px rgba(22, 163, 74, 1)) drop-shadow(0 0 4px rgba(22, 163, 74, .9)); }
+}
+.pin-ripple {
+  position: absolute; left: 28px; bottom: 0; width: 40px; height: 14px; margin: 0 0 -7px -20px;
+  border-radius: 50%; border: 2px solid rgba(22, 163, 74, .9); background: rgba(22, 163, 74, .25);
+  pointer-events: none; animation: pinRipple 2s ease-out infinite;
+}
+@keyframes pinRipple { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .pin-live { animation: none; filter: drop-shadow(0 0 8px rgba(22, 163, 74, 1)); }
+  .pin-ripple { animation: none; opacity: .6; }
+}
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }

@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { dispatchFor } from "@/lib/payout-methods";
+import { projectWhen } from "@/lib/project-time";
 
 // ---------------------------------------------------------------------------
 // Marketplace / orders / carbon / map data layer.
@@ -568,12 +569,39 @@ export async function getMapProjects(): Promise<any[]> {
       .order('created_at', { ascending: false })
       .limit(200);
     if (error || !data) return [];
+
+    // Faces for the list: the host, and the five most recent people going.
+    // Two queries for the whole page rather than one per project.
+    const ids = data.map((p: any) => p.id);
+    const goingBy = new Map<string, string[]>();
+    if (ids.length) {
+      const { data: rsvps } = await supabase.from('project_rsvps')
+        .select('project_id, user_id').in('project_id', ids)
+        .order('created_at', { ascending: false }).limit(2000);
+      for (const r of rsvps ?? []) {
+        const list = goingBy.get(r.project_id) ?? [];
+        if (list.length < 5) { list.push(r.user_id); goingBy.set(r.project_id, list); }
+      }
+    }
+    const people = new Set<string>([...goingBy.values()].flat());
+    data.forEach((p: any) => { if (p.user_id) people.add(p.user_id); });
+    const profiles = new Map<string, { id: string; name: string; avatar: string | null }>();
+    if (people.size) {
+      const { data: rows } = await supabase.from('profiles')
+        .select('id, full_name, handle, avatar_url').in('id', [...people]);
+      for (const r of rows ?? []) profiles.set(r.id, { id: r.id, name: r.full_name || r.handle || 'Member', avatar: r.avatar_url ?? null });
+    }
+
     return data.map((p: any) => ({
       id: p.id,
       t: p.title,
       cat: p.category ?? 'Cleanup',
-      when: p.when_label || (p.starts_at ? new Date(p.starts_at).toLocaleString('default', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Anytime'),
-      host: p.host_name ?? 'A Honua member',
+      when: p.when_label || projectWhen(p.starts_at, p.ends_at),
+      startsAt: p.starts_at ?? null,
+      endsAt: p.ends_at ?? null,
+      host: profiles.get(p.user_id)?.name ?? p.host_name ?? 'A Honua member',
+      hostAvatar: profiles.get(p.user_id)?.avatar ?? null,
+      attendees: (goingBy.get(p.id) ?? []).map(id => profiles.get(id)).filter(Boolean),
       going: p.going_count ?? 0,
       lat: p.lat,
       lng: p.lng,
@@ -590,7 +618,7 @@ export async function getMapProjects(): Promise<any[]> {
 }
 
 export async function createMapProject(userId: string, fields: {
-  title: string; category: string; startsAt?: string; locationName?: string;
+  title: string; category: string; startsAt?: string; endsAt?: string; locationName?: string;
   description?: string; hostName?: string; lat?: number | null; lng?: number | null;
   imageUrls?: string[];
   originalUrls?: string[];
@@ -610,16 +638,18 @@ export async function createMapProject(userId: string, fields: {
       lng: fields.lng ?? null,
       cover_url: images[0] ?? null,
     };
-    const withImages = images.length ? { ...row, image_urls: images } : row;
-    let { error } = await supabase.from('projects').insert(
-      originals.length === images.length && images.length ? { ...withImages, original_urls: originals } : withImages);
-    // Before migration 054 there is no original_urls column; the viewer shows the square photos instead.
-    if (error && /original_urls/.test(error.message ?? '')) {
-      ({ error } = await supabase.from('projects').insert(withImages));
-    }
-    // Before migration 053 there is no image_urls column; keep the cover.
-    if (error && images.length && /image_urls/.test(error.message ?? '')) {
-      ({ error } = await supabase.from('projects').insert(row));
+    // Columns from later migrations: image_urls (053), original_urls (054),
+    // ends_at (055). If one isn't there yet, save without it rather than fail.
+    const extras: Record<string, any> = {};
+    if (images.length) extras.image_urls = images;
+    if (images.length && originals.length === images.length) extras.original_urls = originals;
+    if (fields.endsAt) extras.ends_at = fields.endsAt;
+    let { error } = await supabase.from('projects').insert({ ...row, ...extras });
+    for (let tries = 0; error && tries < 3; tries++) {
+      const missing = Object.keys(extras).find(k => (error!.message ?? '').includes(k));
+      if (!missing) break;
+      delete extras[missing];
+      ({ error } = await supabase.from('projects').insert({ ...row, ...extras }));
     }
     return !error;
   } catch { return false; }

@@ -1,7 +1,8 @@
 "use client";
 import React from "react";
 import dynamic from "next/dynamic";
-import { Icon, ImagePlaceholder, DesktopSidebar, useApp } from "@/components/shared";
+import { Icon, ImagePlaceholder, DesktopSidebar, Avatar, useApp } from "@/components/shared";
+import { projectPhase, useNow, type ProjectPhase } from "@/lib/project-time";
 
 // Leaflet CSS (loaded once globally)
 import "leaflet/dist/leaflet.css";
@@ -41,6 +42,7 @@ const CAT_COLORS: Record<string, string> = {
   Repair:  '#0284c7',
   Policy:  '#4f46e5',
   Waste:   '#ea580c',
+  Other:   '#64748b',
 };
 
 const CAT_EMOJI: Record<string, string> = {
@@ -50,6 +52,7 @@ const CAT_EMOJI: Record<string, string> = {
   Repair:  '🔧',
   Policy:  '📢',
   Waste:   '♻️',
+  Other:   '📍',
 };
 
 // Great-circle distance in km. Used to order the list nearest-first — projects are
@@ -77,9 +80,11 @@ const escAttr = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').
 // get their category colour and emoji in the frame instead.
 // 56px frame + 9px pointer = 65px; the anchor is the pointer's tip.
 const catIconCache = new Map<string, any>();
-function makeCatIcon(cat: string, photo?: string | null) {
+// Live projects glow green around the pin's own outline, with rings
+// rippling out on the ground from its tip.
+function makeCatIcon(cat: string, photo?: string | null, live = false) {
   if (typeof window === "undefined") return null;
-  const key = `${cat}|${photo ?? ''}`;
+  const key = `${cat}|${photo ?? ''}|${live ? 1 : 0}`;
   const cached = catIconCache.get(key);
   if (cached) return cached;
   const color = CAT_COLORS[cat] || '#16a34a';
@@ -91,9 +96,12 @@ function makeCatIcon(cat: string, photo?: string | null) {
   const icon = L.divIcon({
     className: "",
     html: `
-      <div style="position:relative;width:56px;height:65px;cursor:pointer;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28));">
+      <div style="position:relative;width:56px;height:65px;cursor:pointer;">
+        ${live ? '<span class="pin-ripple"></span><span class="pin-ripple" style="animation-delay:1s"></span>' : ''}
+        <div ${live ? 'class="pin-live" style="position:relative;height:65px;"' : 'style="position:relative;height:65px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.28));"'}>
         <div style="width:56px;height:56px;box-sizing:border-box;padding:4px;background:#fff;border-radius:13px;">${inner}</div>
         <div style="position:absolute;left:50%;bottom:0;margin-left:-9px;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:10px solid #fff;"></div>
+        </div>
       </div>`,
     iconSize: [56, 65],
     iconAnchor: [28, 65],
@@ -133,6 +141,41 @@ function makeUserIcon() {
   });
 }
 
+const collapseBtn: React.CSSProperties = {
+  width: 32, height: 32, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)',
+  color: 'var(--ink-2)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0,
+};
+
+// "Live" while a project is running, "Past" after. solid is for use on photos.
+export function LiveBadge({ phase, solid = false }: { phase: ProjectPhase; solid?: boolean }) {
+  if (phase !== 'live' && phase !== 'ended') return null;
+  const live = phase === 'live';
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 7px', borderRadius: 999,
+      fontSize: 10, fontWeight: 700, letterSpacing: '.06em', fontFamily: 'JetBrains Mono, monospace',
+      background: live ? (solid ? '#16a34a' : 'rgba(22,163,74,.12)') : (solid ? 'rgba(0,0,0,.6)' : 'var(--bg-2)'),
+      color: live ? (solid ? '#fff' : '#16a34a') : (solid ? '#fff' : 'var(--ink-3)'),
+    }}>
+      {live && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', animation: 'livePulse 1.6s ease-in-out infinite' }} />}
+      {live ? 'LIVE' : 'PAST'}
+    </span>
+  );
+}
+
+// Up to five overlapping faces of people going, however many there are.
+function FaceStack({ people, size = 24 }: { people: { id: string; name: string; avatar: string | null }[]; size?: number }) {
+  return (
+    <div style={{ display: 'flex' }}>
+      {people.slice(0, 5).map((u, i) => (
+        <span key={u.id} title={u.name} style={{ marginLeft: i ? -size * 0.35 : 0, zIndex: 5 - i, display: 'inline-flex' }}>
+          <Avatar src={u.avatar} name={u.name} size={size} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // =============== Desktop Local Action Map ===============
 export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
   const app = useApp();
@@ -146,6 +189,21 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   const [mapReady, setMapReady] = React.useState(false);
   const [mapKey, setMapKey] = React.useState(0);
   const mapRef = React.useRef<any>(null);
+  const now = useNow();
+  // The list folds down to a strip of project photos to give the map room.
+  const [collapsed, setCollapsed] = React.useState(false);
+  React.useEffect(() => {
+    try { setCollapsed(localStorage.getItem('honua:map-list-collapsed') === '1'); } catch {}
+  }, []);
+  const toggleCollapsed = () => setCollapsed(c => {
+    try { localStorage.setItem('honua:map-list-collapsed', c ? '0' : '1'); } catch {}
+    return !c;
+  });
+  // Leaflet measures its box once; tell it the box changed after the slide.
+  React.useEffect(() => {
+    const t = setTimeout(() => mapRef.current?.invalidateSize(), 240);
+    return () => clearTimeout(t);
+  }, [collapsed]);
   // A project to centre on once the map exists (e.g. from a shared link).
   const pendingFocus = React.useRef<[number, number] | null>(null);
   const onMap = React.useCallback((map: any) => {
@@ -201,7 +259,11 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
   React.useEffect(() => {
     const handler = () => loadDbProjects();
     window.addEventListener('honua:project-created', handler);
-    return () => window.removeEventListener('honua:project-created', handler);
+    window.addEventListener('honua:rsvp-changed', handler);
+    return () => {
+      window.removeEventListener('honua:project-created', handler);
+      window.removeEventListener('honua:rsvp-changed', handler);
+    };
   }, [loadDbProjects]);
 
   // Close location dropdown on outside click
@@ -307,7 +369,12 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     const q = search.trim().toLowerCase();
     const searchMatch = !q || (p.t ?? '').toLowerCase().includes(q) || (p.host ?? '').toLowerCase().includes(q);
     return catMatch && searchMatch;
-  });
+  })
+    // Past projects stay in the list, below everything still to come.
+    .sort((a, b) => Number(projectPhase(a, now) === 'ended') - Number(projectPhase(b, now) === 'ended'));
+  // Only projects that are on now or still to come get a pin.
+  const pinned = filtered.filter(p => projectPhase(p, now) !== 'ended');
+  const current = projects.filter(p => projectPhase(p, now) !== 'ended');
 
   // Centre on the user when we have them, otherwise on the closest thing to a
   // subject the page has — the first project. Without either there is nothing to show.
@@ -317,7 +384,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
     return first ? [first.lat, first.lng] : null;
   }, [userLat, userLng, projects]);
 
-  const totalGoing = projects.reduce((s, p) => s + (p.going ?? 0), 0);
+  const totalGoing = current.reduce((s, p) => s + (p.going ?? 0), 0);
 
   return (
     <div className="page-wrap" style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
@@ -325,12 +392,42 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
       <main style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
         {/* List column */}
         <div style={{
-          width: 380, flexShrink: 0, borderRight: '1px solid var(--line)',
-          background: 'var(--surface)', height: '100%', overflow: 'auto',
+          width: collapsed ? 84 : 380, flexShrink: 0, borderRight: '1px solid var(--line)',
+          background: 'var(--surface)', height: '100%', overflow: 'auto', overflowX: 'hidden',
+          transition: 'width .22s ease',
         }} className="no-scrollbar">
+          {collapsed ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '20px 0' }}>
+              <button onClick={toggleCollapsed} title="Show project list" aria-label="Show project list" style={collapseBtn}>
+                <Icon name="chevron" size={16} />
+              </button>
+              <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', marginBottom: 2 }}>{filtered.length}</div>
+              {filtered.map(p => {
+                const thumb = p.imageUrls?.[0] ?? p.coverUrl;
+                const live = projectPhase(p, now) === 'live';
+                return (
+                  <button key={p.id} onClick={() => focusProject(p)} title={p.t} aria-label={p.t} style={{
+                    position: 'relative', width: 52, height: 52, borderRadius: 12, padding: 0, flexShrink: 0,
+                    border: live ? '2px solid #16a34a' : '1px solid var(--line)', cursor: 'pointer', overflow: 'hidden',
+                    background: p.color, color: '#fff', display: 'grid', placeItems: 'center',
+                  }}>
+                    {thumb
+                      ? <img src={thumb} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      : <Icon name="pin" size={20} stroke={2.2} />}
+                    {live && <span style={{ position: 'absolute', top: 4, right: 4, width: 9, height: 9, borderRadius: '50%', background: '#16a34a', border: '2px solid #fff' }} />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (<>
           <div style={{ padding: '24px 24px 12px' }}>
-            <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em', marginBottom: 4 }}>
-              ACTION MAP
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>
+                ACTION MAP
+              </div>
+              <button onClick={toggleCollapsed} title="Collapse list" aria-label="Collapse project list" style={collapseBtn}>
+                <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><Icon name="chevron" size={16} /></span>
+              </button>
             </div>
 
             {/* Location pill + custom search */}
@@ -439,7 +536,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
               />
             </div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {['All', 'Cleanup', 'Garden', 'Energy', 'Repair', 'Policy', 'Waste'].map(t => (
+              {['All', 'Cleanup', 'Garden', 'Energy', 'Repair', 'Policy', 'Waste', 'Other'].map(t => (
                 <button key={t} onClick={() => setFilter(t.toLowerCase())} className={'chip ' + (filter === t.toLowerCase() ? 'chip-green' : '')} style={{ cursor: 'pointer', border: 'none' }}>
                   {t}
                 </button>
@@ -492,24 +589,19 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                       : <Icon name="pin" size={20} stroke={2.2} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{(p.cat ?? '').toUpperCase()} · {p.when}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>
+                      <LiveBadge phase={projectPhase(p, now)} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(p.cat ?? '').toUpperCase()} · {p.when}</span>
+                    </div>
                     <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{p.t}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>
-                      by {p.host}{p.distKm !== undefined ? ` · ${fmtDistance(p.distKm)}` : ''}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>
+                      <Avatar src={p.hostAvatar} name={p.host} size={18} noBorder />
+                      <span>by {p.host}{p.distKm !== undefined ? ` · ${fmtDistance(p.distKm)}` : ''}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                       {p.going > 0 ? (
                         <>
-                          {/* One dot per attendee, up to three — never more faces than people */}
-                          <div style={{ display: 'flex' }}>
-                            {Array.from({ length: Math.min(p.going, 3) }).map((_, i) => (
-                              <span key={i} style={{
-                                width: 22, height: 22, borderRadius: '50%', marginLeft: i ? -8 : 0,
-                                background: ['var(--green)', 'var(--sky)', 'var(--sun)'][i],
-                                border: '2px solid var(--surface)',
-                              }} />
-                            ))}
-                          </div>
+                          {p.attendees?.length > 0 && <FaceStack people={p.attendees} />}
                           <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{p.going} going</span>
                         </>
                       ) : (
@@ -522,6 +614,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
               })
             )}
           </div>
+          </>)}
         </div>
 
         {/* Map column */}
@@ -550,11 +643,12 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                 </Marker>
               )}
               {/* Project markers */}
-              {filtered.map(p => (
+              {pinned.map(p => (
                 <Marker
                   key={p.id}
                   position={[p.lat, p.lng]}
-                  icon={makeCatIcon(p.cat, p.imageUrls?.[0] ?? p.coverUrl)}
+                  icon={makeCatIcon(p.cat, p.imageUrls?.[0] ?? p.coverUrl, projectPhase(p, now) === 'live')}
+                  zIndexOffset={projectPhase(p, now) === 'live' ? 1000 : 0}
                   eventHandlers={{ click: () => focusProject(p, false) }}
                   title={p.t}
                 />
@@ -604,7 +698,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
           </button>
 
           {/* Floating area summary — nothing to summarise until something is on the map */}
-          {projects.length > 0 && (
+          {current.length > 0 && (
             <div style={{
               position: 'absolute', bottom: 24, left: 24, zIndex: 1000,
               background: 'var(--surface)', borderRadius: 14,
@@ -620,7 +714,7 @@ export function DesktopMap({ onNav, params }: { onNav: any; params?: Record<stri
                   {located && locationName ? `NEAREST TO ${locationName.toUpperCase()}` : 'ON THE MAP'}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  {plural(projects.length, 'project')}
+                  {plural(current.length, 'project')}
                   {totalGoing > 0 && ` · ${totalGoing} ${totalGoing === 1 ? 'person' : 'people'} taking part`}
                 </div>
               </div>

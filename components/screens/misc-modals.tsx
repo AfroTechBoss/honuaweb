@@ -4,6 +4,8 @@ import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, Verified
 import { getNotifications, markAllRead } from "@/lib/notifications";
 import { CarbonPayment } from "@/components/carbon-payment";
 import { PhotoViewer } from "@/components/photo-viewer";
+import { projectPhase, useNow } from "@/lib/project-time";
+import { LiveBadge } from "@/components/screens/map-carbon";
 import type { Retirement } from "@/lib/market";
 
 export function Toggle({ on }) {
@@ -96,6 +98,7 @@ export function MProject({ data, close }) {
   const fullPhotos: string[] = data.originalUrls?.length === photos.length ? data.originalUrls : photos;
   const [photo, setPhoto] = React.useState(0);
   const [viewing, setViewing] = React.useState(false);
+  const phase = projectPhase(data, useNow());
 
   React.useEffect(() => {
     if (!isDbProject) return;
@@ -124,7 +127,10 @@ export function MProject({ data, close }) {
     setCount(c => Math.max(0, c + (going ? -1 : 1)));
     // Real RSVP for DB projects — keeps going_count accurate for everyone
     if (isDbProject && app.user?.id) {
-      import('@/lib/market').then(({ toggleRsvp }) => toggleRsvp(app.user.id, data.id, going)).catch(() => {});
+      import('@/lib/market')
+        .then(({ toggleRsvp }) => toggleRsvp(app.user.id, data.id, going))
+        .then(() => window.dispatchEvent(new Event('honua:rsvp-changed')))
+        .catch(() => {});
     }
     app.toast(going ? { msg: 'RSVP cancelled', icon: 'close' } : { msg: "You're going!", sub: `${data.t} · ${data.when}`, kind: 'success', icon: 'check' });
   };
@@ -150,7 +156,10 @@ export function MProject({ data, close }) {
       <div onClick={photos.length ? () => setViewing(true) : undefined} title={photos.length ? 'View full photo' : undefined}
         style={{ height: photos.length ? 240 : 180, position: 'relative', cursor: photos.length ? 'zoom-in' : 'default', background: photos.length ? `url(${photos[photo] ?? photos[0]}) center/cover` : (data.color || 'var(--green)') }}>
         <button onClick={e => { e.stopPropagation(); close(); }} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 9, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="close" size={16} /></button>
-        <span className="chip chip-green" style={{ position: 'absolute', bottom: 14, left: 16 }}>{data.cat}</span>
+        <div style={{ position: 'absolute', bottom: 14, left: 16, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span className="chip chip-green">{data.cat}</span>
+          {(phase === 'live' || phase === 'ended') && <LiveBadge phase={phase} solid />}
+        </div>
       </div>
       {viewing && (
         <PhotoViewer photos={fullPhotos} index={Math.min(photo, photos.length - 1)} onIndex={setPhoto} onClose={() => setViewing(false)} alt={data.t} />

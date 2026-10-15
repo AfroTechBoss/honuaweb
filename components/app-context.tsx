@@ -167,7 +167,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         hydrateUser(session);
-        if (_event === "SIGNED_IN") router.push("/");
+        // Supabase also fires SIGNED_IN when a page reloads with a saved session
+        // (and on tab refocus), so only leave the page when it's the sign-in screen.
+        if (_event === "SIGNED_IN" && /^\/(login|auth)(\/|$)/.test(window.location.pathname)) router.push("/");
         if (_event === "SIGNED_OUT") router.push("/login");
       } else {
         setSt((s: any) => ({ ...s, authed: false, session: null, user: null }));

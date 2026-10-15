@@ -883,6 +883,14 @@ export function MStartProject({ close }) {
   const [name, setName] = React.useState('');
   const [cat, setCat] = React.useState('Cleanup');
   const [date, setDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
+  // datetime-local values are local wall-clock time with no zone.
+  const toLocalInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const changeStart = (v: string) => {
+    setDate(v);
+    // Suggest a three-hour slot until the host picks an end themselves.
+    if (v && (!endDate || endDate <= v)) setEndDate(toLocalInput(new Date(new Date(v).getTime() + 3 * 3600_000)));
+  };
   const [location, setLocation] = React.useState('');
   // The place picked from the suggestions. Its coordinates are what goes on
   // the map; typing again clears it so a stale pin can't be saved.
@@ -975,6 +983,18 @@ export function MStartProject({ close }) {
       app.toast({ msg: 'Sign in to start a project', icon: 'user' });
       return;
     }
+    if (endDate && !date) {
+      app.toast({ msg: 'Add a start time', sub: 'Set when the project starts as well as when it ends.', icon: 'calendar' });
+      return;
+    }
+    if (date && !endDate) {
+      app.toast({ msg: 'Add an end time', sub: 'Set when the project finishes so people know how long it runs.', icon: 'calendar' });
+      return;
+    }
+    if (date && endDate <= date) {
+      app.toast({ msg: 'End time is before the start', sub: 'Pick an end time after the project starts.', icon: 'calendar' });
+      return;
+    }
     if (needsPick) {
       setPlaceOpen(true);
       app.toast({ msg: 'Pick the exact place', sub: 'Choose one of the suggestions so the project lands in the right spot on the map.', icon: 'pin' });
@@ -1007,7 +1027,10 @@ export function MStartProject({ close }) {
       setStage('saving');
       const { createMapProject } = await import('@/lib/market');
       const ok = await createMapProject(app.user.id, {
-        title: name.trim(), category: cat, startsAt: date || undefined,
+        title: name.trim(), category: cat,
+        // Sent as UTC instants so everyone sees the host's times in their own zone.
+        startsAt: date ? new Date(date).toISOString() : undefined,
+        endsAt: endDate ? new Date(endDate).toISOString() : undefined,
         locationName: place?.label, description: desc.trim() || undefined,
         hostName: app.user?.name, lat: place?.lat ?? null, lng: place?.lng ?? null,
         imageUrls, originalUrls,
@@ -1031,16 +1054,18 @@ export function MStartProject({ close }) {
         <input className="fld" autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Saturday creek cleanup" style={{ marginBottom: 14 }} />
         <span className="fld-label">Type</span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {['Cleanup', 'Garden', 'Energy', 'Repair', 'Policy', 'Waste'].map(c => <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>)}
+          {['Cleanup', 'Garden', 'Energy', 'Repair', 'Policy', 'Waste', 'Other'].map(c => <button key={c} onClick={() => setCat(c)} className={'chip ' + (cat === c ? 'chip-green' : '')} style={{ cursor: 'pointer', border: cat === c ? 'none' : undefined }}>{c}</button>)}
         </div>
-        <span className="fld-label">Date &amp; time</span>
-        <input
-          className="fld"
-          type="datetime-local"
-          value={date}
-          onChange={e => setDate(e.target.value)}
-          style={{ colorScheme: 'light dark', marginBottom: 14 }}
-        />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10, marginBottom: 14 }}>
+          <label style={{ display: 'block' }}>
+            <span className="fld-label">Starts</span>
+            <input className="fld" type="datetime-local" value={date} onChange={e => changeStart(e.target.value)} style={{ colorScheme: 'light dark' }} />
+          </label>
+          <label style={{ display: 'block' }}>
+            <span className="fld-label">Ends</span>
+            <input className="fld" type="datetime-local" value={endDate} min={date || undefined} onChange={e => setEndDate(e.target.value)} style={{ colorScheme: 'light dark' }} />
+          </label>
+        </div>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
           <span className="fld-label">Location</span>
           <button type="button" onClick={useMyLocation} disabled={locating} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12.5, color: 'var(--green)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
