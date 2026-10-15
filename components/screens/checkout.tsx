@@ -174,59 +174,6 @@ function StripeBadge() {
   );
 }
 
-// ---- Mock payment form (shown when Stripe keys aren't configured) ----
-function MockPaymentForm({ total, onSuccess }: { total: number; onSuccess: () => void }) {
-  const [loading, setLoading] = React.useState(false);
-  const [card, setCard] = React.useState('');
-  const [expiry, setExpiry] = React.useState('');
-  const [cvc, setCvc] = React.useState('');
-  const [name, setName] = React.useState('');
-
-  const formatCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
-  const formatExpiry = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 4);
-    return d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setTimeout(() => { setLoading(false); onSuccess(); }, 1800);
-  };
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: 'rgba(234,179,8,.08)', border: '1px solid rgba(234,179,8,.22)', fontSize: 12.5, color: '#b45309', marginBottom: 18, fontWeight: 500 }}>
-        <Icon name="bolt" size={14} /> Test mode — Stripe keys not configured. This simulates a payment.
-      </div>
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-        <label>
-          <span className="fld-label">Cardholder name</span>
-          <input className="fld" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" required />
-        </label>
-        <label>
-          <span className="fld-label">Card number</span>
-          <input className="fld" value={card} onChange={e => setCard(formatCard(e.target.value))} placeholder="4242 4242 4242 4242" maxLength={19} required style={{ fontFamily: 'JetBrains Mono', letterSpacing: '.04em' }} />
-        </label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <label>
-            <span className="fld-label">Expiry</span>
-            <input className="fld" value={expiry} onChange={e => setExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" maxLength={5} required style={{ fontFamily: 'JetBrains Mono' }} />
-          </label>
-          <label>
-            <span className="fld-label">CVC</span>
-            <input className="fld" value={cvc} onChange={e => setCvc(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="123" maxLength={3} required style={{ fontFamily: 'JetBrains Mono' }} />
-          </label>
-        </div>
-        <button type="submit" disabled={loading} className="btn btn-primary" style={{ justifyContent: 'center', padding: '15px', fontSize: 15, fontWeight: 700, opacity: loading ? 0.7 : 1, marginTop: 4 }}>
-          {loading ? 'Processing…' : `Pay ${sMoney(total)}`}
-        </button>
-        <StripeBadge />
-      </form>
-    </div>
-  );
-}
-
 // ---- Order success ----
 function OrderSuccess({ orderId, total, itemCount, items, onContinue, onViewDetails, onTrackOrder }: { orderId: string; total: number; itemCount: number; items: any[]; onContinue: () => void; onViewDetails: () => void; onTrackOrder: () => void }) {
   return (
@@ -238,7 +185,7 @@ function OrderSuccess({ orderId, total, itemCount, items, onContinue, onViewDeta
         <h2 className="font-display" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px' }}>Order confirmed!</h2>
         <p style={{ color: 'var(--ink-3)', fontSize: 15, margin: 0, lineHeight: 1.6 }}>
           {itemCount} item{itemCount !== 1 ? 's' : ''} · {sMoney(total)}<br />
-          A confirmation has been sent to your email.
+          It will show in My orders as soon as the payment clears.
         </p>
         <div style={{ marginTop: 8, fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.04em' }}>{orderId}</div>
       </div>
@@ -355,21 +302,12 @@ function OrderDetailsModal({ items, total, orderId, onClose }: { items: any[]; t
 // =====================================================================
 // Main checkout screen
 // =====================================================================
-// Persist order to localStorage
-function saveOrder(order: any) {
-  try {
-    const existing = JSON.parse(localStorage.getItem('honua_orders') || '[]');
-    existing.unshift(order);
-    localStorage.setItem('honua_orders', JSON.stringify(existing.slice(0, 100)));
-  } catch {}
-}
-
 export function DesktopCheckout() {
   const app = useApp();
   const router = useRouter();
   const { cart = [], clearCart } = app;
   const [clientSecret, setClientSecret] = React.useState<string | null>(null);
-  const [stripeMode, setStripeMode] = React.useState<'loading' | 'live' | 'mock' | 'signin' | 'error'>('loading');
+  const [stripeMode, setStripeMode] = React.useState<'loading' | 'live' | 'unavailable' | 'signin' | 'error'>('loading');
   const [startError, setStartError] = React.useState('');
   // The server's priced quote. Once it arrives it is the only source for what
   // the buyer sees as the total, because it is the amount that gets charged.
@@ -423,9 +361,6 @@ export function DesktopCheckout() {
 
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 
-  // Mock mode only: there is no server quote, so the id is made up locally.
-  const mockOrderIdRef = React.useRef('ORD-' + Math.random().toString(36).slice(2, 8).toUpperCase());
-
   // Ask the server to price the cart. Only ids and quantities go up — the
   // server reads prices from the catalogue and the webhook creates the order
   // once Stripe confirms that exact amount (see app/api/checkout/route.ts).
@@ -450,8 +385,9 @@ export function DesktopCheckout() {
           setQuote({ orderId: data.orderId, items: data.items, subtotal: data.subtotal, shipping: data.shipping, total: data.total });
           setStripeMode('live');
         } else if (data.error === 'stripe_not_configured' || (res.ok && !publishableKey)) {
-          // Local development without Stripe keys: simulate, record nothing.
-          setStripeMode('mock');
+          // No Stripe keys. There used to be a simulated card form here that
+          // showed "Order confirmed" without charging or recording anything.
+          setStripeMode('unavailable');
         } else if (res.status === 401) {
           setStripeMode('signin');
         } else {
@@ -485,7 +421,7 @@ export function DesktopCheckout() {
   const [paymentFailed, setPaymentFailed] = React.useState(false);
 
   const buildSnapshot = () => ({
-    orderId: quote?.orderId ?? mockOrderIdRef.current,
+    orderId: quote?.orderId ?? '',
     items: [...lineItems], subtotal, shipping, total, itemCount,
     address: { firstName, lastName, street, city, zip, country, email }, email,
   });
@@ -498,12 +434,11 @@ export function DesktopCheckout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, quote, firstName, lastName, street, city, zip, country, email, subtotal, shipping, total]);
 
-  // Shows the confirmation. Deliberately writes no order to the database: the
-  // Stripe webhook does that from the server's quote once the payment clears,
-  // so nothing the browser does here can mark anything paid.
+  // Shows the confirmation. Deliberately writes no order anywhere: the Stripe
+  // webhook creates it from the server's quote once the payment clears, and
+  // the orders pages read only that row.
   const finalize = (snap: any) => {
     const address = snap.address;
-    saveOrder({ id: snap.orderId, total: snap.total, itemCount: snap.itemCount, items: snap.items, address, subtotal: snap.subtotal, shipping: snap.shipping, createdAt: new Date().toISOString(), status: 'processing' });
     setOrderSnapshot({ id: snap.orderId, total: snap.total, itemCount: snap.itemCount, items: snap.items, address });
     clearCart?.();
     setSuccess(true);
@@ -660,8 +595,10 @@ export function DesktopCheckout() {
                 <button className="btn btn-ghost" onClick={() => setAttempt(a => a + 1)} style={{ justifySelf: 'start', padding: '9px 16px' }}>Try again</button>
               </div>
             )}
-            {stripeMode === 'mock' && (
-              <MockPaymentForm total={total} onSuccess={handleSuccess} />
+            {stripeMode === 'unavailable' && (
+              <div style={{ padding: '14px 16px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--bg-2)', fontSize: 13.5, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                Payments aren&apos;t set up yet, so orders can&apos;t be placed. Nothing has been charged.
+              </div>
             )}
           </div>
         </div>

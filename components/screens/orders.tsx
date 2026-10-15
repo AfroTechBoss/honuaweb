@@ -5,10 +5,10 @@ import { Icon, sMoney } from "@/components/shared";
 import { DesktopSidebar } from "@/components/sidebar";
 import { useApp } from "@/components/app-context";
 
-// ---- Storage helpers ----
-export function loadOrders(): any[] {
-  try { return JSON.parse(localStorage.getItem('honua_orders') || '[]'); } catch { return []; }
-}
+// Orders come only from the orders table (getDbOrders). Checkout used to keep
+// a browser copy in localStorage, which showed orders that were never paid
+// for and hid real ones on other devices; the leftover key is cleared here.
+const clearLegacyOrders = () => { try { localStorage.removeItem('honua_orders'); } catch {} };
 
 // Reviews are product_reviews rows (lib/reviews), one per product in the
 // order. They used to sit in localStorage under the order id, so no seller or
@@ -145,18 +145,9 @@ export function DesktopOrders({ onNav }: { onNav?: any }) {
   const [orders, setOrders] = React.useState<any[]>([]);
 
   React.useEffect(() => {
-    const local = loadOrders();
-    setOrders(local);
-    // Merge in DB orders (source of truth across devices)
-    if (app.user?.id) {
-      import('@/lib/market').then(({ getDbOrders }) => getDbOrders(app.user.id)).then(dbOrders => {
-        if (!dbOrders.length) return;
-        const seen = new Set(dbOrders.map((o: any) => o.id));
-        const merged = [...dbOrders, ...local.filter((o: any) => !seen.has(o.id))];
-        merged.sort((a: any, b: any) => new Date(b.date ?? b.createdAt ?? 0).getTime() - new Date(a.date ?? a.createdAt ?? 0).getTime());
-        setOrders(merged);
-      }).catch(() => {});
-    }
+    clearLegacyOrders();
+    if (!app.user?.id) { setOrders([]); return; }
+    import('@/lib/market').then(({ getDbOrders }) => getDbOrders(app.user.id)).then(setOrders).catch(() => {});
   }, [app.user?.id]);
 
   const goToOrder = (id: string) => router.push(`/orders/${id}`);
@@ -257,20 +248,23 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
   const [review, setReview] = React.useState<any | null>(null);
 
   React.useEffect(() => {
-    // Show the localStorage copy immediately, but the DB is the source of truth
-    // for status/payment (the seller advances fulfilment server-side).
-    const local = loadOrders().find((o: any) => o.id === orderId);
-    if (local) setOrder(local);
-
-    Promise.all([import('@/lib/market'), import('@/lib/supabase')]).then(async ([{ getDbOrders }, { supabase }]) => {
+    clearLegacyOrders();
+    // The webhook writes the order a few seconds after payment, so straight
+    // from checkout it may not exist yet: keep looking for about 20 seconds.
+    let alive = true;
+    (async () => {
+      const [{ getDbOrders }, { supabase }] = await Promise.all([import('@/lib/market'), import('@/lib/supabase')]);
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-      if (!userId) { if (!local) setNotFound(true); return; }
-      const dbFound = (await getDbOrders(userId)).find((o: any) => o.id === orderId);
-      if (dbFound) setOrder((prev: any) => ({ ...(prev ?? {}), ...dbFound }));
-      else if (!local) setNotFound(true);
-    }).catch(() => { if (!local) setNotFound(true); });
-
+      if (!userId) { if (alive) setNotFound(true); return; }
+      for (let i = 0; i < 8 && alive; i++) {
+        const found = (await getDbOrders(userId)).find((o: any) => o.id === orderId);
+        if (found) { if (alive) setOrder(found); return; }
+        await new Promise(r => setTimeout(r, 2500));
+      }
+      if (alive) setNotFound(true);
+    })().catch(() => { if (alive) setNotFound(true); });
+    return () => { alive = false; };
   }, [orderId]);
 
   // The buyer's existing review for anything in this order.
@@ -294,7 +288,7 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: 'var(--ink-4)' }}>
           <Icon name="package" size={40} stroke={1.4} />
           <div style={{ fontSize: 16, fontWeight: 600 }}>Order not found</div>
-          <div style={{ fontSize: 14 }}>This order doesn't exist or may be on another device.</div>
+          <div style={{ fontSize: 14, maxWidth: 380, textAlign: 'center', lineHeight: 1.55 }}>If you just paid, it can take a minute to appear. Otherwise this order doesn&apos;t exist or belongs to another account.</div>
           <button className="btn btn-ghost" onClick={() => router.push('/orders')}>View all orders</button>
         </main>
       </div>

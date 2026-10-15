@@ -7,7 +7,6 @@ import { followOrRequest, unfollowOrCancel, getFollowState, getLastSeen, lastSee
 import { getAllLogs } from "@/lib/impact";
 import { supabase } from "@/lib/supabase";
 import { ImageLightbox } from "@/components/post-card";
-import { loadOrders } from "@/components/screens/orders";
 import { ImpactVouchBar, useImpactVouches, PostImpactVouch } from "@/components/impact-vouch";
 
 // Lifetime totals, summed from the impact ledger itself. `profiles` carries
@@ -80,6 +79,11 @@ export function DesktopProfile({ onNav, params }) {
   const [tab, setTab] = React.useState('posts');
   const app = useApp();
   const handle = params?.handle;
+  const [myOrders, setMyOrders] = React.useState<any[] | null>(null);
+  React.useEffect(() => {
+    if (tab !== 'orders' || !app.user?.id) return;
+    import('@/lib/market').then(({ getDbOrders }) => getDbOrders(app.user.id)).then(setMyOrders).catch(() => setMyOrders([]));
+  }, [tab, app.user?.id]);
 
   // If no handle or handle is 'you', show the signed-in user's profile
   const lookupKey = (!handle || handle === 'you') ? app.user?.handle : handle;
@@ -421,13 +425,14 @@ export function DesktopProfile({ onNav, params }) {
                   </div>
               )}
               {tab === 'orders' && isOwn && (() => {
-                const orders = loadOrders();
+                const orders = myOrders ?? [];
+                if (!myOrders) return <EmptyTab icon="" msg="Loading orders…" />;
                 if (!orders.length) return <EmptyTab icon="" msg="No orders yet. Find something good in the marketplace!" />;
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {orders.slice().reverse().map((o: any) => (
+                    {orders.map((o: any) => (
                       <div key={o.id} onClick={() => onNav?.('order', { id: o.id })} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14, padding: 16, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'center' }}>
-                        {o.imgUrl && <img src={o.imgUrl} style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 10, flexShrink: 0 }} />}
+                        {o.items?.[0]?.imgUrl && <img src={o.items[0].imgUrl} style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 10, flexShrink: 0 }} />}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.name || o.items?.[0]?.name || 'Order'}</div>
                           <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{o.id} · {o.date ? new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
