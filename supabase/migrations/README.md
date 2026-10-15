@@ -74,6 +74,10 @@ Migration 053 adds `projects.image_urls` for the photos hosts attach when they
 start a project. Until it runs, projects are still created with their first
 photo as the cover. Safe to re-run.
 
+Migration 054 adds `projects.original_urls`: the uncropped version of each
+project photo, shown in the full-screen viewer. Until it runs, projects are
+still created and the viewer shows the square photos. Safe to re-run.
+
 ## Granting yourself admin
 
 `/admin` is gated by Privy, but `profiles.role` controls DB-level admin powers

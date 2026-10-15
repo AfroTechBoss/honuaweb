@@ -891,7 +891,9 @@ export function MStartProject({ close }) {
   const [locating, setLocating] = React.useState(false);
   const { places, loading: searching } = usePlaceSuggestions(location, !place);
   const [desc, setDesc] = React.useState('');
-  const [photos, setPhotos] = React.useState<{ file: File; url: string }[]>([]);
+  // file is the square crop; original is the uncropped picture, kept for the
+  // full-screen viewer (null when the photo was square to begin with).
+  const [photos, setPhotos] = React.useState<{ file: File; url: string; original: File | null }[]>([]);
   // Non-square photos wait here for the user to pick their crop, one at a time.
   const [cropQueue, setCropQueue] = React.useState<File[]>([]);
   const [cropTotal, setCropTotal] = React.useState(0);
@@ -922,7 +924,8 @@ export function MStartProject({ close }) {
     }, { enableHighAccuracy: true, timeout: 10000 });
   };
 
-  const pushPhoto = (file: File) => setPhotos(prev => [...prev, { file, url: URL.createObjectURL(file) }]);
+  const pushPhoto = (file: File, original: File | null = null) =>
+    setPhotos(prev => [...prev, { file, url: URL.createObjectURL(file), original }]);
 
   // Takes a plain array: the caller clears the file input straight after,
   // and a FileList read after that (e.g. past an await) comes back empty.
@@ -980,11 +983,22 @@ export function MStartProject({ close }) {
     setSaving(true);
     try {
       let imageUrls: string[] = [];
+      let originalUrls: string[] = [];
       if (photos.length) {
         setStage('uploading');
         try {
-          const { uploadFile } = await import('@/lib/storage');
-          imageUrls = await Promise.all(photos.map(p => uploadFile('projects', app.user.id, p.file)));
+          const { uploadFile, fitImage } = await import('@/lib/storage');
+          const pairs = await Promise.all(photos.map(async p => {
+            const square = await uploadFile('projects', app.user.id, p.file);
+            if (!p.original) return [square, square];
+            // An original that won't upload just falls back to the square one.
+            const full = await fitImage(p.original)
+              .then(f => uploadFile('projects', app.user.id, f))
+              .catch(() => square);
+            return [square, full];
+          }));
+          imageUrls = pairs.map(([s]) => s);
+          originalUrls = pairs.map(([, f]) => f);
         } catch (e: any) {
           app.toast({ kind: 'error', msg: "Couldn't upload your photos", sub: e?.message || 'Try again, or create the project without them.', icon: 'image' });
           return;
@@ -996,7 +1010,7 @@ export function MStartProject({ close }) {
         title: name.trim(), category: cat, startsAt: date || undefined,
         locationName: place?.label, description: desc.trim() || undefined,
         hostName: app.user?.name, lat: place?.lat ?? null, lng: place?.lng ?? null,
-        imageUrls,
+        imageUrls, originalUrls,
       });
       if (ok) {
         close();
@@ -1106,7 +1120,7 @@ export function MStartProject({ close }) {
           file={cropQueue[0]}
           index={cropTotal - cropQueue.length}
           total={cropTotal}
-          onDone={f => { pushPhoto(f); nextCrop(); }}
+          onDone={f => { pushPhoto(f, cropQueue[0]); nextCrop(); }}
           onCancel={nextCrop}
         />
       )}

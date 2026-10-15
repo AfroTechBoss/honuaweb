@@ -66,6 +66,24 @@ export async function squareImage(file: File, size = 1200): Promise<File> {
   return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
 }
 
+// Scales an image down to fit `max` px on its longest side, keeping its
+// shape, as a JPEG. Used for the uncropped originals behind square photos.
+export async function fitImage(file: File, max = 2400): Promise<File> {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) { bmp.close?.(); return file; }
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close?.();
+  const blob: Blob | null = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.88));
+  if (!blob) return file;
+  const base = file.name.replace(/\.[^.]*$/, "") || "photo";
+  return new File([blob], `${base}-full.jpg`, { type: "image/jpeg" });
+}
+
 // Pixel size of an image file, after the browser applies its orientation.
 export function imageSize(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {

@@ -92,6 +92,8 @@ export function MProject({ data, close }) {
   const [hostHandle, setHostHandle] = React.useState<string | null>(null);
   const isHost = !!app.user?.id && data.userId === app.user.id;
   const photos: string[] = data.imageUrls?.length ? data.imageUrls : (data.coverUrl ? [data.coverUrl] : []);
+  // The viewer shows the uncropped originals when the project has them (054).
+  const fullPhotos: string[] = data.originalUrls?.length === photos.length ? data.originalUrls : photos;
   const [photo, setPhoto] = React.useState(0);
   const [viewing, setViewing] = React.useState(false);
 
@@ -151,7 +153,7 @@ export function MProject({ data, close }) {
         <span className="chip chip-green" style={{ position: 'absolute', bottom: 14, left: 16 }}>{data.cat}</span>
       </div>
       {viewing && (
-        <PhotoViewer photos={photos} index={Math.min(photo, photos.length - 1)} onIndex={setPhoto} onClose={() => setViewing(false)} alt={data.t} />
+        <PhotoViewer photos={fullPhotos} index={Math.min(photo, photos.length - 1)} onIndex={setPhoto} onClose={() => setViewing(false)} alt={data.t} />
       )}
       {photos.length > 1 && (
         <div style={{ display: 'flex', gap: 8, padding: '12px 22px 0', overflowX: 'auto' }}>

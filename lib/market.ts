@@ -582,6 +582,8 @@ export async function getMapProjects(): Promise<any[]> {
       userId: p.user_id ?? null,
       coverUrl: p.cover_url ?? null,
       imageUrls: Array.isArray(p.image_urls) && p.image_urls.length ? p.image_urls : (p.cover_url ? [p.cover_url] : []),
+      // Uncropped versions for the full-screen viewer, same order (054).
+      originalUrls: Array.isArray(p.original_urls) ? p.original_urls : [],
       _db: true,
     }));
   } catch { return []; }
@@ -591,9 +593,11 @@ export async function createMapProject(userId: string, fields: {
   title: string; category: string; startsAt?: string; locationName?: string;
   description?: string; hostName?: string; lat?: number | null; lng?: number | null;
   imageUrls?: string[];
+  originalUrls?: string[];
 }): Promise<boolean> {
   try {
     const images = (fields.imageUrls ?? []).slice(0, 6);
+    const originals = (fields.originalUrls ?? []).slice(0, 6);
     const row: Record<string, any> = {
       user_id: userId,
       title: fields.title,
@@ -606,7 +610,13 @@ export async function createMapProject(userId: string, fields: {
       lng: fields.lng ?? null,
       cover_url: images[0] ?? null,
     };
-    let { error } = await supabase.from('projects').insert(images.length ? { ...row, image_urls: images } : row);
+    const withImages = images.length ? { ...row, image_urls: images } : row;
+    let { error } = await supabase.from('projects').insert(
+      originals.length === images.length && images.length ? { ...withImages, original_urls: originals } : withImages);
+    // Before migration 054 there is no original_urls column; the viewer shows the square photos instead.
+    if (error && /original_urls/.test(error.message ?? '')) {
+      ({ error } = await supabase.from('projects').insert(withImages));
+    }
     // Before migration 053 there is no image_urls column; keep the cover.
     if (error && images.length && /image_urls/.test(error.message ?? '')) {
       ({ error } = await supabase.from('projects').insert(row));
