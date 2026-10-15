@@ -36,6 +36,8 @@ export type Permission =
   | 'sellers.review'
   | 'payouts.manage'
   | 'carbon.manage'
+  | 'challenges.manage'
+  | 'tax.report'
   // operations
   | 'support.handle'
   | 'notifications.send'
@@ -53,6 +55,7 @@ const GRANTS: Record<AdminRole, readonly Permission[]> = {
   owner: [
     'moderation.view', 'moderation.act', 'users.suspend', 'users.ban', 'appeals.resolve',
     'orders.view', 'orders.manage', 'orders.refund', 'sellers.review', 'payouts.manage', 'carbon.manage',
+    'challenges.manage', 'tax.report',
     'support.handle', 'notifications.send', 'analytics.view', 'errors.view',
     // roles.assign_limited is the lesser half of roles.manage, listed explicitly
     // because these grants are flat rather than hierarchical — without it an
@@ -67,6 +70,7 @@ const GRANTS: Record<AdminRole, readonly Permission[]> = {
   admin: [
     'moderation.view', 'moderation.act', 'users.suspend', 'users.ban', 'appeals.resolve',
     'orders.view', 'orders.manage', 'orders.refund', 'sellers.review', 'payouts.manage', 'carbon.manage',
+    'challenges.manage', 'tax.report',
     'support.handle', 'notifications.send', 'analytics.view', 'errors.view',
     'roles.assign_limited',
   ],
@@ -140,6 +144,10 @@ export const PERMISSION_MATRIX: readonly MatrixRow[] = [
   { label: 'Issue refunds', full: 'orders.refund', enforced: true, note: 'POST /api/admin/orders — real money leaves the account here.' },
   { label: 'Seller verification', full: 'sellers.review', enforced: true, note: '/api/admin/verification' },
   { label: 'Carbon catalog', full: 'carbon.manage', enforced: true, note: '/api/admin/carbon-credits' },
+  { label: 'Challenges & rewards', full: 'challenges.manage', enforced: true,
+    note: '/api/admin/challenges. Owner and admin only — a challenge’s reward is paid in Green Points on completion, so setting one mints points. The database ignores reward fields from any browser write (migration 056).' },
+  { label: 'Tax reporting (DAC7)', full: 'tax.report', enforced: true,
+    note: 'GET and PATCH /api/admin/dac7. Owner and admin only: the export holds every seller’s tax ID, date of birth and bank details, so it’s for whoever files the return, not for day-to-day moderation.' },
   { label: 'Payout management', full: 'payouts.manage', enforced: true,
     note: 'GET, PATCH and POST /api/admin/payouts. Owner and admin only — a moderator can freeze an account but cannot move money out of it. Approving only clears a transfer. Sending it is a second, separate act, whether that is Send (Stripe or PayPal, through the same permission) or recording a hand transfer against a reference.' },
 

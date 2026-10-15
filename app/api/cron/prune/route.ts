@@ -30,6 +30,12 @@ const JOBS = [
   // exactly what is on screen, so any question it doesn't already answer could
   // never be asked. See 035.
   { table: 'analytics_events', fn: 'prune_analytics_events', keepDays: 365, migration: '035_prune_analytics_events.sql' },
+  // Identity kept after account deletion for accounting, VAT and DAC7 records.
+  // Counted from the end of the year of the account's last transaction. Ten
+  // years is the longest rule that applies (Italy's Civil Code art. 2220 and
+  // the EU VAT marketplace rule); Estonia alone would need seven. Shorten only
+  // on an accountant's advice — once a snapshot is purged it cannot come back.
+  { table: 'retained_identities', fn: 'prune_retained_identities', keepDays: 3653, migration: '057_account_deletion_keeps_ledger.sql' },
 ] as const;
 
 function authorized(req: NextRequest): boolean {

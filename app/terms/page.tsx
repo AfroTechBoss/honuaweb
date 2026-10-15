@@ -333,7 +333,7 @@ export default function TermsPage() {
               <P>We do not sell your personal data. We share data only with: service providers who process it on our behalf under written data-processing agreements (cloud hosting, payment processing, email delivery, analytics); legal authorities where required by applicable law; business transferees in connection with a merger or acquisition (with notice to you); and other users where your privacy settings permit (public posts are public).</P>
             </Sub>
             <Sub title="Data retention">
-              <P>We retain your data for as long as your account is active or as needed for legal obligations. Upon account deletion: your public-facing content is removed within 30 days; backup copies are purged within 90 days; transaction records required by tax law are retained for 7 years; anonymised aggregates may be retained indefinitely.</P>
+              <P>We retain your data for as long as your account is active or as needed for legal obligations. Upon account deletion: your public-facing content is removed within 30 days; backup copies are purged within 90 days; transaction records (orders, sales, payouts and carbon retirements), together with the identity details they require — name, email, shipping address, seller legal name and country, and payout destination — are retained in restricted storage for 10 years from the end of the calendar year of your last transaction, as required by EU and national accounting, VAT and platform-reporting rules (GDPR art. 17(3)(b)), and are then deleted. Accounts with no transactions keep none of this. Anonymised aggregates may be retained indefinitely.</P>
             </Sub>
             <Sub title="Your rights">
               <UL items={[

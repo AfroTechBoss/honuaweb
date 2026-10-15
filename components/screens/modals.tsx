@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, VerifiedTick, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logImpact, TASK_IMPACTS, ACTION_IMPACTS, computeImpact, VOUCH_THRESHOLD } from "@/lib/impact";
 import { QuoteCard } from "./communities";
@@ -2121,19 +2121,54 @@ const stepBtn: React.CSSProperties = {
 };
 
 // --- Delete account (two-step) ---
+// It used to say "You have 24 IT and 1,240 GP" to everyone. The figures now
+// come from /api/delete-account, along with anything that has to settle first
+// (an order in transit, a payout in progress, unwithdrawn seller earnings).
 export function MDeleteAccount({ close }) {
   const app = useApp();
+  const [check, setCheck] = React.useState<{ impactScore: number; sellerBalanceCents: number; blockers: { kind: string; message: string }[] } | null>(null);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        const token = (await supabase.auth.getSession()).data.session?.access_token;
+        const res = await fetch('/api/delete-account', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (!res.ok) throw new Error();
+        const body = await res.json();
+        if (live) setCheck(body);
+      } catch { if (live) setFailed(true); }
+    })();
+    return () => { live = false; };
+  }, []);
+  const blocked = !!check?.blockers.length;
   return (
     <Modal onClose={close} width={460}>
-      <ModalHead icon="trash" iconColor="var(--clay)" title="Delete your account?" sub="This is permanent. Your posts, impact ledger, wallet balance and verified history will be erased." onClose={close} />
-      <div style={{ padding: '6px 24px 0' }}>
-        <div style={{ background: '#fbeae4', border: '1px solid #eccbbd', borderRadius: 12, padding: 14, fontSize: 13, color: '#8a3d1f' }}>
-          You have <strong>24 IT</strong> and <strong>1,240 GP</strong> in your wallet. These cannot be recovered after deletion.
-        </div>
+      <ModalHead icon="trash" iconColor="var(--clay)" title="Delete your account?" sub="This is permanent. Your posts, comments, impact history and profile will be erased." onClose={close} />
+      <div style={{ padding: '6px 24px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {!check && !failed && <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>Checking your account…</div>}
+        {failed && <div style={{ fontSize: 13, color: 'var(--clay)' }}>Couldn't check your account right now. Try again in a moment.</div>}
+        {check && blocked && (
+          <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 12, padding: 14, fontSize: 13, lineHeight: 1.55 }}>
+            <strong>Before you can delete your account:</strong>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+              {check.blockers.map(b => <li key={b.kind}>{b.message}</li>)}
+            </ul>
+          </div>
+        )}
+        {check && !blocked && (
+          <div style={{ background: '#fbeae4', border: '1px solid #eccbbd', borderRadius: 12, padding: 14, fontSize: 13, color: '#8a3d1f', lineHeight: 1.55 }}>
+            {check.impactScore > 0
+              ? <>You'll lose <strong>{check.impactScore.toLocaleString()} GP</strong> of impact score. It can't be recovered after deletion.</>
+              : <>Everything on your profile will be gone and can't be recovered.</>}
+            {' '}If you've bought, sold or been paid on Honua, the law requires us to keep those transaction records, and the name, email, address and payout details on them, for 10 years. They're locked away, used only for tax and legal requests, then deleted.
+          </div>
+        )}
       </div>
       <ModalFoot>
         <button className="btn btn-ghost" onClick={close}>Keep my account</button>
-        <button className="btn" style={{ background: 'var(--clay)', color: '#fff' }} onClick={() => app.openModal('deleteaccount2')}>Yes, delete my account</button>
+        <button className="btn" style={{ background: 'var(--clay)', color: '#fff', opacity: check && !blocked ? 1 : .5 }} disabled={!check || blocked} onClick={() => app.openModal('deleteaccount2')}>Yes, delete my account</button>
       </ModalFoot>
     </Modal>
   );
@@ -2163,7 +2198,7 @@ export function MDeleteAccount2({ close }) {
         throw new Error(error || 'Deletion failed');
       }
       close();
-      app.toast({ kind: 'success', msg: 'Account deleted', sub: 'Your account and all data have been permanently removed.', icon: 'trash', duration: 6000 });
+      app.toast({ kind: 'success', msg: 'Account deleted', sub: 'Your account and profile data have been permanently removed.', icon: 'trash', duration: 6000 });
       await app.logout?.();
     } catch (err: any) {
       app.toast({ kind: 'error', msg: 'Could not delete account', sub: err.message, icon: 'bolt' });
@@ -2197,7 +2232,7 @@ export function ModalContent({ type, data, close }) {
     deleteaccount: MDeleteAccount, deleteaccount2: MDeleteAccount2,
     project: MProject, credit: MCredit,
     challenge: MChallenge, celebrate: MCelebrate,
-    wallet: MWallet, list: MList, communityabout: MCommunityAbout,
+    wallet: MWallet, list: MList,
   };
   const C = map[type];
   if (!C) return null;

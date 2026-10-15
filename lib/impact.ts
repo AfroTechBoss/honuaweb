@@ -79,7 +79,7 @@ export const TASK_IMPACTS: Record<string, { category: string; quantity: number }
   'Bike commute':        { category: 'Transport', quantity: 12 }, // ~12 km each way
   'Meatless meal':       { category: 'Food',      quantity: 1 },  // 1 meat-free meal
   'Compost food scraps': { category: 'Waste',     quantity: 1 },  // ~1 kg diverted
-  '10 min education':    { category: 'Education',  quantity: 1 },  // 1 session
+  '30 min of learning':  { category: 'Education',  quantity: 1 },  // 1 session
   'Skip ride-share':     { category: 'Transport', quantity: 10 }, // ~10 km
 };
 

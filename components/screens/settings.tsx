@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { useWalletSummary } from "./misc-modals";
 import { logImpact, TASK_IMPACTS } from "@/lib/impact";
@@ -148,7 +148,7 @@ const FAQ_ITEMS = [
   { q: 'How do I edit my profile?', a: 'Go to Settings → Profile and tap "Edit profile", or tap your avatar anywhere it appears and select Edit. You can update your display name, handle, bio, avatar, and cover photo.' },
   { q: 'How do I report a post or user?', a: 'Tap the "…" menu on a post or visit a user\'s profile and tap "Report." Select a reason and submit. Our moderation team reviews reports within 24 hours.' },
   { q: 'Why was my post removed?', a: 'Posts may be removed for violating our Community Guidelines — misinformation about climate science, hate speech, spam, or prohibited commercial promotion. You\'ll receive a notification with the reason.' },
-  { q: 'How do I delete my account?', a: 'Go to Settings → Account → Danger zone and tap "Delete account." You\'ll be asked to confirm. Deletion is immediate and permanent: your profile, posts and activity are removed.' },
+  { q: 'How do I delete my account?', a: 'Go to Settings → Account → Danger zone and tap "Delete account." You\'ll be asked to confirm. Deletion is immediate and permanent: your profile, posts and activity are removed. It waits until any orders you bought or sold are delivered or cancelled, payouts have been sent and seller earnings withdrawn. Transaction records (orders, payouts, carbon retirements) and the identity details on them are kept for 10 years, as EU accounting and tax law requires, then deleted. They are locked away and used only for tax and legal requests.' },
   { q: 'Is my data shared with third parties?', a: 'Honua never sells your personal data. The impact you log is used only to show your progress and rank on the leaderboards. Read our full Privacy Policy under Terms & privacy.' },
 ];
 

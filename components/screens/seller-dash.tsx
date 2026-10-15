@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
+import { EMPTY_TAX_PROFILE, TAX_COUNTRIES, countryName, regimeFor, tinLabel, validateTaxProfile, type TaxProfile } from "@/lib/tax";
 import { PAYOUT_KINDS, PAYOUT_KIND_LABEL, BANK_COUNTRIES, CONNECT_COUNTRIES, countryFor, validateMethod, type ConnectStatus } from "@/lib/payout-methods";
 
 
@@ -923,6 +924,10 @@ function PayoutsTab({ orders, balance, payouts, onRequest, methods, methodsReady
   const [amount, setAmount] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [methodId, setMethodId] = React.useState<string>('');
+  // The seller's tax details (058). Null while loading. Withdrawals are refused
+  // by the database without them, so the button says so instead of failing.
+  const [tax, setTax] = React.useState<{ profile: TaxProfile | null; available: boolean } | null>(null);
+  const taxBlocked = !!app.user?.id && !!tax?.available && (!tax.profile || tax.profile.status === 'rejected');
 
   const primary = (methods ?? []).find((m: any) => m.isPrimary) ?? (methods ?? [])[0] ?? null;
   const chosen = (methods ?? []).find((m: any) => m.id === methodId) ?? primary;
@@ -969,6 +974,9 @@ function PayoutsTab({ orders, balance, payouts, onRequest, methods, methodsReady
         </div>
       </div>
 
+      {/* Who we're paying, for tax reporting */}
+      <TaxDetails onLoad={setTax} />
+
       {/* Where the money goes */}
       <PayoutMethods methods={methods} ready={methodsReady} onChange={onMethods} />
 
@@ -1009,9 +1017,16 @@ function PayoutsTab({ orders, balance, payouts, onRequest, methods, methodsReady
           </div>
         </div>
       ) : (
-        <button className="btn btn-green" onClick={() => setShowRequest(true)} disabled={available < 10} style={{ alignSelf: 'start', padding: '11px 20px', opacity: available >= 10 ? 1 : 0.5 }}>
-          <Icon name="coin" size={15} /> Request withdrawal
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button className="btn btn-green" onClick={() => setShowRequest(true)} disabled={available < 10 || taxBlocked} style={{ alignSelf: 'start', padding: '11px 20px', opacity: available >= 10 && !taxBlocked ? 1 : 0.5 }}>
+            <Icon name="coin" size={15} /> Request withdrawal
+          </button>
+          {taxBlocked && (
+            <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+              {tax?.profile ? 'Correct your tax details above to withdraw.' : 'Add your tax details above to withdraw.'}
+            </span>
+          )}
+        </div>
       )}
 
       {/* History */}
@@ -1047,6 +1062,218 @@ function PayoutsTab({ orders, balance, payouts, onRequest, methods, methodsReady
         ))}
         {history.length === 0 && <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-4)', fontSize: 13 }}>No withdrawal history yet.</div>}
       </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Tax details — who Honua is paying, for DAC7 and the equivalent rules
+// =====================================================================
+//
+// Platforms that pay sellers have to know who they are paying and report it:
+// DAC7 in the EU, the OECD model rules in the UK, Canada, Australia and New
+// Zealand, 1099-K in the US. Migration 058 refuses a withdrawal until this is
+// filled in, so the card leads with that rather than hiding it in settings.
+type TaxState = { profile: TaxProfile | null; available: boolean };
+
+function TaxDetails({ onLoad }: { onLoad?: (v: TaxState) => void }) {
+  const app = useApp();
+  const userId = app.user?.id as string | undefined;
+  const [state, setState] = React.useState<TaxState | null>(null);
+  const [editing, setEditing] = React.useState(false);
+  const [d, setD] = React.useState<TaxProfile>(EMPTY_TAX_PROFILE);
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [otherTinCountry, setOtherTinCountry] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!userId) return;
+    let live = true;
+    (async () => {
+      const { getMyTaxProfile } = await import('@/lib/tax-profile');
+      const res = await getMyTaxProfile(userId);
+      if (!live) return;
+      const next = { profile: res.profile, available: res.available };
+      setState(next); onLoad?.(next);
+    })();
+    return () => { live = false; };
+  }, [userId, onLoad]);
+
+  // Signed out (demo) or 058 not applied: nothing to collect into.
+  if (!userId || !state || !state.available) return null;
+
+  const p = state.profile;
+  const set = <K extends keyof TaxProfile>(k: K) => (v: TaxProfile[K]) => { setD(prev => ({ ...prev, [k]: v })); setErr(null); };
+  const entity = d.entity_type === 'entity';
+  const regime = regimeFor(d.country);
+
+  const open = () => {
+    // Nulls from the row become the form's empty strings.
+    const base: TaxProfile = { ...EMPTY_TAX_PROFILE };
+    if (p) for (const k of Object.keys(EMPTY_TAX_PROFILE) as (keyof TaxProfile)[]) {
+      if (p[k] !== null && p[k] !== undefined) (base as any)[k] = p[k];
+    }
+    setD(base);
+    setOtherTinCountry(!!p?.tin_country && p.tin_country !== p.country);
+    setErr(null); setEditing(true);
+  };
+
+  const save = async () => {
+    const draft = { ...d, tin_country: otherTinCountry ? d.tin_country : d.country };
+    const problem = validateTaxProfile(draft);
+    if (problem) { setErr(problem); return; }
+    setSaving(true);
+    const { saveMyTaxProfile } = await import('@/lib/tax-profile');
+    const { profile, error } = await saveMyTaxProfile(userId, draft);
+    setSaving(false);
+    if (error || !profile) { setErr(error ?? 'Could not save your tax details.'); return; }
+    const next = { profile, available: true };
+    setState(next); onLoad?.(next); setEditing(false);
+    app.toast?.({ msg: 'Tax details saved', sub: 'You can request withdrawals now.', kind: 'success', icon: 'check' });
+  };
+
+  const tone = !p ? 'var(--sun)' : p.status === 'verified' ? 'var(--green)' : p.status === 'rejected' ? 'var(--clay)' : 'var(--sun)';
+  const needsAction = !p || p.status === 'rejected';
+  const nameOf = (x: TaxProfile) => x.entity_type === 'entity' ? x.legal_name : [x.first_name, x.last_name].filter(Boolean).join(' ');
+  const countrySelect = (value: string, onChange: (v: string) => void) => (
+    <select className="fld" value={value} onChange={e => onChange(e.target.value)}>
+      <option value="">Choose a country</option>
+      {TAX_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+    </select>
+  );
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid ' + (needsAction ? 'color-mix(in srgb, var(--sun) 45%, var(--line))' : 'var(--line)'), borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ padding: '15px 20px', borderBottom: editing || needsAction ? '1px solid var(--line)' : 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            Tax details
+            {p && (
+              <span style={{ fontSize: 11.5, fontWeight: 600, padding: '3px 9px', borderRadius: 6, fontFamily: 'JetBrains Mono', background: `color-mix(in srgb, ${tone} 12%, transparent)`, color: tone }}>
+                {p.status === 'verified' ? 'Verified' : p.status === 'rejected' ? 'Needs correcting' : 'Submitted'}
+              </span>
+            )}
+          </div>
+          {p && !editing && (
+            <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 3 }}>
+              {nameOf(p)} · {countryName(p.country)} · {p.no_tin ? 'no TIN issued' : `TIN ending ${(p.tin ?? '').slice(-4)}`}
+            </div>
+          )}
+        </div>
+        {!editing && (
+          <button className="btn btn-ghost" onClick={open} style={{ padding: '7px 12px', fontSize: 13 }}>
+            {p ? 'Edit' : 'Add tax details'}
+          </button>
+        )}
+      </div>
+
+      {!editing && !p && (
+        <div style={{ padding: '14px 20px', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+          Before we can pay you, the law requires us to know who you are for tax purposes. In the EU this is DAC7, and the UK, Canada, Australia, New Zealand and the US have similar rules. It takes a minute.
+        </div>
+      )}
+      {!editing && p?.status === 'rejected' && (
+        <div style={{ padding: '14px 20px', fontSize: 13, color: 'var(--clay)', lineHeight: 1.55 }}>
+          {p.review_note || 'Something in your tax details didn’t check out.'} Withdrawals are paused until you correct them.
+        </div>
+      )}
+
+      {editing && (
+        <div style={{ padding: 20, background: 'var(--bg-2)', display: 'grid', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(['individual', 'entity'] as const).map(k => (
+              <button key={k} onClick={() => set('entity_type')(k)} style={{
+                padding: '8px 14px', borderRadius: 10, fontSize: 13, cursor: 'pointer',
+                border: '1px solid ' + (d.entity_type === k ? 'var(--green)' : 'var(--line)'),
+                background: d.entity_type === k ? 'var(--green-tint)' : 'var(--surface)',
+                color: d.entity_type === k ? 'var(--green)' : 'var(--ink-2)', fontWeight: d.entity_type === k ? 600 : 500,
+              }}>{k === 'individual' ? 'I sell as an individual' : 'I sell as a business'}</button>
+            ))}
+          </div>
+
+          {entity ? (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <DashFld label="Registered business name" value={d.legal_name ?? ''} onChange={set('legal_name')} />
+              <DashFld label="Company registration number" value={d.business_reg_number ?? ''} onChange={set('business_reg_number')} hint="From your business register, if you have one." />
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <DashFld label="First name" value={d.first_name ?? ''} onChange={set('first_name')} hint="As on your tax records." />
+                <DashFld label="Last name" value={d.last_name ?? ''} onChange={set('last_name')} />
+              </div>
+              <DashFld label="Date of birth" type="date" value={d.date_of_birth ?? ''} onChange={set('date_of_birth')} />
+            </>
+          )}
+
+          <label style={{ display: 'block' }}>
+            <span className="fld-label">Country of tax residence</span>
+            {countrySelect(d.country, set('country'))}
+          </label>
+
+          <DashFld label="Address" value={d.address_line1} onChange={set('address_line1')} placeholder="Street and number" />
+          <DashFld value={d.address_line2 ?? ''} onChange={set('address_line2')} placeholder="Apartment or unit (optional)" />
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <DashFld label="City" value={d.city} onChange={set('city')} />
+            <DashFld label="Region / state" value={d.region ?? ''} onChange={set('region')} />
+            <DashFld label="Postcode" value={d.postal_code ?? ''} onChange={set('postal_code')} />
+          </div>
+
+          {!d.no_tin && (
+            <>
+              <DashFld label={d.country ? tinLabel(d.country, entity) : 'Tax identification number (TIN)'} value={d.tin ?? ''} onChange={set('tin')}
+                hint={regime === 'us' ? 'Used for Form 1099-K.' : 'Issued by your tax authority.'} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={otherTinCountry} onChange={e => setOtherTinCountry(e.target.checked)} />
+                My TIN was issued by a different country
+              </label>
+              {otherTinCountry && (
+                <label style={{ display: 'block' }}>
+                  <span className="fld-label">Country that issued the TIN</span>
+                  {countrySelect(d.tin_country ?? '', set('tin_country'))}
+                </label>
+              )}
+            </>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={d.no_tin} onChange={e => set('no_tin')(e.target.checked)} />
+            My country doesn’t issue tax identification numbers
+          </label>
+          {d.no_tin && !entity && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <DashFld label="City of birth" value={d.birth_city ?? ''} onChange={set('birth_city')} />
+              <label style={{ display: 'block', flex: 1 }}>
+                <span className="fld-label">Country of birth</span>
+                {countrySelect(d.birth_country ?? '', set('birth_country'))}
+              </label>
+            </div>
+          )}
+
+          {(regime === 'dac7' || regime === 'oecd' || entity) && (
+            <DashFld label="VAT / GST number" value={d.vat_number ?? ''} onChange={set('vat_number')} hint="If you’re registered. Leave blank if not." />
+          )}
+
+          {err && <div style={{ fontSize: 12.5, color: 'var(--clay)', lineHeight: 1.5 }}>{err}</div>}
+
+          <div style={{ fontSize: 11.5, color: 'var(--ink-4)', lineHeight: 1.5 }}>
+            {regime === 'dac7'
+              ? 'Each January Honua reports EU sellers to its tax authority under DAC7, which shares the report with your country. Sellers with fewer than 30 sales and no more than €2,000 in a year aren’t reported.'
+              : regime === 'oecd'
+                ? 'Your country runs the OECD platform-reporting rules. Sellers with fewer than 30 sales and no more than €2,000 (or the local equivalent) in a year aren’t reported.'
+                : regime === 'us'
+                  ? 'US sellers over the IRS threshold get a Form 1099-K. Stripe reports payouts that go through Stripe Connect.'
+                  : 'We keep these details to meet our own tax obligations.'}
+            {' '}Only the staff who prepare tax filings can see them.
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn btn-green" disabled={saving} onClick={save} style={{ opacity: saving ? 0.5 : 1 }}>
+              {saving ? 'Saving…' : 'Save tax details'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

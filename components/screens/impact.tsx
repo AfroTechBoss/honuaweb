@@ -142,7 +142,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
         <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
           <KpiCard label="CO₂ avoided" value={totalCo2 >= 1000 ? (totalCo2 / 1000).toFixed(2) : Math.round(totalCo2).toString()} unit={totalCo2 >= 1000 ? 't' : 'kg'} delta={verifiedCo2 > 0 ? `✓ ${Math.round(verifiedCo2)} kg community-verified${pendingCount ? ` · ${pendingCount} pending` : ''}` : pendingCount ? `${pendingCount} action${pendingCount === 1 ? '' : 's'} awaiting vouches` : isVerified ? '✓ Verified impact' : 'share actions to get them verified'} color="var(--green)" icon="leaf" big />
           <KpiCard label="Green points" value={formatCount(totalPts)} unit="GP" delta={`${logs.length} action${logs.length === 1 ? '' : 's'} logged`} color="var(--green-2)" icon="award" />
-          <KpiCard label="Current streak" value={streak.toString()} unit={streak === 1 ? 'day' : 'days'} delta={streak >= 30 ? '2× multiplier active!' : `${30 - streak} days to 2×`} color="var(--sky)" icon="flame" />
+          <KpiCard label="Current streak" value={streak.toString()} unit={streak === 1 ? 'day' : 'days'} delta={streak >= 30 ? '30-day streak reached' : `${30 - streak} days to a 30-day streak`} color="var(--sky)" icon="flame" />
           <KpiCard label="Impact level" value={(Math.floor(totalPts / 200) + 1).toString()} unit="" delta={`${totalPts % 200} / 200 GP to next`} color="var(--sun)" icon="bolt" />
         </div>
 
@@ -205,7 +205,7 @@ export function DesktopImpact({ onNav, params }: { onNav: any; params?: Record<s
                 ))}
               </div>
               <div style={{ fontSize: 12, marginTop: 14, opacity: .9 }}>
-                {streak >= 30 ? '🎉 2× point multiplier active!' : `Hit 30 days for a 2× point multiplier.`}
+                {streak >= 30 ? '🎉 30 days in a row. Keep it going!' : streak > 0 ? 'Log something every day to keep it alive.' : 'Log an action today to start a streak.'}
               </div>
             </div>
 

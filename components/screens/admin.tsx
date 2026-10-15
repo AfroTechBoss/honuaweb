@@ -9,6 +9,7 @@ import { AdminVerification } from "./admin-verification";
 import { AdminSupport } from "./admin-support";
 import { AdminOrders } from "./admin-orders";
 import { AdminRoles } from "./admin-roles";
+import { AdminTax } from "./admin-tax";
 import { listTickets } from "@/lib/admin-support";
 import { listOrders, fetchAdminProfile } from "@/lib/admin-orders";
 import {
@@ -74,6 +75,9 @@ const ADMIN_NAV_GROUPS = [
       ['sellers', 'Sellers', 'leaf'],
       ['shops', 'Shops', 'store'],
       ['payouts', 'Payouts', 'coin'],
+      // DAC7 and the other platform-reporting regimes; sits with payouts
+      // because it's the same money, counted for the tax office.
+      ['tax', 'Tax reporting', 'flag'],
     ],
   },
   {
@@ -193,17 +197,40 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
   const [pendingChallenges, setPendingChallenges] = React.useState<any[]>([]);
   const [challengesLoaded, setChallengesLoaded] = React.useState(false);
 
-  const loadChallenges = React.useCallback(() => {
-    import('@/lib/supabase').then(async ({ supabase }) => {
-      const [{ data: active }, { data: pending }] = await Promise.all([
-        supabase.from('challenges').select('*').eq('status', 'active').order('participant_count', { ascending: false }),
-        supabase.from('challenges').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
-      ]);
-      if (active) setDbChallenges(active);
-      if (pending) setPendingChallenges(pending);
-      setChallengesLoaded(true);
-    }).catch(() => setChallengesLoaded(true));
+  // Privy hands back a fresh function every render; the ref keeps the loaders
+  // below from re-firing on each one.
+  const tokenRef = React.useRef(adminToken);
+  tokenRef.current = adminToken;
+  const token = React.useCallback(async (): Promise<string | null> => {
+    try { return await tokenRef.current(); } catch { return null; }
   }, []);
+
+  // Challenges go through /api/admin/challenges: RLS only lets the service role
+  // publish or change one, and since 056 the reward a challenge pays can only be
+  // set there. These used to be browser writes that RLS refused without a word.
+  const challengeApi = React.useCallback(async (method: 'GET' | 'POST' | 'PATCH', body?: any): Promise<{ data?: any; error?: string }> => {
+    try {
+      const t = await token();
+      const res = await fetch('/api/admin/challenges', {
+        method,
+        headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      return res.ok ? { data } : { error: data?.error ?? `Request failed (${res.status})` };
+    } catch {
+      return { error: 'Network error' };
+    }
+  }, [token]);
+
+  const loadChallenges = React.useCallback(async () => {
+    const { data } = await challengeApi('GET');
+    if (data) {
+      setDbChallenges(data.active ?? []);
+      setPendingChallenges(data.pending ?? []);
+    }
+    setChallengesLoaded(true);
+  }, [challengeApi]);
 
   React.useEffect(() => { loadChallenges(); }, [loadChallenges]);
 
@@ -218,51 +245,60 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
     return () => { channel?.unsubscribe(); };
   }, [loadChallenges]);
 
-  const approveChallenge = async (id: string) => {
-    const { supabase } = await import('@/lib/supabase');
+  const challengeFailed = (msg: string, error: string) => {
+    app.toast?.({ msg, sub: error, kind: 'error', icon: 'close' });
+    return false;
+  };
+
+  const approveChallenge = async (id: string, reward: { rewardPoints: number; requiredLogs: number | null }) => {
     const c = pendingChallenges.find(x => x.id === id);
-    await supabase.from('challenges').update({ status: 'active' }).eq('id', id);
+    const { data, error } = await challengeApi('PATCH', { id, action: 'approve', ...reward });
+    if (error) return challengeFailed('Could not approve challenge', error);
     setPendingChallenges(p => p.filter(x => x.id !== id));
-    setDbChallenges(a => [{ ...c, status: 'active' }, ...a]);
+    setDbChallenges(a => [data.challenge, ...a]);
     log('approved challenge', c?.title ?? '', 'check');
     app.toast?.({ msg: 'Challenge approved', sub: c?.title, kind: 'success', icon: 'check' });
+    return true;
+  };
+
+  const updateChallengeReward = async (id: string, reward: { rewardPoints: number; requiredLogs: number | null }) => {
+    const c = dbChallenges.find(x => x.id === id);
+    const { data, error } = await challengeApi('PATCH', { id, action: 'update', ...reward });
+    if (error) return challengeFailed('Could not update reward', error);
+    setDbChallenges(a => a.map(x => x.id === id ? data.challenge : x));
+    log('updated challenge reward', c?.title ?? '', 'check');
+    app.toast?.({ msg: 'Reward updated', sub: c?.title, kind: 'success', icon: 'check' });
+    return true;
   };
 
   const rejectChallenge = async (id: string, reason: string) => {
-    const { supabase } = await import('@/lib/supabase');
     const c = pendingChallenges.find(x => x.id === id);
-    await supabase.from('challenges').update({ status: 'archived', reject_reason: reason }).eq('id', id);
+    const { error } = await challengeApi('PATCH', { id, action: 'reject', reason });
+    if (error) return challengeFailed('Could not reject challenge', error);
     setPendingChallenges(p => p.filter(x => x.id !== id));
     log('rejected challenge', c?.title ?? '', 'close');
     app.toast?.({ msg: 'Challenge rejected', sub: c?.title, icon: 'close' });
+    return true;
   };
 
   const archiveChallenge = async (id: string) => {
-    const { supabase } = await import('@/lib/supabase');
     const c = dbChallenges.find(x => x.id === id);
-    await supabase.from('challenges').update({ status: 'archived' }).eq('id', id);
+    const { error } = await challengeApi('PATCH', { id, action: 'archive' });
+    if (error) return challengeFailed('Could not archive challenge', error);
     setDbChallenges(a => a.filter(x => x.id !== id));
     log('archived challenge', c?.title ?? '', 'trash');
     app.toast?.({ msg: 'Challenge archived', sub: c?.title, icon: 'trash' });
+    return true;
   };
 
-  const createAdminChallenge = async (data: any) => {
-    const { supabase } = await import('@/lib/supabase');
-    const { data: inserted, error } = await supabase.from('challenges').insert({ ...data, status: 'active' }).select().single();
-    if (!error && inserted) {
-      setDbChallenges(a => [inserted, ...a]);
-      log('created challenge', data.title, 'check');
-      app.toast?.({ msg: 'Challenge created', sub: data.title, kind: 'success', icon: 'award' });
-    }
+  const createAdminChallenge = async (body: any) => {
+    const { data, error } = await challengeApi('POST', body);
+    if (error) return challengeFailed('Could not create challenge', error);
+    setDbChallenges(a => [data.challenge, ...a]);
+    log('created challenge', body.title, 'check');
+    app.toast?.({ msg: 'Challenge created', sub: body.title, kind: 'success', icon: 'award' });
+    return true;
   };
-
-  // Privy hands back a fresh function every render; the ref keeps the loaders
-  // below from re-firing on each one.
-  const tokenRef = React.useRef(adminToken);
-  tokenRef.current = adminToken;
-  const token = React.useCallback(async (): Promise<string | null> => {
-    try { return await tokenRef.current(); } catch { return null; }
-  }, []);
 
   const loadAudit = React.useCallback(async () => {
     const { entries } = await fetchActivity(await token(), 50);
@@ -668,13 +704,14 @@ export function DesktopAdmin({ onNav, params }: { onNav: any; params?: Record<st
           {section === 'verification' && <AdminVerification getToken={adminToken} log={log} />}
           {section === 'community-reports' && <AdminCommunityReports getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'appeals' && <AdminAppeals getToken={adminToken} log={log} adminEmail={adminEmail} onCounts={setPendingAppeals} />}
-          {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
+          {section === 'challenges' && <AdminChallenges active={dbChallenges} pending={pendingChallenges} loaded={challengesLoaded} onApprove={approveChallenge} onUpdateReward={updateChallengeReward} onReject={rejectChallenge} onArchive={archiveChallenge} onCreate={createAdminChallenge} />}
           {section === 'products' && <AdminProducts getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'carbon' && <AdminCarbonCredits getToken={adminToken} log={log} />}
           {section === 'users' && <AdminUsers users={users} loaded={usersLoaded} onStatus={setUserStatus} onRole={setUserRole} canSuspend={canSuspend} canBan={canBan} rosterAvailable={rosterAvailable} />}
           {section === 'sellers' && <AdminSellers getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'shops' && <AdminShops getToken={adminToken} onSection={setSection} />}
           {section === 'payouts' && <AdminPayouts getToken={adminToken} log={log} adminEmail={adminEmail} onCounts={setPendingPayouts} />}
+          {section === 'tax' && <AdminTax getToken={adminToken} adminEmail={adminEmail} />}
           {section === 'notifications' && <AdminNotifications getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'roles' && <AdminRoles getToken={adminToken} log={log} adminEmail={adminEmail} />}
           {section === 'activity' && <AdminActivity audit={audit} />}
@@ -2395,13 +2432,57 @@ const CAT_COLORS: Record<string, string> = {
   Waste: 'var(--clay)', Nature: 'var(--green-2)', Lifestyle: 'var(--ink-3)', General: 'var(--ink-3)',
 };
 
-function AdminChallenges({ active, pending, loaded, onApprove, onReject, onArchive, onCreate }) {
+// Reward fields, shared by create, approve and edit. `logs` blank = every day.
+type RewardDraft = { points: string; logs: string };
+const rewardBody = (d: RewardDraft) => ({
+  rewardPoints: Math.max(0, Math.round(Number(d.points) || 0)),
+  requiredLogs: d.logs.trim() === '' ? null : Math.round(Number(d.logs)),
+});
+const rewardSummary = (c: any) => {
+  const need = c.required_logs ?? c.days;
+  const pts = c.reward_points ?? 0;
+  return `${pts > 0 ? `${pts} GP` : 'No reward'} · log ${need === c.days ? 'every day' : `${need} of ${c.days} days`}`;
+};
+
+function RewardFields({ draft, setDraft, days }: { draft: RewardDraft; setDraft: (d: RewardDraft) => void; days: number }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div>
+        <span className="fld-label">Reward (GP)</span>
+        <input className="fld" type="number" min={0} max={2000} value={draft.points} onChange={e => setDraft({ ...draft, points: e.target.value })} placeholder="0" />
+      </div>
+      <div>
+        <span className="fld-label">Days to log</span>
+        <input className="fld" type="number" min={1} max={days} value={draft.logs} onChange={e => setDraft({ ...draft, logs: e.target.value })} placeholder={`${days} (every day)`} />
+      </div>
+    </div>
+  );
+}
+
+function AdminChallenges({ active, pending, loaded, onApprove, onUpdateReward, onReject, onArchive, onCreate }) {
   const app = useApp();
   const [tab, setTab] = React.useState<'pending' | 'active' | 'create'>(pending.length > 0 ? 'pending' : 'active');
   const [rejectModal, setRejectModal] = React.useState<string | null>(null);
   const [rejectReason, setRejectReason] = React.useState('');
-  const [form, setForm] = React.useState({ title: '', description: '', category: 'Energy', days: 30, reward: '' });
+  const [form, setForm] = React.useState({ title: '', description: '', category: 'Energy', days: 30 });
+  const [formReward, setFormReward] = React.useState<RewardDraft>({ points: '', logs: '' });
   const [creating, setCreating] = React.useState(false);
+  // The reward being set for a pending approval or an active edit.
+  const [rewardFor, setRewardFor] = React.useState<{ id: string; mode: 'approve' | 'edit'; draft: RewardDraft } | null>(null);
+  const [savingReward, setSavingReward] = React.useState(false);
+
+  const openReward = (c: any, mode: 'approve' | 'edit') => {
+    const suggested = mode === 'approve' ? (String(c.reward ?? '').match(/^\s*(\d+)\s*GP/i)?.[1] ?? '') : String(c.reward_points ?? '');
+    setRewardFor({ id: c.id, mode, draft: { points: suggested === '0' ? '' : suggested, logs: c.required_logs ? String(c.required_logs) : '' } });
+  };
+  const saveReward = async () => {
+    if (!rewardFor) return;
+    setSavingReward(true);
+    const fn = rewardFor.mode === 'approve' ? onApprove : onUpdateReward;
+    const ok = await fn(rewardFor.id, rewardBody(rewardFor.draft));
+    setSavingReward(false);
+    if (ok) setRewardFor(null);
+  };
 
   React.useEffect(() => {
     if (pending.length > 0 && tab === 'active') setTab('pending');
@@ -2410,9 +2491,11 @@ function AdminChallenges({ active, pending, loaded, onApprove, onReject, onArchi
   const handleCreate = async () => {
     if (!form.title.trim()) return;
     setCreating(true);
-    await onCreate({ title: form.title.trim(), description: form.description.trim() || null, category: form.category, days: form.days, reward: form.reward.trim() || null });
-    setForm({ title: '', description: '', category: 'Energy', days: 30, reward: '' });
+    const ok = await onCreate({ title: form.title.trim(), description: form.description.trim() || null, category: form.category, days: form.days, ...rewardBody(formReward) });
     setCreating(false);
+    if (!ok) return;
+    setForm({ title: '', description: '', category: 'Energy', days: 30 });
+    setFormReward({ points: '', logs: '' });
     setTab('active');
   };
 
@@ -2470,14 +2553,29 @@ function AdminChallenges({ active, pending, loaded, onApprove, onReject, onArchi
                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{c.title}</div>
                 {c.description && <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5 }}>{c.description}</div>}
                 {c.reward && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 6, fontFamily: 'JetBrains Mono' }}>Suggested reward: {c.reward}</div>}
+                {rewardFor?.id === c.id && (
+                  <div style={{ marginTop: 12, maxWidth: 360 }}>
+                    <RewardFields draft={rewardFor.draft} setDraft={d => setRewardFor({ ...rewardFor, draft: d })} days={c.days} />
+                    <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', marginTop: 6 }}>Paid once, when someone logs the required days within {c.days} days of joining.</div>
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                 <button className="btn btn-ghost" onClick={() => { setRejectModal(c.id); setRejectReason(''); }} style={{ color: 'var(--clay)', borderColor: sTint('var(--clay)', 30), fontSize: 12, padding: '6px 12px' }}>
                   Reject
                 </button>
-                <button className="btn btn-green" onClick={() => onApprove(c.id)} style={{ fontSize: 12, padding: '6px 12px' }}>
-                  Approve
-                </button>
+                {rewardFor?.id === c.id ? (
+                  <>
+                    <button className="btn btn-ghost" onClick={() => setRewardFor(null)} style={{ fontSize: 12, padding: '6px 12px' }}>Cancel</button>
+                    <button className="btn btn-green" onClick={saveReward} disabled={savingReward} style={{ fontSize: 12, padding: '6px 12px', opacity: savingReward ? .5 : 1 }}>
+                      {savingReward ? 'Publishing…' : 'Publish'}
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-green" onClick={() => openReward(c, 'approve')} style={{ fontSize: 12, padding: '6px 12px' }}>
+                    Approve
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -2505,7 +2603,19 @@ function AdminChallenges({ active, pending, loaded, onApprove, onReject, onArchi
             <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '2fr 80px 80px 120px 80px', gap: 12, padding: '14px 22px', borderTop: i === 0 ? 'none' : '1px solid var(--line)', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{c.title}</div>
-                {c.reward && <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>{c.reward}</div>}
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginTop: 2 }}>
+                  {rewardSummary(c)} · <button onClick={() => openReward(c, 'edit')} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}>edit</button>
+                </div>
+                {rewardFor?.id === c.id && (
+                  <div style={{ marginTop: 10, maxWidth: 360 }}>
+                    <RewardFields draft={rewardFor.draft} setDraft={d => setRewardFor({ ...rewardFor, draft: d })} days={c.days} />
+                    <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', margin: '6px 0 8px' }}>Changes apply to anyone who hasn't completed it yet.</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-ghost" onClick={() => setRewardFor(null)} style={{ fontSize: 12, padding: '5px 10px' }}>Cancel</button>
+                      <button className="btn btn-green" onClick={saveReward} disabled={savingReward} style={{ fontSize: 12, padding: '5px 10px', opacity: savingReward ? .5 : 1 }}>{savingReward ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  </div>
+                )}
               </div>
               <span style={{ fontSize: 12, color: CAT_COLORS[c.category] ?? 'var(--ink-3)', fontWeight: 600 }}>{c.category}</span>
               <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: 'var(--ink-3)' }}>{c.days}d</span>
@@ -2541,8 +2651,8 @@ function AdminChallenges({ active, pending, loaded, onApprove, onReject, onArchi
               <button key={d} onClick={() => setForm(f => ({ ...f, days: d }))} className={'chip ' + (form.days === d ? 'chip-green' : '')} style={{ cursor: 'pointer', border: form.days === d ? 'none' : undefined }}>{d} days</button>
             ))}
           </div>
-          <span className="fld-label">Reward</span>
-          <input className="fld" value={form.reward} onChange={e => setForm(f => ({ ...f, reward: e.target.value }))} placeholder="e.g. 120 GP + Cyclist badge" style={{ marginBottom: 20 }} />
+          <RewardFields draft={formReward} setDraft={setFormReward} days={form.days} />
+          <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono', margin: '6px 0 20px' }}>Paid once, when someone logs the required days within the duration. Leave days blank for every day.</div>
           <button className="btn btn-green" onClick={handleCreate} disabled={!form.title.trim() || creating} style={{ opacity: form.title.trim() && !creating ? 1 : .5 }}>
             <Icon name="plus" size={14} /> {creating ? 'Creating…' : 'Publish challenge'}
           </button>

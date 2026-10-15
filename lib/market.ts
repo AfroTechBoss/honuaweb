@@ -377,6 +377,15 @@ export async function requestPayout(
       if (error.code === '42501') {
         return { ok: false, error: 'Withdrawals are paused while your account is restricted. You can appeal at /appeal.' };
       }
+      // 058's gate. Tax law (DAC7 in the EU, the same rules in the UK, Canada,
+      // Australia and New Zealand, 1099-K in the US) makes us hold payouts until
+      // we know who we are paying.
+      if (error.message?.includes('tax_profile_required')) {
+        return { ok: false, error: 'Add your tax details in the Payouts tab before withdrawing. The law requires us to collect them before we can pay you.' };
+      }
+      if (error.message?.includes('tax_profile_rejected')) {
+        return { ok: false, error: 'Your tax details need correcting before you can withdraw. See the note in the Payouts tab.' };
+      }
       return { ok: false, error: error.message };
     }
     return { ok: true };

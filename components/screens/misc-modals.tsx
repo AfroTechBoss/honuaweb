@@ -7,6 +7,8 @@ import { PhotoViewer } from "@/components/photo-viewer";
 import { projectPhase, useNow } from "@/lib/project-time";
 import { LiveBadge } from "@/components/screens/map-carbon";
 import type { Retirement } from "@/lib/market";
+import { ACTION_IMPACTS } from "@/lib/impact";
+import { setChallengeJoined } from "@/lib/challenges";
 
 export function Toggle({ on }) {
   return (
@@ -301,24 +303,46 @@ export function MCredit({ data, close }) {
 export function MChallenge({ data, close }) {
   const app = useApp();
   const joined = app.challenge?.has(data.id);
+  const [busy, setBusy] = React.useState(false);
+  const toggleJoined = async () => {
+    if (!app.user?.id) { app.toast({ msg: 'Sign in to join challenges', kind: 'error', icon: 'flame' }); return; }
+    setBusy(true);
+    const { error } = await setChallengeJoined(app.user.id, data.id, !joined);
+    setBusy(false);
+    if (error) { app.toast({ msg: joined ? 'Could not leave the challenge' : 'Could not join the challenge', kind: 'error', icon: 'close' }); return; }
+    app.challenge.toggle(data.id);
+    window.dispatchEvent(new Event('honua:challenge-changed'));
+    app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: data.title, kind: 'success', icon: 'flame' });
+    if (joined) close();
+  };
+  // Logging opens the normal log form, pre-filled for this challenge.
+  const logToday = () => {
+    close();
+    app.openModal('logaction', { category: ACTION_IMPACTS[data.cat] ? data.cat : 'General', description: data.title });
+  };
   return (
     <Modal onClose={close} width={520}>
       <ModalHead icon="flame" iconColor="var(--clay)" title={data.title} sub={`${data.cat} · ${data.days}-day challenge · ${data.joined} joined`} onClose={close} />
       <div style={{ padding: '18px 24px 0' }}>
-        <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)', margin: 0 }}>Log your progress each day to keep your streak alive. Community multipliers stack with your personal streak — finish to earn <strong>{data.reward}</strong>.</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '16px 0' }}>
-          {[['DURATION', data.days + ' days'], ['REWARD', data.reward], ['JOINED', data.joined]].map(([l, v]) => (
+        <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--ink-2)', margin: 0, whiteSpace: 'pre-wrap' }}>{data.desc || 'Log your progress each day to keep your streak alive.'}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.reward ? 3 : 2},1fr)`, gap: 10, margin: '16px 0' }}>
+          {[['DURATION', data.days + ' days'], ...(data.reward ? [['REWARD', data.reward]] : []), ['JOINED', data.joined]].map(([l, v]) => (
             <div key={l} style={{ background: 'var(--bg-2)', borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{l}</div>
               <div style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>{v}</div>
             </div>
           ))}
         </div>
+        {data.completed
+          ? <div style={{ fontSize: 12, color: 'var(--green)', fontFamily: 'JetBrains Mono', marginBottom: 16 }}>You've completed this challenge{data.reward ? ` and earned ${data.reward}` : ''}.</div>
+          : data.reward && <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono', marginBottom: 16 }}>
+              Paid once when you log it on {(data.need ?? data.days) >= data.days ? 'every day' : `${data.need} different days`} within {data.days} days of joining.
+            </div>}
       </div>
       <ModalFoot>
-        {joined && <button className="btn btn-ghost" onClick={() => { close(); app.openModal('celebrate', { title: 'Logged for today!', sub: `Your ${data.title} streak continues. Keep it going.` }); }}>Log today</button>}
-        <button className={joined ? 'btn btn-ghost' : 'btn btn-green'} onClick={() => { app.challenge.toggle(data.id); app.toast(joined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: data.title, kind: 'success', icon: 'flame' }); if (joined) close(); }}>
-          {joined ? 'Joined ✓ — leave' : 'Join challenge'}
+        {joined && !data.completed && <button className="btn btn-green" onClick={logToday}>Log today</button>}
+        <button className={joined ? 'btn btn-ghost' : 'btn btn-green'} onClick={toggleJoined} disabled={busy}>
+          {busy ? '…' : joined ? 'Leave challenge' : 'Join challenge'}
         </button>
       </ModalFoot>
     </Modal>
@@ -451,25 +475,6 @@ export function MList({ data, close }) {
             </div>
             {it.right && <span style={{ fontFamily: 'JetBrains Mono', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>{it.right}</span>}
           </div>
-        ))}
-      </div>
-    </Modal>
-  );
-};
-
-// --- Community about ---
-export function MCommunityAbout({ data, close }) {
-  return (
-    <Modal onClose={close} width={500}>
-      <ModalHead title={'About ' + (data.name || 'Urban gardeners')} onClose={close} />
-      <div style={{ padding: '16px 24px 22px' }}>
-        <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.65, color: 'var(--ink-2)' }}>For anyone growing food, herbs, or pollinator habitat in cities. Beginners welcome. Be kind, cite sources, and share your wins and failures alike.</p>
-        <div style={{ display: 'flex', gap: 18, margin: '18px 0' }}>
-          <Stat n="24.1k" l="Members" /><Stat n="312" l="Posts /wk" /><Stat n="2024" l="Founded" />
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>Community guidelines</div>
-        {['Stay on topic — urban growing & sustainability', 'No promotions without mod approval', 'Be generous with knowledge'].map((g, i) => (
-          <div key={i} style={{ display: 'flex', gap: 9, padding: '5px 0', fontSize: 13.5, color: 'var(--ink-2)' }}><span style={{ color: 'var(--green)' }}><Icon name="check" size={15} stroke={2.2} /></span> {g}</div>
         ))}
       </div>
     </Modal>

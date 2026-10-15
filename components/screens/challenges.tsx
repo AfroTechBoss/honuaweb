@@ -1,13 +1,14 @@
 "use client";
 import React from "react";
 import { Icon, Logo, Avatar, ImagePlaceholder, ScorePill, VerifiedImpact, Modal, ModalHead, ToggleC, DesktopSidebar, ToastHost, Stat, NotifPrefs, useApp, ActionBtn, TrendingPanel, MyImpactCard, SuggestedFollows, CommentThread, CommentNode, formatCount, SBadge, SStat, SSpark, SStepper, SHead, RoleChip, sTint, sMoney, S_STATUS, ADMIN_ROLES, REPORT_REASONS, SELLER_CATEGORIES, SELLER_PRACTICES, SELLER_CERTS } from "@/components/shared";
-import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList, MCommunityAbout } from "./desktop-misc";
+import { Toggle, ModalFoot, MProject, MCredit, MChallenge, MCelebrate, MWallet, MList } from "./desktop-misc";
 import { KpiCard } from "./impact";
 import { logTaskImpact, taskImpact } from "@/lib/impact";
+import { setChallengeJoined, startOfLocalDay, claimChallengeRewards, countLoggedDays } from "@/lib/challenges";
 
 // =============== Desktop Tasks / Challenges ===============
 const TODAY_TASKS: string[] = [
-  'Bike commute', 'Meatless meal', 'Compost food scraps', '10 min education', 'Skip ride-share',
+  'Bike commute', 'Meatless meal', 'Compost food scraps', '30 min of learning', 'Skip ride-share',
 ];
 
 export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<string, unknown> }) {
@@ -17,16 +18,19 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
   // challenge id -> when this user joined it, for the "Day N of M" line
   const [joinedAt, setJoinedAt] = React.useState<Record<string, string>>({});
   const [loggedToday, setLoggedToday] = React.useState<Set<string>>(new Set());
+  // Challenges this user has completed (and been paid for), and their logs
+  // since the earliest join, for the progress bars.
+  const [completed, setCompleted] = React.useState<Set<string>>(new Set());
+  const [windowLogs, setWindowLogs] = React.useState<{ action: string; logged_at: string }[]>([]);
 
   const loadToday = React.useCallback(async () => {
     if (!app.user?.id) return;
-    const todayStr = new Date().toISOString().substring(0, 10);
     const { supabase } = await import('@/lib/supabase');
     const { data: todayLogs } = await supabase
       .from('impact_logs')
       .select('action')
       .eq('user_id', app.user.id)
-      .gte('logged_at', todayStr);
+      .gte('logged_at', startOfLocalDay());
     if (todayLogs) setLoggedToday(new Set(todayLogs.map((l: any) => l.action)));
   }, [app.user?.id]);
 
@@ -37,21 +41,38 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
     return () => window.removeEventListener('honua:impact-logged', loadToday);
   }, [loadToday]);
 
-  React.useEffect(() => {
+  const loadChallenges = React.useCallback(() => {
     if (!app.user?.id) return;
     import('@/lib/supabase').then(async ({ supabase }) => {
-      const [{ data: challs, error }, { data: joined }] = await Promise.all([
-        supabase.from('challenges').select('id, title, description, category, days, reward, participant_count').order('participant_count', { ascending: false }),
+      const base = 'id, title, description, category, days, participant_count';
+      const [first, { data: joined }, { data: done }] = await Promise.all([
+        supabase.from('challenges').select(`${base}, reward_points, required_logs`).order('participant_count', { ascending: false }),
         supabase.from('challenge_participants').select('challenge_id, joined_at').eq('user_id', app.user.id),
+        supabase.from('challenge_completions').select('challenge_id').eq('user_id', app.user.id),
       ]);
+      // Before migration 056 there are no reward columns, and nothing pays —
+      // so no reward is shown rather than the old unpaid text.
+      const { data: challs, error } = first.error
+        ? await supabase.from('challenges').select(base).order('participant_count', { ascending: false })
+        : first;
       if (error) { setLoad('error'); return; }
-      setDbChallenges((challs ?? []).map((c: any) => ({
-        id: c.id, title: c.title, joined: `${(c.participant_count ?? 0).toLocaleString()}`,
-        days: c.days, reward: c.reward ?? '', cat: c.category ?? 'General',
-      })));
+      setDbChallenges((challs ?? []).map((c: any) => {
+        const pts = c.reward_points ?? 0;
+        return {
+          id: c.id, title: c.title, desc: c.description ?? '', joined: `${(c.participant_count ?? 0).toLocaleString()}`,
+          days: c.days, need: c.required_logs ?? c.days, rewardPts: pts, reward: pts > 0 ? `${pts} GP` : '', cat: c.category ?? 'General',
+        };
+      }));
+      setCompleted(new Set((done ?? []).map((d: any) => d.challenge_id)));
       setLoad('ready');
       if (joined) {
         setJoinedAt(Object.fromEntries(joined.map((j: any) => [j.challenge_id, j.joined_at])));
+        const earliest = joined.reduce((m: string | null, j: any) => (!m || j.joined_at < m ? j.joined_at : m), null);
+        if (earliest) {
+          const { data: logs } = await supabase.from('impact_logs').select('action, logged_at')
+            .eq('user_id', app.user.id).gte('logged_at', earliest).limit(2000);
+          setWindowLogs(logs ?? []);
+        } else setWindowLogs([]);
         const joinedSet = new Set(joined.map((j: any) => j.challenge_id));
         // Authoritative both ways — also drops the demo ids (1, 2) older
         // builds saved to this browser.
@@ -64,6 +85,41 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
       }
     }).catch(() => setLoad('error'));
   }, [app.user?.id]);
+  React.useEffect(() => { loadChallenges(); }, [loadChallenges]);
+
+  // Pay out anything now complete. Serialised so the direct call after a log
+  // and the honua:impact-logged listener can't both celebrate the same win.
+  const claiming = React.useRef<Promise<any[]> | null>(null);
+  const runClaim = React.useCallback(async () => {
+    if (!app.user?.id) return [];
+    if (claiming.current) await claiming.current.catch(() => {});
+    const p = claimChallengeRewards();
+    claiming.current = p;
+    const won = await p;
+    claiming.current = null;
+    if (won.length) {
+      const w = won[0];
+      const extra = won.length > 1 ? ` (and ${won.length - 1} more)` : '';
+      app.openModal('celebrate', {
+        title: 'Challenge complete!',
+        sub: w.points > 0 ? `"${w.title}"${extra} finished — +${won.reduce((n, x) => n + (x.points ?? 0), 0)} GP added to your impact.` : `"${w.title}"${extra} finished. Nice work.`,
+      });
+      loadChallenges();
+    }
+    return won;
+  }, [app.user?.id, loadChallenges]);
+  React.useEffect(() => { runClaim(); }, [app.user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    const onLogged = () => { runClaim(); loadChallenges(); };
+    window.addEventListener('honua:impact-logged', onLogged);
+    return () => window.removeEventListener('honua:impact-logged', onLogged);
+  }, [runClaim, loadChallenges]);
+  // Joining from the detail modal changes counts and "Day N" here too.
+  React.useEffect(() => {
+    window.addEventListener('honua:challenge-changed', loadChallenges);
+    return () => window.removeEventListener('honua:challenge-changed', loadChallenges);
+  }, [loadChallenges]);
+  const [catFilter, setCatFilter] = React.useState('All');
 
   const handleLogTask = (taskName: string) => {
     if (loggedToday.has(taskName)) {
@@ -77,24 +133,54 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
   };
 
   const handleToggleChallenge = async (c: any) => {
+    if (!app.user?.id) return;
     const isJoined = app.challenge?.has(c.id);
     app.challenge.toggle(c.id);
-    app.toast(isJoined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: c.title, kind: 'success', icon: 'flame' });
-    if (typeof c.id === 'string' && app.user?.id) {
-      const { supabase } = await import('@/lib/supabase');
-      if (isJoined) {
-        await supabase.from('challenge_participants').delete().match({ challenge_id: c.id, user_id: app.user.id });
-      } else {
-        await supabase.from('challenge_participants').insert({ challenge_id: c.id, user_id: app.user.id });
-      }
+    const { error } = await setChallengeJoined(app.user.id, c.id, !isJoined);
+    if (error) {
+      app.challenge.toggle(c.id);
+      app.toast({ msg: isJoined ? 'Could not leave the challenge' : 'Could not join the challenge', kind: 'error', icon: 'close' });
+      return;
     }
+    app.toast(isJoined ? { msg: 'Left challenge', icon: 'close' } : { msg: 'Joined!', sub: c.title, kind: 'success', icon: 'flame' });
+    loadChallenges();
   };
 
-  const allChallenges = dbChallenges;
+  // Daily log for a joined challenge, once per day like the task cards.
+  const handleLogChallenge = async (c: any) => {
+    if (!app.user?.id) return;
+    if (loggedToday.has(c.title)) {
+      app.toast({ msg: `${c.title} — already logged today ✓`, icon: 'check' });
+      return;
+    }
+    const { error } = await logTaskImpact(app.user.id, c.title, c.cat);
+    if (error) {
+      app.toast({ msg: 'Could not log today', sub: error, kind: 'error', icon: 'close' });
+      return;
+    }
+    const won = await runClaim();
+    if (!won.length) {
+      const left = Math.max(0, c.need - (c.done + 1));
+      app.openModal('celebrate', {
+        title: 'Logged for today!',
+        sub: left > 0
+          ? `"${c.title}" — ${c.done + 1} of ${c.need} days logged.${c.rewardPts ? ` ${left} to go for +${c.rewardPts} GP.` : ''}`
+          : `"${c.title}" — day ${c.day} of ${c.days}. Keep it going.`,
+      });
+    }
+    window.dispatchEvent(new Event('honua:impact-logged'));
+  };
+
+  const challengeCats = Array.from(new Set(dbChallenges.map(c => c.cat))).sort();
+  const allChallenges = catFilter === 'All' ? dbChallenges : dbChallenges.filter(c => c.cat === catFilter);
   const activeChallenges = dbChallenges.filter(c => app.challenge?.has(c.id)).map((c, i) => {
     const since = joinedAt[c.id] ? new Date(joinedAt[c.id]).getTime() : Date.now();
-    const day = Math.min(c.days, Math.max(1, Math.floor((Date.now() - since) / 86_400_000) + 1));
-    return { ...c, day, p: day / Math.max(1, c.days), col: i % 2 ? 'var(--sky)' : 'var(--green)' };
+    const elapsed = Math.floor((Date.now() - since) / 86_400_000);
+    const day = Math.min(c.days, Math.max(1, elapsed + 1));
+    const done = joinedAt[c.id] ? countLoggedDays(windowLogs, c.title, joinedAt[c.id], c.days) : 0;
+    const isDone = completed.has(c.id);
+    const ended = !isDone && elapsed >= c.days;
+    return { ...c, day, done, isDone, ended, p: isDone ? 1 : Math.min(1, done / Math.max(1, c.need)), col: i % 2 ? 'var(--sky)' : 'var(--green)' };
   });
 
   const now = new Date();
@@ -116,7 +202,7 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
           <div>
             <div style={{ fontSize: 12, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)', letterSpacing: '.05em' }}>CHALLENGES · WEEK {isoWeek}</div>
             <h1 className="font-display" style={{ margin: '4px 0 0', fontSize: 36, fontWeight: 600, letterSpacing: '-0.03em' }}>Small streaks. Big swings.</h1>
-            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Pick a challenge, log daily, watch your numbers move. Community multipliers stack with personal streaks.</p>
+            <p style={{ margin: '4px 0 0', color: 'var(--ink-3)', fontSize: 14 }}>Pick a challenge, log daily, watch your numbers move.</p>
           </div>
           <button className="btn btn-primary" onClick={() => app.openModal('createchallenge')}><Icon name="plus" size={14} /> Create challenge</button>
         </div>
@@ -178,20 +264,27 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 16, fontWeight: 600 }}>{c.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>Day {c.day} of {c.days} · {c.joined} joined</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>
+                    {c.isDone ? 'Completed' : c.ended ? 'Ended' : `Day ${c.day} of ${c.days}`} · {c.joined} joined
+                  </div>
                 </div>
-                <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={async () => {
-                  app.openModal('celebrate', { title: 'Logged for today!', sub: `Your "${c.title}" streak continues — day ${c.day} of ${c.days}. Keep it going.` });
-                  if (app.user?.id) {
-                    await logTaskImpact(app.user.id, c.title, c.cat);
-                    window.dispatchEvent(new Event('honua:impact-logged'));
-                  }
-                }}>Log today</button>
+                {c.isDone
+                  ? <span className="chip chip-green" style={{ fontSize: 12 }}><Icon name="award" size={12} /> Completed</span>
+                  : c.ended ? null
+                  : loggedToday.has(c.title)
+                  ? <span className="chip chip-green" style={{ fontSize: 12 }}><Icon name="check" size={12} stroke={2.5} /> Logged today</span>
+                  : <button className="btn btn-green" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => handleLogChallenge(c)}>Log today</button>}
               </div>
               <div style={{ height: 8, background: 'var(--line)', borderRadius: 999, marginBottom: 8 }}>
                 <div style={{ width: (c.p * 100) + '%', height: '100%', background: c.col, borderRadius: 999 }} />
               </div>
-              {c.reward && <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Reward at finish: <strong style={{ color: 'var(--ink)' }}>{c.reward}</strong></div>}
+              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                {c.isDone
+                  ? <>Finished{c.rewardPts ? <> · <strong style={{ color: 'var(--ink)' }}>+{c.rewardPts} GP</strong> earned</> : ''}</>
+                  : c.ended
+                  ? <>Window closed with {c.done} of {c.need} days logged.</>
+                  : <>{c.done} of {c.need} days logged{c.rewardPts ? <> · <strong style={{ color: 'var(--ink)' }}>{c.reward}</strong> when you finish</> : ''}</>}
+              </div>
             </div>
           ))}
         </div>
@@ -200,25 +293,26 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
         {/* Browse challenges */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h2 className="font-display" style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Browse all challenges</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <span className="chip chip-green">Featured</span>
-            <span className="chip">Energy</span>
-            <span className="chip">Transport</span>
-            <span className="chip">Food</span>
-            <span className="chip">Waste</span>
-          </div>
+          {challengeCats.length > 1 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {['All', ...challengeCats].map(cat => (
+                <button key={cat} onClick={() => setCatFilter(cat)} className={'chip ' + (catFilter === cat ? 'chip-green' : '')}
+                  style={{ cursor: 'pointer', border: catFilter === cat ? 'none' : undefined }}>{cat}</button>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {allChallenges.map(c => {
             const joined = app.challenge?.has(c.id);
             return (
-            <div key={c.id} className="post-card" onClick={() => app.openModal('challenge', c)} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, cursor: 'pointer' }}>
+            <div key={c.id} className="post-card" onClick={() => app.openModal('challenge', { ...c, completed: completed.has(c.id) })} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--line)', padding: 16, cursor: 'pointer' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <span className="chip chip-green">{c.cat}</span>
                 <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono', color: 'var(--ink-3)' }}>{c.days}d</span>
               </div>
               <h3 style={{ margin: '12px 0 4px', fontSize: 15, fontWeight: 600 }}>{c.title}</h3>
-              <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.joined} joined · earn {c.reward}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono' }}>{c.joined} joined{completed.has(c.id) ? ' · completed ✓' : c.reward ? ` · ${c.reward}` : ''}</div>
               <button className={joined ? 'btn btn-green' : 'btn btn-ghost'} onClick={(e) => { e.stopPropagation(); handleToggleChallenge(c); }} style={{ marginTop: 10, padding: '6px 12px', fontSize: 12 }}>{joined ? 'Joined ✓' : 'Join challenge'}</button>
             </div>
             );
@@ -226,7 +320,8 @@ export function DesktopTasks({ onNav, params }: { onNav: any; params?: Record<st
         </div>
         {allChallenges.length === 0 && (
           <div style={{ padding: '28px 0', textAlign: 'center', fontSize: 14, color: 'var(--ink-3)' }}>
-            {load === 'loading' ? 'Loading challenges…'
+            {load === 'ready' && dbChallenges.length > 0 ? 'No challenges in this category.'
+              : load === 'loading' ? 'Loading challenges…'
               : load === 'error' ? 'Challenges could not be loaded. Try again in a moment.'
               : 'No challenges yet. Start one with “Create challenge”.'}
           </div>
