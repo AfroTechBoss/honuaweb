@@ -10,15 +10,11 @@ export function loadOrders(): any[] {
   try { return JSON.parse(localStorage.getItem('honua_orders') || '[]'); } catch { return []; }
 }
 
-function loadReviews(): Record<string, any> {
-  try { return JSON.parse(localStorage.getItem('honua_reviews') || '{}'); } catch { return {}; }
-}
-
-function saveReview(orderId: string, review: any) {
-  const all = loadReviews();
-  all[orderId] = review;
-  localStorage.setItem('honua_reviews', JSON.stringify(all));
-}
+// Reviews are product_reviews rows (lib/reviews), one per product in the
+// order. They used to sit in localStorage under the order id, so no seller or
+// other buyer ever saw them.
+const reviewableIds = (order: any): string[] =>
+  (order?.items || []).map((i: any) => String(i.id ?? '')).filter((id: string) => /^[0-9a-f-]{36}$/.test(id));
 
 // ---- Star rating display ----
 export function StarRating({ score, size = 14, color = 'var(--sun, #f59e0b)' }: { score: number; size?: number; color?: string }) {
@@ -35,18 +31,27 @@ export function StarRating({ score, size = 14, color = 'var(--sun, #f59e0b)' }: 
 
 // ---- Review modal ----
 function ReviewModal({ order, onClose, onSubmit }: { order: any; onClose: () => void; onSubmit: (review: any) => void }) {
+  const app = useApp();
   const [stars, setStars] = React.useState(0);
   const [hover, setHover] = React.useState(0);
   const [text, setText] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (stars === 0) return;
-    const review = { stars, text, date: new Date().toISOString(), orderId: order.id };
-    saveReview(order.id, review);
-    setSubmitted(true);
-    setTimeout(onSubmit, 1200);
+    if (stars === 0 || saving || !app.user?.id) return;
+    setSaving(true);
+    try {
+      const { saveReview } = await import('@/lib/reviews');
+      for (const productId of reviewableIds(order)) await saveReview(app.user.id, productId, stars, text, order.id);
+      setSubmitted(true);
+      setTimeout(() => onSubmit({ stars, text }), 1200);
+    } catch (err: any) {
+      app.toast?.({ kind: 'error', msg: "Couldn't post your review", sub: err?.message, icon: 'star' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -103,11 +108,11 @@ function ReviewModal({ order, onClose, onSubmit }: { order: any; onClose: () => 
                 style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 14, fontFamily: 'Satoshi, sans-serif', color: 'var(--ink)', outline: 'none', resize: 'vertical', marginBottom: 16 }}
               />
               <button
-                type="submit" disabled={stars === 0}
+                type="submit" disabled={stars === 0 || saving}
                 className="btn btn-primary"
-                style={{ width: '100%', justifyContent: 'center', padding: '13px', opacity: stars === 0 ? 0.5 : 1 }}
+                style={{ width: '100%', justifyContent: 'center', padding: '13px', opacity: stars === 0 || saving ? 0.5 : 1 }}
               >
-                Submit review
+                {saving ? 'Posting…' : 'Submit review'}
               </button>
             </form>
           </>
@@ -266,9 +271,21 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
       else if (!local) setNotFound(true);
     }).catch(() => { if (!local) setNotFound(true); });
 
-    const reviews = loadReviews();
-    if (reviews[orderId]) setReview(reviews[orderId]);
   }, [orderId]);
+
+  // The buyer's existing review for anything in this order.
+  React.useEffect(() => {
+    const ids = reviewableIds(order);
+    if (!ids.length) return;
+    import('@/lib/supabase').then(async ({ supabase }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+      const { getMyReviews } = await import('@/lib/reviews');
+      const mine = await getMyReviews(session.user.id, ids);
+      const first = ids.map(id => mine[id]).find(Boolean);
+      if (first) setReview(first);
+    }).catch(() => {});
+  }, [order?.id, order?.items?.length]);
 
   if (notFound) {
     return (
@@ -311,11 +328,7 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
         <ReviewModal
           order={order}
           onClose={() => setShowReview(false)}
-          onSubmit={() => {
-            const reviews = loadReviews();
-            setReview(reviews[orderId]);
-            setShowReview(false);
-          }}
+          onSubmit={(r: any) => { setReview(r); setShowReview(false); }}
         />
       )}
 
@@ -463,7 +476,7 @@ export function DesktopOrderTracking({ orderId, onNav }: { orderId: string; onNa
               )}
 
               {/* Review card — only for delivered orders */}
-              {order.status === 'delivered' && (
+              {order.status === 'delivered' && reviewableIds(order).length > 0 && (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 18, padding: 22 }}>
                   <div style={{ fontSize: 11.5, fontFamily: 'JetBrains Mono', color: 'var(--ink-4)', letterSpacing: '.06em', marginBottom: 12 }}>YOUR REVIEW</div>
                   {review ? (

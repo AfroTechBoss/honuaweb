@@ -13,19 +13,11 @@ const ECO_DETAILS: Record<string, { icon: string; label: string }[]> = {
   'Digital': [{ icon: 'bolt', label: 'Instant delivery' }, { icon: 'leaf', label: 'Zero shipping emissions' }],
 };
 
-// ─── Load / save reviews ─────────────────────────────────────────────────────
-function loadReviews() {
-  try { return JSON.parse(localStorage.getItem('honua_reviews') || '[]'); } catch { return []; }
-}
-
-function getProductReviews(productId: string, productTitle: string) {
-  const all = loadReviews();
-  return all.filter((r: any) => r.productId === productId || r.productName === productTitle);
-}
-
+// Reviews come from product_reviews only (lib/reviews). They used to be read
+// from localStorage, so a review was visible only on the device that wrote it.
 function avgRating(reviews: any[]) {
   if (!reviews.length) return 0;
-  return reviews.reduce((s, r) => s + (r.rating || r.stars || 0), 0) / reviews.length;
+  return reviews.reduce((s, r) => s + (r.stars || 0), 0) / reviews.length;
 }
 
 // ─── Star row ────────────────────────────────────────────────────────────────
@@ -51,34 +43,26 @@ function Stars({ rating, size = 14, interactive = false, onRate }: { rating: num
 }
 
 // ─── Write review modal ──────────────────────────────────────────────────────
-function WriteReviewModal({ product, onClose, onSubmit }: { product: any; onClose: () => void; onSubmit: (r: any) => void }) {
+function WriteReviewModal({ product, existing, onClose, onSubmit }: { product: any; existing?: any; onClose: () => void; onSubmit: () => void }) {
   const app = useApp();
-  const [rating, setRating] = React.useState(0);
-  const [text, setText] = React.useState('');
+  const [rating, setRating] = React.useState(existing?.stars ?? 0);
+  const [text, setText] = React.useState(existing?.text ?? '');
   const [done, setDone] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
 
-  const submit = () => {
-    if (!rating) return;
-    const review = {
-      productId: product.id,
-      productName: product.title,
-      rating,
-      text,
-      date: new Date().toISOString(),
-      author: app.user?.name || 'You',
-    };
-    const existing = loadReviews();
-    localStorage.setItem('honua_reviews', JSON.stringify([...existing, review]));
-    // DB products (uuid ids) also get a real product_reviews row
-    if (app.user?.id && /^[0-9a-f-]{36}$/.test(String(product.id))) {
-      import('@/lib/supabase').then(({ supabase }) =>
-        supabase.from('product_reviews').upsert({
-          product_id: product.id, user_id: app.user.id, stars: rating, body: text || null,
-        }, { onConflict: 'product_id,user_id' })
-      ).catch(() => {});
+  const submit = async () => {
+    if (!rating || !app.user?.id || saving) return;
+    setSaving(true);
+    try {
+      const { saveReview } = await import('@/lib/reviews');
+      await saveReview(app.user.id, product.id, rating, text);
+      setDone(true);
+      onSubmit();
+    } catch (e: any) {
+      app.toast?.({ kind: 'error', msg: "Couldn't post your review", sub: e?.code === '42501' ? 'Only people who bought this product can review it.' : e?.message, icon: 'star' });
+    } finally {
+      setSaving(false);
     }
-    setDone(true);
-    onSubmit(review);
   };
 
   return (
@@ -93,7 +77,7 @@ function WriteReviewModal({ product, onClose, onSubmit }: { product: any; onClos
           </div>
         ) : (
           <>
-            <h3 className="font-display" style={{ margin: '0 0 4px', fontSize: 20 }}>Leave a review</h3>
+            <h3 className="font-display" style={{ margin: '0 0 4px', fontSize: 20 }}>{existing ? 'Edit your review' : 'Leave a review'}</h3>
             <p style={{ color: 'var(--ink-3)', fontSize: 13, margin: '0 0 20px' }}>{product.title}</p>
             <div style={{ marginBottom: 16 }}>
               <Stars rating={rating} size={28} interactive onRate={setRating} />
@@ -104,7 +88,7 @@ function WriteReviewModal({ product, onClose, onSubmit }: { product: any; onClos
             <textarea value={text} onChange={e => setText(e.target.value)} placeholder="What did you think? (optional)" rows={4} style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 11, padding: '12px 14px', fontSize: 14, fontFamily: 'Satoshi', resize: 'vertical', outline: 'none', color: 'var(--ink)' }} />
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
-              <button className="btn btn-primary" onClick={submit} disabled={!rating} style={{ flex: 2, justifyContent: 'center', opacity: rating ? 1 : 0.5 }}>Post review</button>
+              <button className="btn btn-primary" onClick={submit} disabled={!rating || saving} style={{ flex: 2, justifyContent: 'center', opacity: rating && !saving ? 1 : 0.5 }}>{saving ? 'Posting…' : existing ? 'Update review' : 'Post review'}</button>
             </div>
           </>
         )}
@@ -232,6 +216,8 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
   const [dbLoading, setDbLoading] = React.useState(isDbId);
   const [reviews, setReviews] = React.useState<any[]>([]);
   const [showReview, setShowReview] = React.useState(false);
+  const [canReview, setCanReview] = React.useState(false);
+  const [reviewsTick, setReviewsTick] = React.useState(0);
   const [qty, setQty] = React.useState(1);
 
   // Real product from Supabase when the id is a uuid
@@ -289,20 +275,18 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
 
   React.useEffect(() => {
     if (!product) return;
-    setReviews(getProductReviews(product.id, product.title));
-    // DB reviews for real products
-    if (isDbId) {
-      import('@/lib/supabase').then(({ supabase }) =>
-        supabase.from('product_reviews')
-          .select('stars, body, created_at, profile:profiles!product_reviews_user_id_fkey(full_name, handle, avatar_url)')
-          .eq('product_id', id).order('created_at', { ascending: false })
-      ).then(({ data }: any) => {
-        if (data?.length) setReviews(data.map((r: any) => ({
-          rating: r.stars, text: r.body ?? '', date: r.created_at, author: r.profile?.full_name ?? 'A member',
-        })));
-      }).catch(() => {});
-    }
-  }, [product?.id]);
+    let alive = true;
+    import('@/lib/reviews').then(async ({ getProductReviews, hasPurchased }) => {
+      const [list, bought] = await Promise.all([
+        getProductReviews(product.id),
+        app.user?.id ? hasPurchased(product.id) : Promise.resolve(false),
+      ]);
+      if (!alive) return;
+      setReviews(list);
+      setCanReview(bought);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [product?.id, app.user?.id, reviewsTick]);
 
   if (!product && dbLoading) {
     return (
@@ -327,9 +311,9 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
   }
 
   const wished = app.wishlist?.has(product.id) || app.wishlist?.has(product.title);
-  const reviewCount = reviews.length || product.seller.reviews || 0;
-  // Empty by default — only show a rating once there's at least one review
-  const avg = reviews.length ? avgRating(reviews) : (reviewCount > 0 ? product.seller.rating : 0);
+  const reviewCount = reviews.length;
+  const avg = avgRating(reviews);
+  const myReview = reviews.find((r: any) => r.userId === app.user?.id);
 
   const addToCart = () => {
     for (let i = 0; i < qty; i++) {
@@ -357,8 +341,9 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
       {showReview && (
         <WriteReviewModal
           product={product}
+          existing={myReview}
           onClose={() => setShowReview(false)}
-          onSubmit={r => { setReviews(prev => [...prev, r]); setShowReview(false); }}
+          onSubmit={() => setReviewsTick(t => t + 1)}
         />
       )}
 
@@ -496,34 +481,39 @@ export function DesktopProductDetail({ id, onNav }: { id: string; onNav?: any })
                     : <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>No reviews yet</span>}
                 </div>
               </div>
-              <button className="btn btn-primary" onClick={() => setShowReview(true)} style={{ padding: '9px 18px' }}>
-                Write a review
-              </button>
+              {canReview && (
+                <button className="btn btn-primary" onClick={() => setShowReview(true)} style={{ padding: '9px 18px' }}>
+                  {myReview ? 'Edit your review' : 'Write a review'}
+                </button>
+              )}
             </div>
 
             {reviews.length === 0 ? (
               <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)' }}>
                 <Icon name="star" size={32} />
                 <div style={{ marginTop: 12, fontSize: 15, fontWeight: 600, color: 'var(--ink-2)' }}>No reviews yet</div>
-                <p style={{ margin: '6px 0 20px', fontSize: 13 }}>Be the first to review this product.</p>
-                <button className="btn btn-primary" onClick={() => setShowReview(true)}>Write a review</button>
+                <p style={{ margin: '6px 0 20px', fontSize: 13 }}>{canReview ? 'You bought this — be the first to review it.' : 'Reviews come from people who have bought this product.'}</p>
+                {canReview && <button className="btn btn-primary" onClick={() => setShowReview(true)}>Write a review</button>}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {reviews.map((r: any, i: number) => (
                   <div key={i} style={{ padding: 20, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--green)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
-                        {(r.author || 'A').charAt(0)}
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--green)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0, overflow: 'hidden' }}>
+                        {r.avatarUrl ? <img src={r.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (r.author || 'A').replace('@', '').charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>{r.author || 'Anonymous'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {r.handle ? <button onClick={() => onNav?.('profile', { handle: r.handle })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit' }}>{r.author}</button> : r.author}
+                          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--green)', fontFamily: 'JetBrains Mono', letterSpacing: '.04em' }}>VERIFIED PURCHASE</span>
+                        </div>
                         <div style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'JetBrains Mono' }}>
                           {r.date ? new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
                         </div>
                       </div>
                       <div style={{ marginLeft: 'auto' }}>
-                        <Stars rating={r.rating || r.stars || 0} size={14} />
+                        <Stars rating={r.stars || 0} size={14} />
                       </div>
                     </div>
                     {r.text && <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.6 }}>{r.text}</p>}
